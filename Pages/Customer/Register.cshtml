@@ -1,0 +1,71 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.RegisterModel
+@{
+    ViewData["Title"] = "Create account";
+    Layout = "_CustomerAuthLayout";
+}
+
+<h1>Create account</h1>
+<p class="md-auth-subtitle">Join for a refined dining experience</p>
+
+@* Field names match the Customer model (custName, custEmail, custPhone, DietryPref, custPassword). *@
+<form method="post">
+    <div class="mb-3">
+        <label class="md-label" for="custName">Full name</label>
+        <input class="form-control md-input" id="custName" name="custName" type="text"
+               placeholder="Alexandra Beaumont" autocomplete="name" required />
+    </div>
+
+    <div class="mb-3">
+        <label class="md-label" for="custEmail">Email address</label>
+        <input class="form-control md-input" id="custEmail" name="custEmail" type="email"
+               placeholder="you@example.com" autocomplete="email" required />
+    </div>
+
+    <div class="mb-3">
+        <label class="md-label" for="custPhone">Phone number</label>
+        <input class="form-control md-input" id="custPhone" name="custPhone" type="tel"
+               placeholder="0123456789" maxlength="11" inputmode="numeric" autocomplete="tel" required />
+    </div>
+
+    <div class="mb-3">
+        <label class="md-label" for="DietryPref">Dining preferences</label>
+        <select class="form-select md-input" id="DietryPref" name="DietryPref">
+            <option value="None" selected>None</option>
+            <option value="Vegetarian">Vegetarian</option>
+            <option value="Vegan">Vegan</option>
+            <option value="Halal">Halal</option>
+            <option value="Gluten-free">Gluten-free</option>
+            <option value="Nut allergy">Nut allergy</option>
+            <option value="Seafood allergy">Seafood allergy</option>
+            <option value="Other">Other</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label class="md-label" for="custPassword">Password</label>
+        <input class="form-control md-input" id="custPassword" name="custPassword" type="password"
+               placeholder="••••••••" autocomplete="new-password" required />
+        <p class="md-hint">At least 8 characters, with an uppercase letter, a number and a symbol.</p>
+    </div>
+
+    <div class="mb-4">
+        <label class="md-label" for="confirmPassword">Confirm password</label>
+        <input class="form-control md-input" id="confirmPassword" name="confirmPassword" type="password"
+               placeholder="••••••••" autocomplete="new-password" required />
+    </div>
+
+    <div class="form-check mb-2">
+        <input class="form-check-input" id="agreeTerms" name="agreeTerms" type="checkbox" value="true" required />
+        <label class="form-check-label" for="agreeTerms">I agree to the Terms and Privacy Policy</label>
+    </div>
+
+    <div class="form-check mb-4">
+        <input class="form-check-input" id="promoOptIn" name="promoOptIn" type="checkbox" value="true" />
+        <label class="form-check-label" for="promoOptIn">Send me promotions and member offers (optional)</label>
+    </div>
+
+    <button type="submit" class="btn btn-md-dark w-100">Create account</button>
+</form>
+
+<p class="md-auth-switch">Already a member? <a asp-page="/Customer/Login">Sign in</a></p>
