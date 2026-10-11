@@ -1,0 +1,230 @@
+/* =========================================================
+   Maison Dorée – shared styles (sits on top of Bootstrap 5)
+   Fonts: Playfair Display (headings) + Outfit (body)
+   ========================================================= */
+
+/* ---------- Design tokens ---------- */
+:root {
+    --md-black: #0e0e0e;
+    --md-ink: #1a1a1a;
+    --md-gold: #c9a24a;          /* accents, borders, active states */
+    --md-gold-bright: #d4af55;   /* gold text on black */
+    --md-gold-dark: #8a6a1f;     /* gold text on white (readable) */
+    --md-cream: #faf8f3;         /* page background */
+    --md-cream-dark: #f3eee3;
+    --md-line: #e6dfd1;          /* card + input borders */
+    --md-muted: #7a756b;         /* supporting text */
+    --md-white: #ffffff;
+    --md-danger: #a8323a;
+    --md-danger-bg: #fdf1f2;
+
+    --md-font-heading: "Playfair Display", Georgia, serif;
+    --md-font-body: "Outfit", "Segoe UI", sans-serif;
+
+    /* Placeholder photo – swap for a real image later, e.g. url("/images/interior.jpg") */
+    --md-photo-interior: repeating-linear-gradient(135deg, #1b1a18 0 18px, #222120 18px 36px);
+}
+
+/* ---------- Base ---------- */
+body {
+    font-family: var(--md-font-body);
+    color: var(--md-ink);
+    background: var(--md-cream);
+}
+
+h1, h2, h3, h4, .md-heading {
+    font-family: var(--md-font-heading);
+    font-weight: 400;
+    color: var(--md-ink);
+}
+
+a { color: var(--md-gold-dark); }
+a:hover { color: var(--md-ink); }
+
+/* Small spaced capitals: "FINE DINING · EST. 1998", "EMAIL ADDRESS" */
+.md-eyebrow {
+    font-size: .72rem;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--md-gold-dark);
+}
+
+.md-label {
+    display: block;
+    font-size: .7rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--md-muted);
+    margin-bottom: .4rem;
+}
+
+/* ---------- Form controls ---------- */
+.md-input.form-control {
+    border: 1px solid var(--md-line);
+    border-radius: 0;
+    padding: .8rem 1rem;
+    font-size: .95rem;
+    background: var(--md-white);
+}
+
+.md-input.form-control::placeholder { color: #b7b1a5; }
+
+.md-input.form-select {
+    border: 1px solid var(--md-line);
+    border-radius: 0;
+    padding: .8rem 2.25rem .8rem 1rem;
+    font-size: .95rem;
+    background-color: var(--md-white);
+}
+
+.md-input.form-control:focus,
+.md-input.form-select:focus {
+    border-color: var(--md-gold);
+    box-shadow: 0 0 0 .15rem rgba(201, 162, 74, .2);
+}
+
+/* Helper text under a field, e.g. password rules */
+.md-hint {
+    font-size: .8rem;
+    color: var(--md-muted);
+    margin: .4rem 0 0;
+}
+
+.form-check-label { font-size: .92rem; }
+
+.form-check-input:checked {
+    background-color: var(--md-black);
+    border-color: var(--md-black);
+}
+
+.form-check-input:focus {
+    border-color: var(--md-gold);
+    box-shadow: 0 0 0 .15rem rgba(201, 162, 74, .2);
+}
+
+/* ---------- Buttons ---------- */
+.btn-md-dark,
+.btn-md-gold,
+.btn-md-outline {
+    border-radius: 0;
+    padding: .85rem 1.5rem;
+    font-size: .78rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+}
+
+.btn-md-dark { background: var(--md-black); color: var(--md-gold-bright); border: 1px solid var(--md-black); }
+.btn-md-dark:hover, .btn-md-dark:focus { background: #262626; color: var(--md-gold-bright); }
+
+.btn-md-gold { background: var(--md-gold); color: var(--md-black); border: 1px solid var(--md-gold); }
+.btn-md-gold:hover, .btn-md-gold:focus { background: var(--md-gold-bright); color: var(--md-black); }
+
+.btn-md-outline { background: var(--md-white); color: var(--md-ink); border: 1px solid var(--md-line); }
+.btn-md-outline:hover, .btn-md-outline:focus { border-color: var(--md-ink); color: var(--md-ink); }
+
+/* ---------- Alerts ---------- */
+.md-alert-danger {
+    border: 1px solid #f0c2c6;
+    background: var(--md-danger-bg);
+    color: var(--md-danger);
+    font-size: .88rem;
+    padding: .8rem 1rem;
+}
+
+/* =========================================================
+   Customer sign-in / register layout (_CustomerAuthLayout)
+   ========================================================= */
+.md-auth {
+    min-height: 100vh;
+    display: flex;
+    background: var(--md-white);
+}
+
+/* Left photo panel */
+.md-auth-photo {
+    position: relative;
+    flex: 0 0 45%;
+    background: var(--md-photo-interior);
+    background-size: cover;
+    background-position: center;
+    color: var(--md-white);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 3.5rem;
+}
+
+/* Dark fade so the brand text stays readable on a real photo */
+.md-auth-photo::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, .75), rgba(0, 0, 0, .15) 60%);
+}
+
+.md-auth-photo > * { position: relative; }
+
+.md-auth-photo-label {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.75rem;
+    font-size: .7rem;
+    letter-spacing: .2em;
+    color: #8f8770;
+}
+
+.md-auth-photo .md-eyebrow { color: var(--md-gold-bright); }
+
+.md-auth-brand {
+    font-family: var(--md-font-heading);
+    font-size: clamp(3rem, 5vw, 4.5rem);
+    line-height: 1.05;
+    color: var(--md-white);
+    margin: .75rem 0 1.25rem;
+    max-width: 4.5em;            /* wraps the name onto two lines, as in the design */
+}
+
+.md-auth-tagline {
+    max-width: 22rem;
+    color: #d6d0c4;
+    margin: 0;
+}
+
+/* Right form panel */
+.md-auth-form {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+}
+
+.md-auth-card { width: 100%; max-width: 24rem; }
+
+.md-auth-card h1 { font-size: 2.4rem; margin: .5rem 0 .4rem; }
+
+.md-auth-subtitle { color: var(--md-muted); margin-bottom: 2rem; }
+
+.md-auth-switch {
+    text-align: center;
+    color: var(--md-muted);
+    margin-top: 1.75rem;
+}
+
+.md-auth-switch a { color: var(--md-ink); }
+
+/* Phones and small tablets: photo panel becomes a short banner on top */
+@media (max-width: 991.98px) {
+    .md-auth { flex-direction: column; }
+
+    .md-auth-photo {
+        flex: 0 0 auto;
+        min-height: 13rem;
+        padding: 2rem 1.5rem;
+    }
+
+    .md-auth-photo-label { display: none; }
+    .md-auth-brand { font-size: 2.5rem; margin: .5rem 0 .75rem; }
+    .md-auth-tagline { font-size: .9rem; }
+    .md-auth-form { padding: 2.5rem 1rem; }
+}
