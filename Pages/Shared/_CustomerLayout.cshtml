@@ -1,0 +1,88 @@
+@{
+    // Each customer page sets ViewData["ActiveNav"] so the matching sidebar link is highlighted.
+    string active = ViewData["ActiveNav"] as string ?? "";
+    string NavClass(string name) => name == active ? "md-nav-link active" : "md-nav-link";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] · @ViewData["Brand"]</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="md-app">
+
+    @* Phone / tablet top bar with the menu button *@
+    <header class="md-mobilebar d-lg-none">
+        <button class="md-menu-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mdSidebar" aria-controls="mdSidebar" aria-label="Open menu">
+            <i class="bi bi-list"></i>
+        </button>
+        <span class="md-mobilebar-brand">@ViewData["Brand"]</span>
+        <a class="md-bell" href="/Customer/Notifications" aria-label="Notifications"><i class="bi bi-bell"></i><span class="md-bell-dot">2</span></a>
+    </header>
+
+    @* Sidebar: always visible on desktop, slides in on phones *@
+    <aside class="md-sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="mdSidebar" aria-label="Customer menu">
+        <div class="md-sidebar-brand">
+            <span class="md-eyebrow">@ViewData["BrandTagline"]</span>
+            <div class="md-sidebar-name">@ViewData["Brand"]</div>
+            <span class="md-sidebar-module">Member</span>
+            <button type="button" class="btn-close btn-close-white d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#mdSidebar" aria-label="Close menu"></button>
+        </div>
+
+        @* Signed-in customer – replace with the real name from the session later *@
+        <div class="md-sidebar-user">
+            <span class="md-avatar">AB</span>
+            <div>
+                <div class="md-sidebar-user-name">Alexandra Beaumont</div>
+                <div class="md-sidebar-user-meta">Member since Mar 2025</div>
+            </div>
+        </div>
+
+        <nav class="md-nav">
+            <a class="@NavClass("Overview")" href="/Customer/Dashboard"><i class="bi bi-grid"></i>Overview</a>
+            <a class="@NavClass("Menu")" href="/Customer/Menu"><i class="bi bi-book"></i>Menu</a>
+            <a class="@NavClass("Reservations")" href="/Customer/Reservations"><i class="bi bi-calendar3"></i>Reservations</a>
+            <a class="@NavClass("Orders")" href="/Customer/Orders"><i class="bi bi-receipt"></i>Orders</a>
+            <a class="@NavClass("History")" href="/Customer/History"><i class="bi bi-clock-history"></i>History</a>
+            <a class="@NavClass("Profile")" href="/Customer/Profile"><i class="bi bi-person"></i>Profile</a>
+            <a class="@NavClass("Notifications")" href="/Customer/Notifications"><i class="bi bi-bell"></i>Notifications<span class="md-nav-badge">2</span></a>
+        </nav>
+
+        <a class="md-signout" href="/Customer/Login">Sign out</a>
+    </aside>
+
+    <main class="md-main">
+        @* Page header: small gold label, big title, optional actions on the right *@
+        <div class="md-page-header">
+            <div>
+                @if (ViewData["Eyebrow"] != null)
+                {
+                    <span class="md-eyebrow">@ViewData["Eyebrow"]</span>
+                }
+                <h1 class="md-page-title">@(ViewData["Heading"] ?? ViewData["Title"])</h1>
+                @if (ViewData["Subtitle"] != null)
+                {
+                    <p class="md-page-subtitle">@ViewData["Subtitle"]</p>
+                }
+            </div>
+            <div class="md-page-actions">
+                @await RenderSectionAsync("HeaderActions", required: false)
+                <a class="md-bell d-none d-lg-inline-flex" href="/Customer/Notifications" aria-label="Notifications"><i class="bi bi-bell"></i><span class="md-bell-dot">2</span></a>
+            </div>
+        </div>
+
+        @RenderBody()
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

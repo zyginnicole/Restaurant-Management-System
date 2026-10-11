@@ -1,0 +1,132 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.DashboardModel
+@{
+    ViewData["Title"] = "Overview";
+    ViewData["ActiveNav"] = "Overview";
+    ViewData["Eyebrow"] = "Good evening";
+    ViewData["Heading"] = "Alexandra Beaumont";
+    Layout = "_CustomerLayout";
+}
+
+@* Example data from the design. Replace with the signed-in customer's data later. *@
+
+@* ---------- Summary cards ---------- *@
+<div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+        <div class="md-stat">
+            <span class="md-label">Next visit</span>
+            <div class="md-stat-value">09 / 20</div>
+            <div class="md-stat-note">19:30 · 2 guests</div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="md-stat">
+            <span class="md-label">Active order</span>
+            <div class="md-stat-value">ORD-0088</div>
+            <div class="md-stat-note">Preparing</div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="md-stat">
+            <span class="md-label">Total visits</span>
+            <div class="md-stat-value">8</div>
+            <div class="md-stat-note">Dining experiences logged</div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="md-stat">
+            <span class="md-label">Unread</span>
+            <div class="md-stat-value">2</div>
+            <div class="md-stat-note">4 total notifications</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    @* ---------- Next reservation ---------- *@
+    <div class="col-lg-6">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Next reservation</span>
+                <span class="md-badge md-badge-confirmed">Confirmed</span>
+            </div>
+            <div class="md-card-body md-reservation">
+                <div class="md-reservation-date">2026-09-20</div>
+                <div class="md-reservation-ref">R-0041</div>
+                <div class="md-reservation-details">
+                    <div><span class="md-label">Time</span>19:30</div>
+                    <div><span class="md-label">Guests</span>2</div>
+                    <div><span class="md-label">Table</span>T-07 · Indoor</div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    @* ---------- Recent notifications ---------- *@
+    <div class="col-lg-6">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Recent notifications</span>
+                <a class="md-card-link" href="/Customer/Notifications">View all</a>
+            </div>
+            @* Click a notification to open it in the pop-up (see _NotificationModal + notifications.js). *@
+            <ul class="md-notice-list">
+                <li class="md-notice unread">
+                    <button type="button" class="md-notice-btn"
+                            data-type="Reservation" data-title="Reservation confirmed"
+                            data-message="Your reservation R-0041 for Sep 20 at 19:30 has been confirmed. Table T-07 (Indoor) is reserved for 2 guests. Free cancellation until 17:30 on the day."
+                            data-time="2 hours ago" data-link="/Customer/Reservations" data-link-text="View reservation">
+                        <p>Your reservation R-0041 for Sep 20 at 19:30 has been confirmed.</p>
+                        <span class="md-notice-time">2 hours ago</span>
+                    </button>
+                </li>
+                <li class="md-notice unread">
+                    <button type="button" class="md-notice-btn"
+                            data-type="Order update" data-title="Your order is being prepared"
+                            data-message="Order ORD-0088 is now being prepared by the kitchen. Estimated 25 minutes."
+                            data-time="30 minutes ago" data-link="/Customer/Orders" data-link-text="Track order">
+                        <p>Order ORD-0088 is now being prepared by the kitchen. Estimated 25 minutes.</p>
+                        <span class="md-notice-time">30 minutes ago</span>
+                    </button>
+                </li>
+                <li class="md-notice">
+                    <button type="button" class="md-notice-btn"
+                            data-type="Promotion" data-title="Weekend Tasting Menu"
+                            data-message="This weekend only: Chef's eight-course tasting menu is available. Reserve your table now."
+                            data-time="1 day ago" data-link="/Customer/Reservations" data-link-text="Reserve a table">
+                        <p>This weekend only: Chef's eight-course tasting menu is available. Reserve your table now.</p>
+                        <span class="md-notice-time">1 day ago</span>
+                    </button>
+                </li>
+            </ul>
+        </section>
+    </div>
+</div>
+
+@* ---------- Order in progress ---------- *@
+<section class="md-card">
+    <div class="md-card-header">
+        <span class="md-card-label">Order in progress — ORD-0088</span>
+        <span class="md-badge md-badge-preparing">Preparing</span>
+    </div>
+    <div class="md-card-body">
+        @* Tracker steps: add "done" to finished steps and "current" to the active one. *@
+        <ol class="md-tracker">
+            <li class="done"><span>Received</span></li>
+            <li class="current"><span>Preparing</span></li>
+            <li><span>Ready to Serve</span></li>
+            <li><span>Served</span></li>
+            <li><span>Completed</span></li>
+        </ol>
+        <div class="md-order-summary">
+            <span>1× Wagyu Beef Tenderloin · 1× Château Margaux 2018 (glass)</span>
+            <span class="md-order-total">RM 288.00</span>
+        </div>
+    </div>
+</section>
+
+<partial name="_NotificationModal" />
+
+@section Scripts {
+    <script src="~/js/notifications.js" asp-append-version="true"></script>
+}
