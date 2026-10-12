@@ -1691,3 +1691,34 @@ a:hover { color: var(--md-ink); }
 
 /* Single action button sits on the right, where Modify used to be */
 .md-res-actions { justify-content: flex-end; }
+
+/* Reservation card: beige date tile (month + day) and "Sunday evening / 7:30 PM" */
+.md-date-tile {
+    flex: 0 0 auto;
+    width: 4.75rem;
+    height: 4.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .15rem;
+    background: #faf7f0;
+}
+
+.md-date-tile-month {
+    font-size: var(--md-text-label);
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--md-gold-dark);
+}
+
+.md-date-tile-day {
+    font-family: var(--md-font-heading);
+    font-variant-numeric: lining-nums;
+    font-size: 1.9rem;
+    line-height: 1;
+}
+
+.md-res-date { font-size: 1.5rem; line-height: 1.15; }
+
+.md-res-time i { color: var(--md-gold-dark); }

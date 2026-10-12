@@ -10,123 +10,153 @@
 
 @* Example data from the design. Replace with the signed-in customer's data later. *@
 
-@* ---------- Summary cards ---------- *@
-<div class="row g-3 mb-4">
-    <div class="col-6 col-xl-3">
-        <div class="md-stat">
-            <span class="md-label">Next visit</span>
-            <div class="md-stat-value">09 / 20</div>
-            <div class="md-stat-note">19:30 · 2 guests</div>
+@* ---------- Recommendations hero ----------
+   Same dishes as the Menu page's Recommendations tab. Replace .md-hero-photo's background
+   with the dish photo (menuImageUrl) when real photos are ready. *@
+<section id="recommendationHero" class="carousel slide md-hero md-section" data-bs-ride="carousel" data-bs-interval="6000" aria-label="Recommended dishes">
+    <div class="carousel-inner">
+        <div class="carousel-item active">
+            <a class="md-hero-slide" href="/Customer/Menu">
+                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
+                <span class="md-hero-content">
+                    <span class="md-hero-eyebrow">Based on your preferences · Mains</span>
+                    <span class="md-hero-title">Wagyu Beef Tenderloin</span>
+                    <span class="md-hero-price">RM 168.00</span>
+                </span>
+            </a>
+        </div>
+        <div class="carousel-item">
+            <a class="md-hero-slide" href="/Customer/Menu">
+                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
+                <span class="md-hero-content">
+                    <span class="md-hero-eyebrow">Based on your preferences · Mains</span>
+                    <span class="md-hero-title">Pan-Seared Sea Bass</span>
+                    <span class="md-hero-price">RM 98.00</span>
+                </span>
+            </a>
+        </div>
+        <div class="carousel-item">
+            <a class="md-hero-slide" href="/Customer/Menu">
+                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
+                <span class="md-hero-content">
+                    <span class="md-hero-eyebrow">Based on your preferences · Mains</span>
+                    <span class="md-hero-title">Duck à l'Orange</span>
+                    <span class="md-hero-price">RM 92.00</span>
+                </span>
+            </a>
+        </div>
+        <div class="carousel-item">
+            <a class="md-hero-slide" href="/Customer/Menu">
+                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
+                <span class="md-hero-content">
+                    <span class="md-hero-eyebrow">Popular selection · Desserts</span>
+                    <span class="md-hero-title">Valrhona Chocolate Fondant</span>
+                    <span class="md-hero-price">RM 36.00</span>
+                </span>
+            </a>
+        </div>
+        <div class="carousel-item">
+            <a class="md-hero-slide" href="/Customer/Menu">
+                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
+                <span class="md-hero-content">
+                    <span class="md-hero-eyebrow">Popular selection · Starters</span>
+                    <span class="md-hero-title">Caviar &amp; Soft Egg</span>
+                    <span class="md-hero-price">RM 85.00</span>
+                </span>
+            </a>
+        </div>
+        <div class="carousel-item">
+            <a class="md-hero-slide" href="/Customer/Menu">
+                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
+                <span class="md-hero-content">
+                    <span class="md-hero-eyebrow">Popular selection · Mains</span>
+                    <span class="md-hero-title">Lobster Thermidor</span>
+                    <span class="md-hero-price">RM 128.00 <span class="md-hero-soldout">Sold out today</span></span>
+                </span>
+            </a>
         </div>
     </div>
-    <div class="col-6 col-xl-3">
-        <div class="md-stat">
-            <span class="md-label">Active order</span>
-            <div class="md-stat-value">ORD-0088</div>
-            <div class="md-stat-note">Preparing</div>
-        </div>
-    </div>
-    <div class="col-6 col-xl-3">
-        <div class="md-stat">
-            <span class="md-label">Total visits</span>
-            <div class="md-stat-value">8</div>
-            <div class="md-stat-note">Dining experiences logged</div>
-        </div>
-    </div>
-    <div class="col-6 col-xl-3">
-        <div class="md-stat">
-            <span class="md-label">Unread</span>
-            <div class="md-stat-value">2</div>
-            <div class="md-stat-note">4 total notifications</div>
-        </div>
-    </div>
-</div>
 
-<div class="row g-3 mb-4">
-    @* ---------- Next reservation ---------- *@
-    <div class="col-lg-6">
+    @* Arrows (top-right) *@
+    <div class="md-hero-arrows">
+        <button type="button" data-bs-target="#recommendationHero" data-bs-slide="prev" aria-label="Previous dish"><i class="bi bi-chevron-left"></i></button>
+        <button type="button" data-bs-target="#recommendationHero" data-bs-slide="next" aria-label="Next dish"><i class="bi bi-chevron-right"></i></button>
+    </div>
+
+    @* Line indicators (bottom-right) *@
+    <div class="carousel-indicators md-hero-indicators">
+        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="0" class="active" aria-current="true" aria-label="Dish 1"></button>
+        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="1" aria-label="Dish 2"></button>
+        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="2" aria-label="Dish 3"></button>
+        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="3" aria-label="Dish 4"></button>
+        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="4" aria-label="Dish 5"></button>
+        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="5" aria-label="Dish 6"></button>
+    </div>
+</section>
+
+<div class="row md-grid md-section">
+    @* ---------- Next reservation (narrower column) ---------- *@
+    <div class="col-lg-5">
         <section class="md-card h-100">
             <div class="md-card-header">
-                <span class="md-card-label">Next reservation</span>
+                <span class="md-card-label">Next reservation — <strong class="md-card-code">R-0041</strong></span>
                 <span class="md-badge md-badge-confirmed">Confirmed</span>
             </div>
             <div class="md-card-body md-reservation">
-                <div class="md-reservation-date">2026-09-20</div>
-                <div class="md-reservation-ref">R-0041</div>
+                @* Date tile (month + day) and day/time *@
+                <div class="md-res-datetime">
+                    <div class="md-date-tile" aria-hidden="true">
+                        <span class="md-date-tile-month">Sep</span>
+                        <span class="md-date-tile-day">20</span>
+                    </div>
+                    <div>
+                        <div class="md-res-date">Sunday evening</div>
+                        <div class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>7:30 PM</div>
+                    </div>
+                </div>
+
+                @* Guests + table *@
                 <div class="md-reservation-details">
-                    <div><span class="md-label">Time</span>19:30</div>
-                    <div><span class="md-label">Guests</span>2</div>
-                    <div><span class="md-label">Table</span>T-07 · Indoor</div>
+                    <span><i class="bi bi-person" aria-hidden="true"></i>2 <span class="visually-hidden">guests</span></span>
+                    <span>T-07 · Indoor</span>
+                </div>
+                @* View details opens the pop-up (Modify is available inside the pop-up) *@
+                <div class="md-res-actions">
+                    <button type="button" class="btn btn-md-outline" data-bs-toggle="modal" data-bs-target="#reservationModal">View details</button>
                 </div>
             </div>
         </section>
     </div>
 
-    @* ---------- Recent notifications ---------- *@
-    <div class="col-lg-6">
+    @* ---------- Order in progress (wider column for the status line) ---------- *@
+    <div class="col-lg-7">
         <section class="md-card h-100">
             <div class="md-card-header">
-                <span class="md-card-label">Recent notifications</span>
-                <a class="md-card-link" href="/Customer/Notifications">View all</a>
+                <span class="md-card-label">Order in progress — <strong class="md-card-code">ORD-0088</strong></span>
+                <span class="md-badge md-badge-preparing">Preparing</span>
             </div>
-            @* Click a notification to open it in the pop-up (see _NotificationModal + notifications.js). *@
-            <ul class="md-notice-list">
-                <li class="md-notice unread">
-                    <button type="button" class="md-notice-btn"
-                            data-type="Reservation" data-title="Reservation confirmed"
-                            data-message="Your reservation R-0041 for Sep 20 at 19:30 has been confirmed. Table T-07 (Indoor) is reserved for 2 guests. Free cancellation until 17:30 on the day."
-                            data-time="2 hours ago" data-link="/Customer/Reservations" data-link-text="View reservation">
-                        <p>Your reservation R-0041 for Sep 20 at 19:30 has been confirmed.</p>
-                        <span class="md-notice-time">2 hours ago</span>
-                    </button>
-                </li>
-                <li class="md-notice unread">
-                    <button type="button" class="md-notice-btn"
-                            data-type="Order update" data-title="Your order is being prepared"
-                            data-message="Order ORD-0088 is now being prepared by the kitchen. Estimated 25 minutes."
-                            data-time="30 minutes ago" data-link="/Customer/Orders" data-link-text="Track order">
-                        <p>Order ORD-0088 is now being prepared by the kitchen. Estimated 25 minutes.</p>
-                        <span class="md-notice-time">30 minutes ago</span>
-                    </button>
-                </li>
-                <li class="md-notice">
-                    <button type="button" class="md-notice-btn"
-                            data-type="Promotion" data-title="Weekend Tasting Menu"
-                            data-message="This weekend only: Chef's eight-course tasting menu is available. Reserve your table now."
-                            data-time="1 day ago" data-link="/Customer/Reservations" data-link-text="Reserve a table">
-                        <p>This weekend only: Chef's eight-course tasting menu is available. Reserve your table now.</p>
-                        <span class="md-notice-time">1 day ago</span>
-                    </button>
-                </li>
-            </ul>
+            <div class="md-card-body">
+                @* Tracker steps: add "done" to finished steps and "current" to the active one. *@
+                <ol class="md-tracker">
+                    <li class="done"><span>Received</span></li>
+                    <li class="current"><span>Preparing</span></li>
+                    <li><span>Ready to Serve</span></li>
+                    <li><span>Served</span></li>
+                    <li><span>Completed</span></li>
+                </ol>
+
+                @* Ordered items: one row per OrderItem (quantity × name, line price) *@
+                <ul class="md-order-items">
+                    <li><span>1× Wagyu Beef Tenderloin</span><span>RM 168.00</span></li>
+                    <li><span>1× Château Margaux 2018 (glass)</span><span>RM 120.00</span></li>
+                </ul>
+                <div class="md-order-summary">
+                    <span>Total</span>
+                    <span class="md-order-total">RM 288.00</span>
+                </div>
+            </div>
         </section>
     </div>
 </div>
 
-@* ---------- Order in progress ---------- *@
-<section class="md-card">
-    <div class="md-card-header">
-        <span class="md-card-label">Order in progress — ORD-0088</span>
-        <span class="md-badge md-badge-preparing">Preparing</span>
-    </div>
-    <div class="md-card-body">
-        @* Tracker steps: add "done" to finished steps and "current" to the active one. *@
-        <ol class="md-tracker">
-            <li class="done"><span>Received</span></li>
-            <li class="current"><span>Preparing</span></li>
-            <li><span>Ready to Serve</span></li>
-            <li><span>Served</span></li>
-            <li><span>Completed</span></li>
-        </ol>
-        <div class="md-order-summary">
-            <span>1× Wagyu Beef Tenderloin · 1× Château Margaux 2018 (glass)</span>
-            <span class="md-order-total">RM 288.00</span>
-        </div>
-    </div>
-</section>
-
-<partial name="_NotificationModal" />
-
-@section Scripts {
-    <script src="~/js/notifications.js" asp-append-version="true"></script>
-}
+<partial name="_ReservationModal" />
