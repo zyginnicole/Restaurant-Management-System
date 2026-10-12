@@ -1721,4 +1721,5 @@ a:hover { color: var(--md-ink); }
 
 .md-res-date { font-size: 1.5rem; line-height: 1.15; }
 
-.md-res-time i { color: var(--md-gold-dark); }
+.md-res-time i { color: var(--md-gold-dark); }/* Month on the reservation date tile in bold */
+.md-date-tile-month { font-weight: 600; }
