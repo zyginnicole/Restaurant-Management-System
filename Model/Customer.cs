@@ -30,7 +30,12 @@ namespace RestaurantManagementSystem.Model
 
         public DateTimeOffset custCreateAt { get; set; } = DateTimeOffset.Now;
 
-        public string DietryPref { get; set; } = "None";
+        public string DietaryPref { get; set; } = "None";
+
+        public bool promoOptIn { get; set; } = false;
+
+        public int FailedLoginAttempts { get; set; } = 0;
+        public DateTimeOffset? LockoutEnd { get; set; }
 
         // Navigation (one customer -> many)
         //the List goes on the "one" side, the side that has many of something.

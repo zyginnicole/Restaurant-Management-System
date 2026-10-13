@@ -16,13 +16,13 @@
 <form method="post">
     <div class="mb-3">
         <label class="md-label" for="custEmail">Email address</label>
-        <input class="form-control md-input" id="custEmail" name="custEmail" type="email"
+        <input class="form-control md-input" asp-for="Customer.custEmail" type="email"
                placeholder="you@example.com" autocomplete="email" required />
     </div>
 
     <div class="mb-3">
         <label class="md-label" for="custPassword">Password</label>
-        <input class="form-control md-input" id="custPassword" name="custPassword" type="password"
+        <input class="form-control md-input" asp-for="Customer.custPassword" type="password"
                placeholder="••••••••" autocomplete="current-password" required />
     </div>
 
