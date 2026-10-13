@@ -130,17 +130,19 @@
 
     @* ---------- Order in progress (wider column for the status line) ---------- *@
     <div class="col-lg-7">
-        <section class="md-card h-100">
+        @* The whole card is clickable and opens the Orders page (stretched link below) *@
+        <section class="md-card h-100 md-card-clickable">
+            <a class="stretched-link" href="/Customer/Orders" aria-label="View order ORD-0088"></a>
             <div class="md-card-header">
                 <span class="md-card-label">Order in progress — <strong class="md-card-code">ORD-0088</strong></span>
                 <span class="md-badge md-badge-preparing">Preparing</span>
             </div>
             <div class="md-card-body">
-                @* Tracker steps: add "done" to finished steps and "current" to the active one. *@
+                @* Order status flow: Order placed → Preparing → Served → Completed (or Cancelled).
+                   Add "done" to finished steps and "current" to the active one. *@
                 <ol class="md-tracker">
-                    <li class="done"><span>Received</span></li>
+                    <li class="done"><span>Order placed</span></li>
                     <li class="current"><span>Preparing</span></li>
-                    <li><span>Ready to Serve</span></li>
                     <li><span>Served</span></li>
                     <li><span>Completed</span></li>
                 </ol>
