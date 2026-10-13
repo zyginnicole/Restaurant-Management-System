@@ -19,6 +19,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+app.UseStatusCodePagesWithReExecute("/Error");   // shows the Error page for 404 / return NotFound();
+
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
