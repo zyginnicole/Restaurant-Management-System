@@ -103,6 +103,12 @@ namespace RestaurantManagementSystem.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset>("custCreateAt")
                         .HasColumnType("datetimeoffset");
 
@@ -122,6 +128,9 @@ namespace RestaurantManagementSystem.Migrations
                         .IsRequired()
                         .HasMaxLength(11)
                         .HasColumnType("nvarchar(11)");
+
+                    b.Property<bool>("promoOptIn")
+                        .HasColumnType("bit");
 
                     b.HasKey("custID");
 
