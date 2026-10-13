@@ -99,7 +99,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("custID"));
 
-                    b.Property<string>("DietryPref")
+                    b.Property<string>("DietaryPref")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
