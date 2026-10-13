@@ -124,8 +124,10 @@ a:hover { color: var(--md-ink); }
     text-transform: uppercase;
 }
 
-.btn-md-dark { background: var(--md-black); color: var(--md-gold-bright); border: 1px solid var(--md-black); }
-.btn-md-dark:hover, .btn-md-dark:focus { background: #262626; color: var(--md-gold-bright); }
+/* Main action button: white with gold text and a gold outline (fills gold on hover) */
+.btn-md-dark { background: var(--md-white); color: var(--md-gold-dark); border: 1px solid var(--md-gold); }
+.btn-md-dark:hover, .btn-md-dark:focus { background: var(--md-gold); color: var(--md-black); border-color: var(--md-gold); }
+.btn-md-dark:disabled { background: var(--md-white); color: var(--md-gold-dark); opacity: .5; }
 
 .btn-md-gold { background: var(--md-gold); color: var(--md-black); border: 1px solid var(--md-gold); }
 .btn-md-gold:hover, .btn-md-gold:focus { background: var(--md-gold-bright); color: var(--md-black); }
@@ -650,18 +652,25 @@ a:hover { color: var(--md-ink); }
     border: 1px solid transparent;
 }
 
-.md-badge-pending,
-.md-badge-preparing { background: #fbf0d9; color: #7a4f00; border-color: #f0dcae; }
+/* One colour scheme for every module (Customer badges here, Staff tags = .md-pill below):
+   Reservation – Pending red · Confirmed blue · Seated yellow · Completed green · Cancelled grey
+   Order       – Order placed yellow · Preparing orange · Served blue · Completed green · Cancelled grey */
+.md-badge-pending { background: #fbe9eb; color: #a8323a; border-color: #f1c6cb; }
 
 .md-badge-confirmed,
-.md-badge-ready { background: #e5eef9; color: #1d4e89; border-color: #c9daf0; }
+.md-badge-served { background: #e5eef9; color: #1d4e89; border-color: #c9daf0; }
+
+.md-badge-seated,
+.md-badge-placed { background: #fff6cc; color: #7a5c00; border-color: #f3e08a; }
+
+.md-badge-preparing { background: #fde3cc; color: #8a3c00; border-color: #f5b98a; }
 
 .md-badge-completed,
-.md-badge-served,
 .md-badge-paid,
 .md-badge-available { background: #e3f2e8; color: #1e6b43; border-color: #c4e3cf; }
 
-.md-badge-cancelled,
+.md-badge-cancelled { background: #f1f0ed; color: #7a756b; border-color: #e0ddd6; }
+
 .md-badge-failed { background: #fbe9eb; color: var(--md-danger); border-color: #f0c2c6; }
 
 .md-badge-neutral { background: #efebe2; color: #5f5a50; border-color: #e1dbcf; }
@@ -1721,5 +1730,890 @@ a:hover { color: var(--md-ink); }
 
 .md-res-date { font-size: 1.5rem; line-height: 1.15; }
 
-.md-res-time i { color: var(--md-gold-dark); }/* Month on the reservation date tile in bold */
+.md-res-time i { color: var(--md-gold-dark); }
+/* =========================================================
+   Staff / Admin dashboards – list rows with status edge
+   ========================================================= */
+.md-header-btn { padding: .65rem 1.1rem; }
+.md-header-btn i { margin-right: .4rem; }
+
+.md-btn-sm.btn { padding: .45rem .85rem; font-size: .66rem; letter-spacing: .14em; white-space: nowrap; }
+
+.md-list { list-style: none; margin: 0; padding: 0; }
+
+/* One row: [time] [title + meta] [badge] [action] */
+.md-list-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: .8rem 1.25rem;
+    border-bottom: 1px solid var(--md-line);
+    box-shadow: inset 3px 0 0 transparent;     /* coloured left edge per status */
+}
+
+.md-list-row:last-child { border-bottom: 0; }
+
+/* Same status scheme as the badges / tags:
+   Reservation – Pending red · Confirmed blue · Seated yellow · Completed green · Cancelled grey
+   Order       – Order placed yellow · Preparing orange · Served blue · Completed green · Cancelled grey */
+.md-list-row.is-pending   { box-shadow: inset 3px 0 0 var(--md-danger); }
+.md-list-row.is-confirmed,
+.md-list-row.is-served    { box-shadow: inset 3px 0 0 #5165ad; }
+.md-list-row.is-seated,
+.md-list-row.is-placed    { box-shadow: inset 3px 0 0 #e6b800; }
+.md-list-row.is-preparing { box-shadow: inset 3px 0 0 #e8701a; }
+.md-list-row.is-completed { box-shadow: inset 3px 0 0 #3f9b72; }
+.md-list-row.is-cancelled { box-shadow: inset 3px 0 0 #c9c5bc; }
+
+.md-list-time {
+    flex: 0 0 3.2rem;
+    font-family: var(--md-font-heading);
+    font-variant-numeric: lining-nums;
+    font-size: 1.3rem;
+}
+
+.md-list-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.md-list-title { font-size: var(--md-text-body); }
+
+.md-list-code {
+    font-size: var(--md-text-label);
+    font-weight: 600;
+    letter-spacing: .12em;
+    color: var(--md-muted);
+    margin-left: .35rem;
+}
+
+.md-list-title > .md-list-code:first-child { margin-left: 0; margin-right: .35rem; color: var(--md-ink); }
+
+.md-list-meta {
+    font-size: var(--md-text-meta);
+    color: var(--md-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.md-list-meta i { margin-right: .3rem; }
+
+.md-list-actions { flex: 0 0 auto; }
+
+/* Phones: badge and action move under the text */
+@media (max-width: 575.98px) {
+    .md-list-row { flex-wrap: wrap; gap: .5rem .75rem; padding: .8rem 1rem; }
+    .md-list-main { flex-basis: calc(100% - 4rem); }
+    .md-list-row > .md-badge { margin-left: 3.95rem; }
+    .md-list-time + .md-list-main ~ .md-badge { margin-left: 3.95rem; }
+    .md-list-row:not(:has(.md-list-time)) > .md-badge { margin-left: 0; }
+    .md-list-meta { white-space: normal; }
+}
+/* Let row details wrap instead of being cut off */
+.md-list-meta { white-space: normal; overflow: visible; }
+
+/* Badge stacked above the action button (order rows) */
+.md-list-side {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .4rem;
+}
+
+/* Month on the reservation date tile in bold */
 .md-date-tile-month { font-weight: 600; }
+
+/* =========================================================
+   Admin Dashboard
+   ========================================================= */
+.md-page-actions { flex-wrap: wrap; justify-content: flex-end; }
+
+/* Page-level tabs (Live operations / Sales & trends) */
+.md-page-tabs {
+    border-bottom: 1px solid var(--md-line);
+    margin-bottom: var(--md-section-gap);
+}
+
+.md-segment-sm button { padding: .3rem .7rem; font-size: var(--md-text-meta); }
+
+.md-trend-up { color: #1e6b43; }
+.md-trend-up i { margin-right: .25rem; }
+
+/* "Tonight at a glance" label / value rows */
+.md-glance { margin: 0; }
+
+.md-glance > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .7rem 1.25rem;
+    border-bottom: 1px solid var(--md-line);
+    font-size: var(--md-text-body);
+}
+
+.md-glance > div:last-child { border-bottom: 0; }
+
+.md-glance dt { font-weight: 400; color: var(--md-muted); }
+
+.md-glance dd { margin: 0; font-weight: 500; text-align: right; }
+
+/* Charts */
+.md-chart { position: relative; height: 15rem; }
+
+.md-chart-note {
+    margin: .75rem 0 0;
+    font-size: var(--md-text-meta);
+    color: var(--md-muted);
+}
+
+/* Horizontal meters (utilization, top items) */
+.md-meter {
+    display: grid;
+    grid-template-columns: minmax(0, 9rem) 1fr 2.5rem;
+    align-items: center;
+    gap: .75rem;
+    margin-bottom: .7rem;
+    font-size: var(--md-text-body);
+}
+
+.md-meter span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.md-meter b { font-weight: 500; text-align: right; font-variant-numeric: lining-nums; }
+
+.md-meter-bar { height: 6px; background: #efeae0; }
+
+.md-meter-bar i { display: block; height: 100%; background: var(--md-gold); }
+
+/* Stacked status bar + legend */
+.md-stack {
+    display: flex;
+    height: 10px;
+    overflow: hidden;
+    background: #efeae0;
+    margin-bottom: 1rem;
+}
+
+.md-stack i { display: block; height: 100%; }
+
+.md-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .5rem 1rem;
+    font-size: var(--md-text-body);
+}
+
+.md-legend li { display: flex; align-items: center; gap: .5rem; }
+
+.md-legend li b { margin-left: auto; font-weight: 500; }
+
+.md-legend li i { width: .7rem; height: .7rem; display: inline-block; }
+
+/* Reservation status colours (same scheme as the badges / tags) */
+.md-stack .is-completed, .md-legend .is-completed { background: #3f9b72; }
+.md-stack .is-cancelled, .md-legend .is-cancelled { background: #c9c5bc; }
+.md-stack .is-confirmed, .md-legend .is-confirmed { background: #5165ad; }
+.md-stack .is-pending,   .md-legend .is-pending   { background: var(--md-danger); }
+/* =========================================================
+   Error page
+   ========================================================= */
+.md-error {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    background: var(--md-white);
+}
+
+.md-error-card {
+    width: 100%;
+    max-width: 30rem;
+    text-align: center;
+}
+
+.md-error-card h1 { font-size: 2.4rem; margin: .6rem 0 .75rem; }
+
+.md-error-card p { color: var(--md-muted); font-size: var(--md-text-body); }
+
+.md-error-ref { font-size: var(--md-text-meta) !important; }
+
+.md-error-ref code { color: var(--md-ink); background: #f5f2ec; padding: .1rem .4rem; }
+
+.md-error-actions {
+    display: flex;
+    justify-content: center;
+    gap: .75rem;
+    margin-top: 1.5rem;
+}
+/* =========================================================
+   Admin Dashboard – indigo/teal accents (same scale as the rest of the system)
+   (body class md-admin, set on the Admin Dashboard page)
+   ========================================================= */
+.md-admin {
+    --md-indigo: #5165ad;
+    --md-teal: #4b9a8e;
+}
+
+/* Header */
+
+/* Tabs */
+.md-admin .md-page-tabs button.active { border-bottom-color: var(--md-indigo); }
+
+/* Stat cards */
+.md-admin .md-trend-up { color: var(--md-teal); }
+
+/* Cards and rows */
+.md-admin .md-list-meta { margin-top: .2rem; }
+
+/* Recent activity edges and reservation status bars use the shared status scheme (see .md-list-row / .md-stack) */
+
+/* Charts and meters */
+.md-admin .md-meter-bar { height: 5px; background: #eceef5; }
+.md-admin .md-meter-bar i { background: var(--md-indigo); }
+.md-admin .md-stack { background: #eceef5; }
+
+/* Small teal square in the chart note ("Highlighted: today") */
+.md-swatch {
+    display: inline-block;
+    width: .6rem;
+    height: .6rem;
+    margin: 0 .3rem 0 .25rem;
+    background: var(--md-teal);
+    vertical-align: middle;
+}
+
+.md-admin .md-chart-note b { font-weight: 600; color: var(--md-ink); }
+
+@media (max-width: 575.98px) {
+}
+
+/* ---------- Admin: tabs (left) + period filter (right) on one row ---------- */
+.md-tabbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    border-bottom: 1px solid var(--md-line);
+    margin-bottom: var(--md-section-gap);
+}
+
+.md-tabbar .md-page-tabs { border-bottom: 0; margin-bottom: 0; }
+.md-tabbar > .md-segment { margin-bottom: .5rem; flex: 0 0 auto; }
+
+@media (max-width: 767.98px) {
+    .md-tabbar { flex-direction: column; align-items: stretch; }
+    .md-tabbar > .md-segment { align-self: flex-start; }
+}
+
+/* ---------- Admin: period selector (day / month / year) ---------- */
+.md-period { display: flex; gap: .5rem; margin-bottom: .5rem; flex: 0 0 auto; }
+
+.md-period-select.form-select {
+    width: auto;
+    border: 1px solid var(--md-line);
+    border-radius: 0;
+    padding: .45rem 2rem .45rem .75rem;
+    font-size: .85rem;
+    background-color: var(--md-white);
+}
+
+.md-period-select.form-select:focus { border-color: var(--md-gold); box-shadow: 0 0 0 .15rem rgba(201, 162, 74, .2); }
+.md-period-select.form-select:disabled { color: #b7b1a5; background-color: #faf9f6; }
+
+@media (max-width: 767.98px) {
+    .md-tabbar > .md-period { align-self: flex-start; }
+}
+
+/* ---------- Admin: ranked Top menu items ---------- */
+/* Title row without a divider; category tabs + Portions/Revenue share one row with the underline baseline */
+.md-card-header-plain { border-bottom: 0; padding-bottom: 0; }
+
+.md-rank-filter {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    padding: 0 1.25rem;
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-rank-filter .md-tabs { gap: 1.5rem; }
+.md-rank-filter .md-tabs button { padding: .7rem .1rem; font-size: .9rem; }
+.md-admin .md-rank-filter .md-tabs button.active { border-bottom-color: #5165ad; }
+.md-rank-filter > .md-segment { margin-bottom: .45rem; flex: 0 0 auto; }
+
+@media (max-width: 575.98px) {
+    .md-rank-filter { flex-direction: column; align-items: stretch; padding: 0 1rem; }
+    .md-rank-filter > .md-segment { align-self: flex-start; }
+}
+
+.md-rank-list { list-style: none; margin: 0; padding: 0; }
+
+/* Columns: # | dish | bar | value | trend */
+.md-rank-row {
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr) minmax(5rem, 9rem) 6.5rem 4rem;
+    align-items: center;
+    gap: 1rem;
+    padding: .7rem 1.25rem;
+    border-bottom: 1px solid var(--md-line);
+    font-size: var(--md-text-body);
+}
+
+.md-rank-list .md-rank-row:last-child { border-bottom: 0; }
+
+.md-rank-head {
+    padding-top: .55rem;
+    padding-bottom: .55rem;
+    font-size: var(--md-text-label);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--md-muted);
+}
+
+.md-rank-head span:nth-child(4),
+.md-rank-head span:nth-child(5) { text-align: right; }
+
+.md-rank-no { color: var(--md-muted); font-variant-numeric: lining-nums; }
+
+.md-rank-dish { min-width: 0; display: flex; flex-direction: column; }
+
+.md-rank-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.md-rank-meta { font-size: var(--md-text-meta); color: var(--md-muted); }
+
+.md-rank-bar { height: 6px; background: #eceef5; }
+.md-rank-bar i { display: block; height: 100%; background: #5165ad; }
+.md-rank-row.is-top .md-rank-bar i { background: #4b9a8e; }
+
+.md-rank-value { text-align: right; font-weight: 500; font-variant-numeric: lining-nums; white-space: nowrap; }
+
+.md-trend { text-align: right; font-size: var(--md-text-meta); color: var(--md-muted); white-space: nowrap; }
+.md-trend.is-up { color: #2f7d5a; }
+.md-trend.is-down { color: var(--md-danger); }
+
+@media (max-width: 575.98px) {
+    .md-rank-row { grid-template-columns: 1.2rem minmax(0, 1fr) 4.5rem 3.2rem; gap: .6rem; padding: .7rem 1rem; }
+    .md-rank-bar,
+    .md-rank-head span:nth-child(3) { display: none; }
+    .md-rank-filter .md-tabs { overflow-x: auto; }
+}
+
+/* Summary number on the 1/3 cards */
+.md-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    font-size: var(--md-text-meta);
+    color: var(--md-muted);
+}
+
+.md-summary-value {
+    font-family: var(--md-font-heading);
+    font-variant-numeric: lining-nums;
+    font-size: 2rem;
+    line-height: 1;
+    color: var(--md-ink);
+}
+
+/* =========================================================
+   Admin Live operations – KPI micro-visuals (Option A)
+   ========================================================= */
+.md-kpi { display: flex; flex-direction: column; }
+
+/* Value on the left, sparkline / stars on the right */
+.md-kpi-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: .75rem;
+}
+
+.md-kpi-top .md-stat-value { margin-bottom: .15rem; }
+
+.md-kpi-delta { font-size: var(--md-text-meta); margin-bottom: .6rem; }
+.md-kpi-delta i { margin-right: .2rem; }
+.md-kpi-delta.is-up { color: #2f7d5a; }
+.md-kpi-delta.is-down { color: var(--md-danger); }
+
+.md-kpi-progress { height: 5px; background: #eceef5; margin-bottom: .45rem; }
+.md-kpi-progress i { display: block; height: 100%; background: #5165ad; }
+
+.md-kpi-stack { height: 7px; margin-bottom: .45rem; }
+
+/* Gold stars filled to the rating */
+.md-stars {
+    position: relative;
+    display: inline-block;
+    font-size: 1rem;
+    letter-spacing: .1em;
+    color: #e6e1d5;
+    line-height: 1;
+    margin-bottom: .45rem;
+    white-space: nowrap;
+}
+
+.md-stars-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    color: var(--md-gold);
+}
+
+/* 5★ … 1★ distribution */
+.md-rating-bars { display: flex; flex-direction: column; gap: .15rem; margin: .35rem 0 .45rem; }
+
+.md-rating-bars > div {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr 2.2rem;
+    align-items: center;
+    gap: .4rem;
+    font-size: .68rem;
+    color: var(--md-muted);
+}
+
+.md-rating-bars i { display: block; height: 4px; background: #eceef5; }
+.md-rating-bars b { display: block; height: 100%; background: var(--md-gold); }
+.md-rating-bars em { font-style: normal; text-align: right; }
+
+/* =========================================================
+   Admin Live operations – tonight cards (Option B)
+   ========================================================= */
+.md-subhead {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-size: 1.3rem;
+    margin: 0 0 var(--md-gap);
+}
+
+/* Pulsing green "Live" pill */
+.md-live-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .15rem .55rem;
+    border-radius: 1rem;
+    background: #e3f2e8;
+    color: #1e6b43;
+    font-family: var(--md-font-body);
+    font-size: .62rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+}
+
+.md-live-dot::before {
+    content: "";
+    width: .45rem;
+    height: .45rem;
+    border-radius: 50%;
+    background: #2f9d63;
+    animation: md-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes md-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(47, 157, 99, .45); }
+    50% { box-shadow: 0 0 0 .3rem rgba(47, 157, 99, 0); }
+}
+
+.md-live-value {
+    font-family: var(--md-font-heading);
+    font-variant-numeric: lining-nums;
+    font-size: 1.6rem;
+    line-height: 1.1;
+    margin-bottom: .5rem;
+}
+
+.md-live-value small { font-family: var(--md-font-body); font-size: var(--md-text-meta); color: var(--md-muted); }
+
+/* Ring gauge */
+.md-live-ring { display: flex; align-items: center; gap: 1.1rem; }
+
+.md-ring { flex: 0 0 auto; width: 4.4rem; height: 4.4rem; transform: rotate(-90deg); }
+.md-ring circle { fill: none; stroke-width: 3.6; }
+.md-ring-track { stroke: #eceef5; }
+.md-ring-value { stroke: #4b9a8e; stroke-linecap: round; }
+
+.md-area-list { list-style: none; margin: .5rem 0 0; padding: 0; font-size: var(--md-text-meta); color: var(--md-muted); }
+.md-area-list li { display: flex; justify-content: space-between; gap: 1rem; white-space: nowrap; }
+.md-live-ring > div { flex: 1; min-width: 0; }
+.md-area-list b { font-weight: 500; color: var(--md-ink); }
+
+/* Arrivals timeline */
+.md-timeline {
+    position: relative;
+    height: 1.4rem;
+    margin: .2rem .4rem 0;
+}
+
+.md-timeline::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    background: #eceef5;
+}
+
+.md-timeline span {
+    position: absolute;
+    top: 50%;
+    width: .8rem;
+    height: .8rem;
+    margin: -.4rem 0 0 -.4rem;
+    border-radius: 50%;
+}
+
+.md-timeline-scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: .68rem;
+    color: var(--md-muted);
+    margin: .2rem 0 .7rem;
+}
+
+/* Dot colours for the timeline and its legend (scoped so other .is-* classes are unaffected).
+   Same reservation scheme as the badges: Seated yellow · Expected (= Confirmed, not arrived) blue · Pending red */
+.md-timeline .is-seated,   .md-dot-legend .is-seated   { background: #e6b800; }
+.md-timeline .is-expected, .md-dot-legend .is-expected { background: #5165ad; }
+.md-timeline .is-pending,  .md-dot-legend .is-pending  { background: var(--md-danger); }
+
+.md-dot-legend {
+    list-style: none;
+    margin: 0 0 .5rem;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem 1rem;
+    font-size: var(--md-text-meta);
+    color: var(--md-muted);
+}
+
+.md-dot-legend li { display: flex; align-items: center; gap: .4rem; }
+.md-dot-legend i { display: inline-block; width: .65rem; height: .65rem; border-radius: 50%; }
+
+/* "Tonight" card titles: slightly stronger contrast than other card labels */
+.md-live .md-card-label { color: #4a463f; font-weight: 500; }
+
+/* Recent activity inside a "Tonight" card: compact rows */
+.md-list-compact .md-list-row { padding: .6rem 1.25rem; }
+.md-list-compact .md-list-title { font-size: .9rem; line-height: 1.35; }
+
+/* Collected tonight */
+.md-live-pending {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    margin-top: .8rem;
+    padding: .5rem .7rem;
+    background: #fbf3e2;
+    color: #7a4f00;
+    font-size: var(--md-text-meta);
+}
+
+/* =========================================================
+   Staff Dashboard – simple stat cards (label, number, thin bar, link)
+   ========================================================= */
+.md-staff-stat { display: flex; flex-direction: column; gap: .7rem; }
+/* Numbers smaller than the page heading ("Good evening", 2.1rem) */
+.md-staff-stat .md-stat-value { margin: 0; font-size: 1.4rem; }
+
+@media (max-width: 575.98px) {
+    .md-staff-stat .md-stat-value { font-size: 1.25rem; }
+}
+.md-staff-stat .md-stat-value small { font-family: var(--md-font-body); font-size: var(--md-text-meta); color: var(--md-muted); }
+
+
+/* Thin bar: parts sized by flex (= count); unclassed parts show the grey track.
+   (Named md-statbar because the Admin dashboard already uses md-meter.) */
+.md-statbar { display: flex; gap: 2px; height: 6px; flex-shrink: 0; background: #eeeae1; }
+.md-statbar i { display: block; height: 100%; }
+.md-statbar .is-blue { background: #5165ad; }
+.md-statbar .is-gold { background: var(--md-gold); }
+.md-statbar .is-red    { background: var(--md-danger); }   /* Pending reservations (matches the Pending tag) */
+.md-statbar .is-orange { background: #e8701a; }            /* Preparing orders (matches the Preparing tag) */
+.md-statbar .is-yellow { background: #e6b800; }            /* Order placed (matches the Order placed tag) */
+
+/* Link under the bar */
+/* Hint link ("2 need approval →"): darker gold and medium weight so it stands out */
+.md-stat-action {
+    margin-top: auto;
+    font-size: .8rem;
+    font-weight: 500;
+    text-decoration: none;
+    color: #6b4f12;
+}
+
+.md-stat-action:hover { color: var(--md-ink); text-decoration: underline; text-underline-offset: 3px; }
+.md-stat-action i { margin-left: .2rem; }
+
+/* =========================================================
+   Staff Dashboard – Upcoming guests / Active orders panels
+   ========================================================= */
+.md-panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    padding: 1.1rem 1.5rem 1rem;
+}
+
+.md-panel-title { font-size: 1.3rem; margin: .2rem 0 0; }
+
+/* Arrow button in the panel header (opens the full page) – plain arrow, no circle border */
+.md-circle-btn {
+    width: 2.2rem;
+    height: 2.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--md-ink);
+    text-decoration: none;
+}
+
+.md-circle-btn:hover { color: var(--md-gold-dark); }
+
+/* Whole panel header is clickable (arrow is a stretched-link); arrow turns gold on hover */
+.md-panel-head.md-row-link:hover .md-circle-btn { color: var(--md-gold-dark); }
+.md-panel-head.md-row-link .md-circle-btn { color: var(--md-ink); }
+
+/* Beige status legend bar */
+.md-panel-legend {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem 1rem;
+    padding: .7rem 1.5rem;
+    background: #f6f3ec;
+    border-top: 1px solid var(--md-line);
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-panel-legend .md-label { margin: 0; color: var(--md-gold-dark); }
+.md-panel-legend > div { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+/* Status pills with a dot */
+.md-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .25rem .7rem;
+    border-radius: 1rem;
+    border: 1px solid transparent;
+    font-size: .62rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.md-pill::before { content: ""; width: .35rem; height: .35rem; border-radius: 50%; background: currentColor; }
+
+/* Reservation statuses: Pending red · Confirmed blue · Seated yellow · Completed green · Cancelled grey
+   (Cancelled is not shown on the dashboard overview; grey is for full lists such as the Reservations page) */
+.md-pill.is-pending   { background: #fbe9eb; color: #a8323a; border-color: #f1c6cb; }
+.md-pill.is-confirmed { background: #e5eef9; color: #1d4e89; border-color: #c9daf0; }
+.md-pill.is-seated    { background: #fff6cc; color: #7a5c00; border-color: #f3e08a; }
+.md-pill.is-completed { background: #e3f2e8; color: #1e6b43; border-color: #c4e3cf; }
+.md-pill.is-cancelled { background: #f1f0ed; color: #7a756b; border-color: #e0ddd6; }
+
+/* Order statuses: Order placed yellow · Preparing orange · Served blue · Completed green · Cancelled grey
+   (Completed and Cancelled reuse .is-completed / .is-cancelled above; neither is shown on the dashboard overview) */
+.md-pill.is-placed    { background: #fff6cc; color: #7a5c00; border-color: #f3e08a; }
+.md-pill.is-preparing { background: #fde3cc; color: #8a3c00; border-color: #f5b98a; }
+.md-pill.is-served    { background: #e5eef9; color: #1d4e89; border-color: #c9daf0; }
+
+/* Upcoming guests rows */
+.md-guest-list, .md-order-list { list-style: none; margin: 0; padding: 0; }
+
+.md-guest {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-guest:last-child { border-bottom: 0; }
+
+/* Coloured left edge by status */
+.md-guest.is-pending   { box-shadow: inset 3px 0 0 var(--md-danger); }
+.md-guest.is-confirmed { box-shadow: inset 3px 0 0 #5165ad; }
+.md-guest.is-seated    { box-shadow: inset 3px 0 0 #e6b800; }
+.md-guest.is-completed { box-shadow: inset 3px 0 0 #3f9b72; }
+
+/* Cancelled: greyed out (faded row, grey edge) */
+.md-guest.is-cancelled { box-shadow: inset 3px 0 0 #c9c5bc; color: var(--md-muted); }
+.md-guest.is-cancelled .md-guest-time,
+.md-guest.is-cancelled .md-guest-name { color: var(--md-muted); }
+
+.md-order.is-placed    { box-shadow: inset 3px 0 0 #e6b800; }
+.md-order.is-preparing { box-shadow: inset 3px 0 0 #e8701a; }
+.md-order.is-served    { box-shadow: inset 3px 0 0 #5165ad; }
+.md-order.is-completed { box-shadow: inset 3px 0 0 #3f9b72; }
+
+/* Cancelled order: greyed out */
+.md-order.is-cancelled { box-shadow: inset 3px 0 0 #c9c5bc; color: var(--md-muted); }
+.md-order.is-cancelled .md-guest-name,
+.md-order.is-cancelled .md-order-amount { color: var(--md-muted); }
+
+.md-guest-time {
+    font-family: var(--md-font-heading);
+    font-variant-numeric: lining-nums;
+    font-size: 1.25rem;          /* time fits within the width of "TONIGHT" below it */
+    line-height: 1;
+}
+
+.md-guest-time span {
+    display: block;
+    margin-top: .35rem;
+    font-family: var(--md-font-body);
+    font-size: .6rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--md-muted);
+}
+
+.md-guest-main { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+
+.md-guest-name { font-size: var(--md-text-body); font-weight: 500; }
+
+.md-guest-code {
+    margin-left: .35rem;
+    font-size: var(--md-text-label);
+    font-weight: 600;
+    letter-spacing: .12em;
+    color: var(--md-gold-dark);
+}
+
+.md-guest-meta { display: block; font-size: var(--md-text-meta); color: var(--md-muted); }
+.md-guest-meta i { margin-right: .35rem; }
+
+/* Rounded action buttons */
+.md-btn-round.btn {
+    border-radius: .4rem;
+    padding: .55rem 1.1rem;
+    font-size: .68rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.md-btn-round i { margin-right: .35rem; }
+
+.md-btn-green { background: #2f7d5a; border: 1px solid #2f7d5a; color: var(--md-white); }
+.md-btn-green:hover, .md-btn-green:focus { background: #256649; border-color: #256649; color: var(--md-white); }
+
+.md-btn-outline { background: var(--md-white); border: 1px solid var(--md-line); color: var(--md-ink); }
+.md-btn-outline:hover, .md-btn-outline:focus { border-color: var(--md-ink); color: var(--md-ink); }
+
+/* Cancel: small red outline; Cancel order (in the pop-up): solid red */
+.md-btn-cancel { background: var(--md-white); border: 1px solid #e9b9be; color: var(--md-danger); }
+.md-btn-cancel:hover, .md-btn-cancel:focus { background: #fbe9eb; border-color: var(--md-danger); color: var(--md-danger); }
+
+.md-btn-danger { background: var(--md-danger); border: 1px solid var(--md-danger); color: var(--md-white); }
+.md-btn-danger:hover, .md-btn-danger:focus { background: #8d2930; border-color: #8d2930; color: var(--md-white); }
+
+.md-order-actions { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Underline filter tabs inside a panel (same style as Live operations / Sales & trends) */
+.md-filter-tabs {
+    flex: 0 0 auto;              /* don't stretch to fill the card's height (cards in a row share one height) */
+    padding: 0 1.5rem;
+    gap: 1.6rem;
+    border-top: 1px solid var(--md-line);
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-filter-tabs button { padding: .7rem .1rem; font-size: .9rem; }
+.md-filter-tabs button.active { border-bottom-color: #5165ad; }
+.md-filter-tabs small { margin-left: .2rem; font-size: .72rem; color: var(--md-muted); }
+.md-filter-tabs button.active small { color: #5165ad; }
+
+@media (max-width: 575.98px) {
+    .md-filter-tabs { padding: 0 1rem; gap: 1.2rem; }
+}
+
+/* Whole card clickable (e.g. Customer Overview → Orders) */
+.md-card-clickable { position: relative; transition: border-color .15s ease, box-shadow .15s ease; }
+.md-card-clickable:hover { border-color: var(--md-gold); box-shadow: 0 4px 14px rgba(0, 0, 0, .06); }
+.md-card-clickable .stretched-link:focus-visible { outline: 2px solid var(--md-gold); outline-offset: -2px; }
+
+.md-btn-amber { background: #fbf3e2; border: 1px solid #efdfbb; color: #7a4f00; }
+.md-btn-amber:hover, .md-btn-amber:focus { background: #f6e7c6; border-color: #e5cd94; color: #7a4f00; }
+
+/* Active orders summary strip */
+.md-order-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: 0 1.5rem;
+    background: #f6f3ec;
+    border-top: 1px solid var(--md-line);
+}
+
+.md-order-summary-strip > div { padding: .8rem 1rem; display: flex; flex-direction: column; gap: .15rem; }
+.md-order-summary-strip > div + div { border-left: 1px solid var(--md-line); }
+.md-order-summary-strip b { font-family: var(--md-font-heading); font-size: 1.3rem; font-weight: 400; line-height: 1; }
+.md-order-summary-strip span { font-size: var(--md-text-meta); color: var(--md-muted); }
+
+/* Active order rows */
+.md-order {
+    display: flex;
+    gap: .9rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-order:last-child { border-bottom: 0; }
+
+/* Table number in a soft circle */
+.md-table-badge {
+    flex: 0 0 auto;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    background: #f6f3ec;
+    border: 1px solid #ece4d2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--md-font-heading);
+    font-variant-numeric: lining-nums;
+    font-size: 1rem;
+}
+
+.md-order { align-items: center; }
+
+.md-order-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
+
+/* Pill above, amount below, right-aligned */
+.md-order-side { display: flex; flex-direction: column; align-items: flex-end; gap: .4rem; }
+
+.md-order-amount { font-size: var(--md-text-body); font-variant-numeric: lining-nums; white-space: nowrap; }
+
+/* Whole row clickable (stretched-link on the name); light hover */
+.md-row-link { position: relative; transition: background-color .15s ease; }
+.md-row-link:hover { background-color: #faf8f3; }
+.md-row-link .stretched-link { color: inherit; text-decoration: none; }
+.md-row-link .stretched-link:focus-visible { outline: none; }
+.md-row-link .stretched-link:focus-visible::after { outline: 2px solid var(--md-gold); outline-offset: -2px; }
+
+/* Phones: guest rows wrap (pill under the name) */
+@media (max-width: 575.98px) {
+    .md-panel-head, .md-panel-legend, .md-guest, .md-order { padding-left: 1rem; padding-right: 1rem; }
+    .md-order-summary-strip { margin: 0 1rem; }
+    .md-guest { grid-template-columns: 3.6rem minmax(0, 1fr); row-gap: .6rem; }
+    .md-guest > .md-pill { grid-column: 2; justify-self: start; }
+}
