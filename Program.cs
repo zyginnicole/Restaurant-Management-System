@@ -21,6 +21,7 @@ builder.Services.AddSession(options =>
 
 // ---- Account services (Dev 1) ----
 builder.Services.AddSingleton<PasswordService>();      // one shared PasswordService for the whole app
+builder.Services.AddScoped<AuthService>();
 
 var app = builder.Build();
 
