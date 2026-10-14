@@ -1,25 +1,26 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
+using RestaurantManagementSystem.Services;
 using CustomerModel = RestaurantManagementSystem.Model.Customer;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
     public class RegisterModel : PageModel
     {
-        private readonly ApplicationDbContext _context;
-        public RegisterModel(ApplicationDbContext context)
+        private readonly AuthService _authService;
+
+        public RegisterModel(AuthService authService)
         {
-            _context = context;
+            _authService = authService;
         }
 
-        // The form fields (Customer.custName, custEmail, custPhone, DietryPref, custPassword) bind to this object
+        // The form fields (Customer.custName, custEmail, custPhone, DietaryPref, custPassword) bind to this object
         [BindProperty]
         public CustomerModel Customer { get; set; } = new CustomerModel();
 
-        // These three are NOT saved in the Customer table, they only help the form
+        // These three are NOT columns in the Customer table, they only help the form
         [BindProperty]
         [Required(ErrorMessage = "Please confirm your password.")]
         [DataType(DataType.Password)]
@@ -29,12 +30,12 @@ namespace RestaurantManagementSystem.Pages.Customer
         public bool AgreeTerms { get; set; }                          // must be ticked
 
         [BindProperty]
-        public bool PromoOptIn { get; set; }                          // optional
+        public bool PromoOptIn { get; set; }                          // optional, copied to Customer.promoOptIn
 
         public IActionResult OnGet()
         {
-            // already signed in, go straight to the dashboard
-            if (HttpContext.Session.GetString("CustomerLoggedIn") == "true")
+            // already signed in as a customer, go straight to the dashboard
+            if (HttpContext.Session.IsSignedInAs(UserRoles.Customer))
             {
                 return RedirectToPage("/Customer/Dashboard");
             }
@@ -74,13 +75,8 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return Page();
             }
 
-            //check duplicate email
-            string email = Customer.custEmail.Trim();
-
-            bool emailExists = await _context.Customers
-                .AnyAsync(c => c.custEmail == email);
-
-            if (emailExists)
+            //email must not belong to ANY account (customer, staff or admin)
+            if (await _authService.IsEmailTakenAsync(Customer.custEmail))
             {
                 ModelState.AddModelError(
                     "Customer.custEmail",
@@ -88,15 +84,11 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return Page();
             }
 
-            //save new customer
-            Customer.custName = Customer.custName.Trim();
-            Customer.custEmail = email;
-            Customer.custCreateAt = DateTimeOffset.Now;
+            //save: the service trims the fields and hashes the password
+            Customer.promoOptIn = PromoOptIn;
+            await _authService.RegisterCustomerAsync(Customer);
 
-            _context.Customers.Add(Customer);
-            await _context.SaveChangesAsync();
-
-            //show the success pop-up on this page (redirect to itself so refresh won't re-submit the form)
+            //show the success pop-up (redirect to itself so refresh won't re-submit the form)
             TempData["SuccessMessage"] = "Your account has been created. You can now sign in.";
             return RedirectToPage();
         }

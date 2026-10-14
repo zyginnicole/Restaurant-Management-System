@@ -1,17 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
+using RestaurantManagementSystem.Services;
 using CustomerModel = RestaurantManagementSystem.Model.Customer;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
     public class LoginModel : PageModel
     {
-        private readonly ApplicationDbContext _context;
-        public LoginModel(ApplicationDbContext context)
+        private readonly AuthService _authService;
+
+        public LoginModel(AuthService authService)
         {
-            _context = context;
+            _authService = authService;
         }
 
         // The form fields (Customer.custEmail, Customer.custPassword) bind to this object
@@ -23,8 +24,8 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         public IActionResult OnGet()
         {
-            // already signed in, go straight to the dashboard
-            if (HttpContext.Session.GetString("CustomerLoggedIn") == "true")
+            // already signed in as a customer, go straight to the dashboard
+            if (HttpContext.Session.IsSignedInAs(UserRoles.Customer))
             {
                 return RedirectToPage("/Customer/Dashboard");
             }
@@ -52,23 +53,18 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return Page();
             }
 
-            //find customer by email
-            string email = Customer.custEmail.Trim();
+            //the service checks the password hash and the lockout rules
+            LoginResult result = await _authService.LoginCustomerAsync(
+                Customer.custEmail, Customer.custPassword);
 
-            CustomerModel? customer = await _context.Customers
-                .FirstOrDefaultAsync(c => c.custEmail == email);
-
-            //check email and password (same message for both, so we don't reveal which one is wrong)
-            if (customer == null || customer.custPassword != Customer.custPassword)
+            if (!result.Succeeded)
             {
-                ErrorMessage = "Incorrect email or password.";
+                ErrorMessage = result.ErrorMessage;
                 return Page();
             }
 
-            //save login info in session
-            HttpContext.Session.SetString("CustomerLoggedIn", "true");
-            HttpContext.Session.SetInt32("CustID", customer.custID);
-            HttpContext.Session.SetString("CustName", customer.custName);
+            //clear any old session, then store user ID + role + name
+            HttpContext.Session.SignInUser(result.UserId, result.Role, result.UserName);
 
             return RedirectToPage("/Customer/Dashboard");
         }

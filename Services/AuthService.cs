@@ -43,6 +43,7 @@ namespace RestaurantManagementSystem.Services
         // Saves a new customer. The password is hashed BEFORE it reaches the database.
         public async Task RegisterCustomerAsync(Customer customer)
         {
+            customer.custID = 0; // the database picks the ID, never the form
             customer.custName = customer.custName.Trim();
             customer.custEmail = NormaliseEmail(customer.custEmail);
             customer.custPhone = customer.custPhone.Trim();
