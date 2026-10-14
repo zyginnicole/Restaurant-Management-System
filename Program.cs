@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,7 +10,17 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddSession();
+// ---- Session: remembers who is signed in (Dev 1) ----
+builder.Services.AddDistributedMemoryCache();          // session data is kept in server memory
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);    // signed out after 30 min of no activity
+    options.Cookie.HttpOnly = true;                    // page scripts can't read the session cookie
+    options.Cookie.IsEssential = true;                 // the site needs this cookie to work
+});
+
+// ---- Account services (Dev 1) ----
+builder.Services.AddSingleton<PasswordService>();      // one shared PasswordService for the whole app
 
 var app = builder.Build();
 
