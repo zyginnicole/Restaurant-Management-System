@@ -103,12 +103,6 @@ namespace RestaurantManagementSystem.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("FailedLoginAttempts")
-                        .HasColumnType("int");
-
-                    b.Property<DateTimeOffset?>("LockoutEnd")
-                        .HasColumnType("datetimeoffset");
-
                     b.Property<DateTimeOffset>("custCreateAt")
                         .HasColumnType("datetimeoffset");
 
@@ -129,6 +123,12 @@ namespace RestaurantManagementSystem.Migrations
                         .HasMaxLength(11)
                         .HasColumnType("nvarchar(11)");
 
+                    b.Property<int>("failedLoginCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("lockoutEnd")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<bool>("promoOptIn")
                         .HasColumnType("bit");
 
@@ -137,7 +137,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("custEmail")
                         .IsUnique();
 
-                    b.ToTable("Customer");
+                    b.ToTable("Customers");
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.DiningTable", b =>
@@ -234,6 +234,49 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasKey("menuID");
 
                     b.ToTable("Menus");
+                });
+
+            modelBuilder.Entity("RestaurantManagementSystem.Model.Notification", b =>
+                {
+                    b.Property<int>("notificationID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("notificationID"));
+
+                    b.Property<int>("custID")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("isRead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("linkUrl")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("notificationCategory")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTimeOffset>("notificationCreateAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("notificationMessage")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("notificationTitle")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("notificationID");
+
+                    b.HasIndex("custID");
+
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Order", b =>
@@ -360,7 +403,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<int>("endDay")
                         .HasColumnType("int");
 
-                    b.Property<bool>("promoActive")
+                    b.Property<bool>("isActive")
                         .HasColumnType("bit");
 
                     b.Property<string>("promoCode")
@@ -453,7 +496,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("staffID"));
 
-                    b.Property<bool>("staffActive")
+                    b.Property<bool>("isActive")
                         .HasColumnType("bit");
 
                     b.Property<DateTimeOffset>("staffCreateAt")
@@ -476,7 +519,7 @@ namespace RestaurantManagementSystem.Migrations
                         .HasMaxLength(11)
                         .HasColumnType("nvarchar(11)");
 
-                    b.Property<string>("staffRole")
+                    b.Property<string>("staffPosition")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -516,6 +559,17 @@ namespace RestaurantManagementSystem.Migrations
                     b.Navigation("Customer");
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("RestaurantManagementSystem.Model.Notification", b =>
+                {
+                    b.HasOne("RestaurantManagementSystem.Model.Customer", "Customer")
+                        .WithMany("Notifications")
+                        .HasForeignKey("custID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Order", b =>
@@ -620,6 +674,8 @@ namespace RestaurantManagementSystem.Migrations
             modelBuilder.Entity("RestaurantManagementSystem.Model.Customer", b =>
                 {
                     b.Navigation("Feedbacks");
+
+                    b.Navigation("Notifications");
 
                     b.Navigation("Orders");
 

@@ -8,11 +8,10 @@ namespace RestaurantManagementSystem.Model
     [Index(nameof(promoCode), IsUnique = true)]          // no two promotions can share a code
     public class Promotion
     {
-        [Key] // Sets this as the Primary Key
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)] // Enforces Auto-Increment
+        [Key]
         public int promoID { get; set; }
 
-        // Foreign key: which admin created it(?
+        // ---- Foreign key: which admin created it ----
         [ForeignKey(nameof(Admin))]
         public int adminID { get; set; }
 
@@ -38,14 +37,14 @@ namespace RestaurantManagementSystem.Model
 
         public bool autoApply { get; set; } = false;        // "Auto-apply enabled / off"
 
-        // ---- Availability, default Monday to Sun, can define yourself
-        public DayOfWeek startDay { get; set; } = DayOfWeek.Monday;   
-        public DayOfWeek endDay { get; set; } = DayOfWeek.Sunday;     
+        // ---- Availability ----
+        public DayOfWeek startDay { get; set; } = DayOfWeek.Monday;   // "Fri"
+        public DayOfWeek endDay { get; set; } = DayOfWeek.Sunday;     // "Sun"
 
         public DateTime? validFrom { get; set; }            // optional campaign dates
         public DateTime? validUntil { get; set; }
 
-        public bool promoActive { get; set; } = true;          // the ON/OFF toggle
+        public bool isActive { get; set; } = true;          // the ON/OFF toggle
 
         public DateTimeOffset promoCreateAt { get; set; } = DateTimeOffset.Now;
     }

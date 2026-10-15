@@ -6,8 +6,7 @@ namespace RestaurantManagementSystem.Model
     [Table("Announcements")]
     public class Announcement
     {
-        [Key] // Sets this as the Primary Key
-        [DatabaseGenerated(DatabaseGeneratedOption.Identity)] // Enforces Auto-Increment
+        [Key]
         public int announcementID { get; set; }
 
         // ---- Foreign key: which admin posted it ----
