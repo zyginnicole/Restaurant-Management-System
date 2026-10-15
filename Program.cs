@@ -10,20 +10,31 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ---- Session: remembers who is signed in (Dev 1) ----
-builder.Services.AddDistributedMemoryCache();          // session data is kept in server memory
+// Session: keeps the signed-in user's ID, role and name between pages
+builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
-    options.IdleTimeout = TimeSpan.FromMinutes(30);    // signed out after 30 min of no activity
-    options.Cookie.HttpOnly = true;                    // page scripts can't read the session cookie
-    options.Cookie.IsEssential = true;                 // the site needs this cookie to work
+    options.IdleTimeout = TimeSpan.FromMinutes(30);   // signed out after 30 minutes of no activity
+    options.Cookie.HttpOnly = true;                   // JavaScript cannot read the session cookie
+    options.Cookie.IsEssential = true;                // session works without a cookie-consent banner
 });
 
-// ---- Account services (Dev 1) ----
-builder.Services.AddSingleton<PasswordService>();      // one shared PasswordService for the whole app
+// Account services (business logic layer)
+builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<DemoAccountSeeder>();
 
 var app = builder.Build();
+
+// Development only: create the demo admin and staff accounts if they are missing
+if (app.Environment.IsDevelopment())
+{
+    using (IServiceScope scope = app.Services.CreateScope())
+    {
+        DemoAccountSeeder seeder = scope.ServiceProvider.GetRequiredService<DemoAccountSeeder>();
+        await seeder.SeedAsync();
+    }
+}
 
 if (!app.Environment.IsDevelopment())
 {
