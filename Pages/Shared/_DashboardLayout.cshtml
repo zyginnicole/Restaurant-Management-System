@@ -81,8 +81,9 @@
             }
         </nav>
 
-        @* Staff and Admin both sign in through the Staff Portal *@
-        <a class="md-signout" href="/Staff/Login">Sign out</a>
+        @* Opens the Sign out confirmation pop-up below. data-id="staff" is posted as "portal",
+           so the (temporary) Customer/Logout page sends Staff and Admin back to the Staff Portal login. *@
+        <button type="button" class="md-signout" data-bs-toggle="modal" data-bs-target="#signOutPopup" data-id="staff">Sign out</button>
     </aside>
 
     <main class="md-main">
@@ -109,7 +110,23 @@
         @RenderBody()
     </main>
 
+    @* ---------- Sign out confirmation (shared _ConfirmPopup, same as the customer layout) ----------
+       TODO: change Page to "/Logout" (Sophia's page, any role) once feature/auth-login is merged,
+       then remove IdField / data-id and delete Pages/Customer/Logout. *@
+    @{
+        var signOutPopup = new ConfirmPopupView
+        {
+            Id = "signOutPopup", Eyebrow = "Account", Title = "Confirm sign-out?",
+            Message = "You'll need to sign in again through the Staff Portal.",
+            Page = "/Customer/Logout", IdField = "portal",
+            BackText = "Stay signed in", ConfirmText = "Sign out"
+        };
+    }
+    <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="signOutPopup" />
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    @* Fills any shared _ConfirmPopup from the button that opened it *@
+    <script src="~/js/confirm-popup.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

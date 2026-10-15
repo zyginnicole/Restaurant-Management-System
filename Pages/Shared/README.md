@@ -6,7 +6,7 @@
 Pages/Shared/
 ├─ _CustomerLayout.cshtml        customer pages (sidebar, header, bell, Sign out pop-up)
 ├─ _CustomerAuthLayout.cshtml    customer Login / Register
-├─ _DashboardLayout.cshtml       Staff + Admin pages
+├─ _DashboardLayout.cshtml       Staff + Admin pages (sidebar, header, Sign out pop-up)
 ├─ _StaffAuthLayout.cshtml       Staff / Admin login
 ├─ Popups/                       shared pop-ups
 │  ├─ _ConfirmPopup.cshtml       every "Are you sure?" pop-up (cancel, delete, sign out)
@@ -56,11 +56,11 @@ and `bootstrap.Modal` in JavaScript.
 
    - `data-id` → the hidden field named in `IdField` (posted to the handler)
    - `data-code`, `data-details`, … → `{code}`, `{details}`, … in Title / Message / Note
-   - Filling is done by `wwwroot/js/confirm-popup.js` (loaded by `_CustomerLayout`).
+   - Filling is done by `wwwroot/js/confirm-popup.js` (loaded by `_CustomerLayout` and `_DashboardLayout`).
 
 3. Write the handler on the PageModel, e.g. `public IActionResult OnPostCancel(int orderId)`.
 
-Options: `Page` (post to another page, e.g. `/Customer/Logout`), `Reasons` (adds a "Reason" dropdown,
+Options: `Page` (post to another page, e.g. `/Logout`), `Reasons` (adds a "Reason" dropdown,
 posted as `cancelReason`), `Danger` (red button for cancel / delete).
 
 ## Pop-ups that stay on their own page
@@ -101,3 +101,11 @@ Fill a `ReceiptView` from the Order + Payment and pass it in:
 | `pdf-download.js` | "Download … (PDF)" buttons (`data-pdf-target`, `data-pdf-name`) |
 | `function.js` | password eye buttons, pop-ups with `data-auto-show` |
 | `menu.js` | Menu page tabs, search, cart, quantity stepper, chatbot |
+
+## Sign out
+
+Both layouts show the same "Confirm sign-out?" pop-up (`signOutPopup`, shared `_ConfirmPopup`).
+For now it posts to the temporary `Pages/Customer/Logout`, which clears the session and opens Customer Login,
+or Staff Login for Staff/Admin (the Staff layout sends `portal=staff`).
+When Sophia's `feature/auth-login` is merged (her `Pages/Logout` signs out any role and needs an `OnPost`):
+set `Page = "/Logout"` in both layouts, remove `IdField`/`data-id` from the Staff layout and delete `Pages/Customer/Logout`.
