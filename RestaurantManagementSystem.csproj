@@ -15,9 +15,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Admin\" />
-    <Folder Include="Customer\" />
-    <Folder Include="Staff\" />
+    <Folder Include="Pages\Admin\" />
+    <Folder Include="Pages\Customer\" />
+    <Folder Include="Pages\Staff\" />
   </ItemGroup>
 
 </Project>

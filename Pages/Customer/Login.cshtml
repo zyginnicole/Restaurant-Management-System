@@ -1,0 +1,40 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.LoginModel
+@{
+    ViewData["Title"] = "Sign in";
+    Layout = "_CustomerAuthLayout";
+}
+
+<h1>Welcome back</h1>
+<p class="md-auth-subtitle">Sign in to your member account</p>
+
+@* Error message – show it from the PageModel when sign-in fails (remove d-none). *@
+<div class="md-alert-danger mb-4 d-none" role="alert">
+    Incorrect email or password. 3 attempts left before the account is locked for 15 minutes.
+</div>
+
+<form method="post">
+    <div class="mb-3">
+        <label class="md-label" for="custEmail">Email address</label>
+        <input class="form-control md-input" asp-for="Customer.custEmail" type="email"
+               placeholder="you@example.com" autocomplete="email" required />
+    </div>
+
+    <div class="mb-3">
+        <label class="md-label" for="custPassword">Password</label>
+        <input class="form-control md-input" asp-for="Customer.custPassword" type="password"
+               placeholder="••••••••" autocomplete="current-password" required />
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="form-check">
+            <input class="form-check-input" id="rememberMe" name="rememberMe" type="checkbox" value="true" />
+            <label class="form-check-label" for="rememberMe">Remember me</label>
+        </div>
+        <a href="#" class="small">Forgot password?</a>
+    </div>
+
+    <button type="submit" class="btn btn-md-dark w-100">Sign in</button>
+</form>
+
+<p class="md-auth-switch">No account? <a asp-page="/Customer/Register">Register</a></p>
