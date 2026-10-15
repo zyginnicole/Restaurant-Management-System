@@ -1,0 +1,234 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Customer.OrdersModel
+@{
+    ViewData["Title"] = "Orders";
+    ViewData["ActiveNav"] = "Orders";
+    ViewData["Eyebrow"] = "Your orders";
+    ViewData["Heading"] = "Orders";
+    ViewData["Subtitle"] = "Follow your open orders from the kitchen to your table.";
+    Layout = "_CustomerLayout";
+}
+
+@* Example data from the design. Replace with the customer's open orders later.
+   Order colours (same scheme as every module): Order placed yellow · Preparing orange · Served blue · Completed green.
+   Only open orders appear here; Completed and Cancelled ones are on the History page. *@
+
+@* Same cart button as the Menu page: shows the current cart and opens Checkout *@
+@section HeaderActions {
+    <a class="btn btn-md-dark md-cart-btn" href="/Customer/Checkout">
+        <i class="bi bi-bag"></i>
+        Cart · <span>2</span> items · <span>RM 204.00</span>
+    </a>
+}
+
+<div class="row md-grid md-section">
+    @* ---------- Selected order: tracker, items and totals ----------
+       One detail section per open order; the list on the right switches which one is shown.
+       On phones the list comes first (order-1) and the detail below it (order-2). *@
+    <div class="col-lg-7 order-2 order-lg-1">
+
+        @* ORD-0088 · Dine-in · Preparing *@
+        <section class="md-card h-100 md-order-detail" id="order-ORD-0088">
+            <div class="md-card-header">
+                <span class="md-card-label">Order — <strong class="md-card-code">ORD-0088</strong></span>
+                <span class="md-badge md-badge-preparing">Preparing</span>
+            </div>
+            <div class="md-card-body">
+                @* Order placed → Preparing → Served → Completed; "done" = finished, "current" = now *@
+                <ol class="md-tracker">
+                    <li class="done"><span>Order placed</span><small class="md-tracker-time">19:42</small></li>
+                    <li class="current"><span>Preparing</span><small class="md-tracker-time">19:46</small></li>
+                    <li><span>Served</span><small class="md-tracker-time">—</small></li>
+                    <li><span>Completed</span><small class="md-tracker-time">—</small></li>
+                </ol>
+
+                <dl class="md-order-facts">
+                    <div><dt>Order type</dt><dd>Dine-in</dd></div>
+                    <div><dt>Table</dt><dd><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-07 · Indoor</dd></div>
+                    <div><dt>Reservation</dt><dd>R-0041</dd></div>
+                    <div><dt>Placed</dt><dd>20 Sep, 19:42</dd></div>
+                </dl>
+
+                @* One row per OrderItem: quantity × name, kitchen note, line price *@
+                <ul class="md-order-items">
+                    <li><span>1× Wagyu Beef Tenderloin<small class="md-item-note">Medium rare</small></span><span>RM 168.00</span></li>
+                    <li><span>1× Château Margaux 2018 (glass)</span><span>RM 120.00</span></li>
+                </ul>
+                <div class="md-order-summary">
+                    <span>Total so far</span>
+                    <span class="md-order-total">RM 288.00</span>
+                </div>
+
+                <p class="md-note-box">The kitchen is preparing your order. Service charge and SST are added to the bill, which is paid at your table once everything is served.</p>
+            </div>
+        </section>
+
+        @* ORD-0089 · Takeaway · Order placed (paid online) – hidden until chosen in the list *@
+        <section class="md-card h-100 md-order-detail d-none" id="order-ORD-0089">
+            <div class="md-card-header">
+                <span class="md-card-label">Order — <strong class="md-card-code">ORD-0089</strong></span>
+                <span class="md-badge md-badge-placed">Order placed</span>
+            </div>
+            <div class="md-card-body">
+                <ol class="md-tracker">
+                    <li class="current"><span>Order placed</span><small class="md-tracker-time">20:44</small></li>
+                    <li><span>Preparing</span><small class="md-tracker-time">—</small></li>
+                    <li><span>Served</span><small class="md-tracker-time">—</small></li>
+                    <li><span>Completed</span><small class="md-tracker-time">—</small></li>
+                </ol>
+
+                <dl class="md-order-facts">
+                    <div><dt>Order type</dt><dd>Takeaway</dd></div>
+                    <div><dt>Pick-up</dt><dd>Today, 21:30</dd></div>
+                    <div><dt>Payment</dt><dd><span class="md-badge md-badge-paid">Paid</span></dd></div>
+                    <div><dt>Placed</dt><dd>20 Sep, 20:44</dd></div>
+                </dl>
+
+                <ul class="md-order-items">
+                    <li><span>1× Wagyu Beef Tenderloin</span><span>RM 168.00</span></li>
+                    <li><span>1× Valrhona Chocolate Fondant</span><span>RM 36.00</span></li>
+                    <li class="md-order-items-sub"><span>SST 6%</span><span>RM 12.24</span></li>
+                </ul>
+                <div class="md-order-summary">
+                    <span>Total paid</span>
+                    <span class="md-order-total">RM 216.24</span>
+                </div>
+
+                @* Cancel only while orderStatus = "Order placed" (before the kitchen starts) *@
+                <div class="md-order-cancel">
+                    <p class="md-hint mb-0">You can cancel until the kitchen starts preparing. Paid orders are refunded to your card.</p>
+                    <button type="button" class="btn md-btn-cancel md-btn-sm" data-bs-toggle="modal" data-bs-target="#cancelOrderPopup"
+                            data-id="ORD-0089" data-code="ORD-0089" data-details="Takeaway · pick-up 21:30 · RM 216.24">Cancel order</button>
+                </div>
+            </div>
+        </section>
+
+        @* ORD-0087 · Dine-in · Served (bill not paid yet) – hidden until chosen in the list.
+           Recording the payment at the table (staff) moves it to Completed, and it leaves this page for History. *@
+        <section class="md-card h-100 md-order-detail d-none" id="order-ORD-0087">
+            <div class="md-card-header">
+                <span class="md-card-label">Order — <strong class="md-card-code">ORD-0087</strong></span>
+                <span class="md-badge md-badge-served">Served</span>
+            </div>
+            <div class="md-card-body">
+                <ol class="md-tracker">
+                    <li class="done"><span>Order placed</span><small class="md-tracker-time">19:10</small></li>
+                    <li class="done"><span>Preparing</span><small class="md-tracker-time">19:12</small></li>
+                    <li class="current"><span>Served</span><small class="md-tracker-time">19:48</small></li>
+                    <li><span>Completed</span><small class="md-tracker-time">—</small></li>
+                </ol>
+
+                <dl class="md-order-facts">
+                    <div><dt>Order type</dt><dd>Dine-in</dd></div>
+                    <div><dt>Table</dt><dd><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-05 · Outdoor</dd></div>
+                    <div><dt>Reservation</dt><dd>R-0047</dd></div>
+                    <div><dt>Payment</dt><dd><span class="md-badge md-badge-pending">Pending</span></dd></div>
+                </dl>
+
+                <ul class="md-order-items">
+                    <li><span>2× Pan-Seared Sea Bass</span><span>RM 196.00</span></li>
+                    <li><span>1× Duck à l'Orange<small class="md-item-note">No orange zest</small></span><span>RM 92.00</span></li>
+                    <li><span>3× Mille-Feuille</span><span>RM 96.00</span></li>
+                </ul>
+                <div class="md-order-summary">
+                    <span>Total so far</span>
+                    <span class="md-order-total">RM 384.00</span>
+                </div>
+
+                <p class="md-note-box md-note-box-info">Everything has been served. Ask our staff for the bill when you're ready – paying at your table completes the order.</p>
+            </div>
+        </section>
+    </div>
+
+    @* ---------- Open orders list (click to show the order on the left) ---------- *@
+    <div class="col-lg-5 order-1 order-lg-2">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Your open orders</span>
+                <span class="md-card-meta">3 open</span>
+            </div>
+            <ul class="md-order-pick" id="orderPick">
+                <li>
+                    <button type="button" class="md-order-pick-row is-preparing active" data-show="order-ORD-0088" aria-pressed="true">
+                        <span class="md-order-pick-main">
+                            <span class="md-res-code">ORD-0088</span>
+                            <span class="md-res-item-info">Dine-in · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-07 · 2 items</span>
+                            <span class="md-res-item-note">Placed 19:42</span>
+                        </span>
+                        <span class="md-order-pick-side">
+                            <span class="md-badge md-badge-preparing">Preparing</span>
+                            <span class="md-order-pick-amount">RM 288.00</span>
+                        </span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="md-order-pick-row is-placed" data-show="order-ORD-0089" aria-pressed="false">
+                        <span class="md-order-pick-main">
+                            <span class="md-res-code">ORD-0089</span>
+                            <span class="md-res-item-info">Takeaway · pick-up 21:30 · 2 items</span>
+                            <span class="md-res-item-note">Placed 20:44</span>
+                        </span>
+                        <span class="md-order-pick-side">
+                            <span class="md-badge md-badge-placed">Order placed</span>
+                            <span class="md-order-pick-amount">RM 216.24</span>
+                        </span>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="md-order-pick-row is-served" data-show="order-ORD-0087" aria-pressed="false">
+                        <span class="md-order-pick-main">
+                            <span class="md-res-code">ORD-0087</span>
+                            <span class="md-res-item-info">Dine-in · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-05 · 6 items</span>
+                            <span class="md-res-item-note">Placed 19:10 · bill not paid yet</span>
+                        </span>
+                        <span class="md-order-pick-side">
+                            <span class="md-badge md-badge-served">Served</span>
+                            <span class="md-order-pick-amount">RM 384.00</span>
+                        </span>
+                    </button>
+                </li>
+            </ul>
+            <div class="md-card-foot">
+                <a class="md-stat-action" href="/Customer/History">Past orders are in History <i class="bi bi-arrow-right"></i></a>
+            </div>
+        </section>
+    </div>
+</div>
+
+@* ---------- Cancel order pop-up (only for Order placed) ----------
+   Shared _ConfirmPopup: posts orderId (from the button's data-id) to OnPostCancel.
+   {code} and {details} come from the clicked button's data-code / data-details. *@
+@{
+    var cancelOrderPopup = new ConfirmPopupView
+    {
+        Id = "cancelOrderPopup", Eyebrow = "Order", Title = "Cancel {code}?", Message = "{details}",
+        Note = "Its status changes to Cancelled and the payment is refunded to your card within 3–5 working days.",
+        Handler = "Cancel", IdField = "orderId",
+        BackText = "Keep order", ConfirmText = "Cancel order", Danger = true
+    };
+}
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="cancelOrderPopup" />
+
+@section Scripts {
+    <script>
+        (function () {
+            // Open orders list: show the chosen order on the left
+            var rows = document.querySelectorAll('#orderPick [data-show]');
+            rows.forEach(function (row) {
+                row.addEventListener('click', function () {
+                    rows.forEach(function (r) {
+                        var on = r === row;
+                        r.classList.toggle('active', on);
+                        r.setAttribute('aria-pressed', on);
+                        document.getElementById(r.dataset.show).classList.toggle('d-none', !on);
+                    });
+                    // On phones the detail is below the list – scroll down to it
+                    if (window.innerWidth < 992) {
+                        document.getElementById(row.dataset.show).scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            });
+            // The Cancel order pop-up is filled by confirm-popup.js (loaded by the layout)
+        })();
+    </script>
+}
