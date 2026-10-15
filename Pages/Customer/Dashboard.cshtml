@@ -6,6 +6,24 @@
     ViewData["Eyebrow"] = "Good evening";
     ViewData["Heading"] = "Alexandra Beaumont";
     Layout = "_CustomerLayout";
+
+    // Next reservations card: the customer's Pending / Confirmed (incl. Seated) reservations in the next 7 days, soonest first.
+    // Backend: replace this list with the query result. The card always has two slots:
+    //   1 reservation → top slot filled, bottom slot left blank · 2 → both slots · 3 or more → the slots scroll inside the card.
+    // UI preview only: /Customer/Dashboard?preview=2 or ?preview=3
+    var nextReservations = new List<(string Code, string Status, string Month, string Day, string DayText, string Time, int Guests, string Table)>
+    {
+        ("R-0041", "Confirmed", "Sep", "20", "Sunday evening", "7:30 PM", 2, "T-07 · Indoor")
+    };
+    var preview = Request.Query["preview"].ToString();
+    if (preview == "2" || preview == "3")
+    {
+        nextReservations.Insert(0, ("R-0047", "Seated", "Sep", "16", "Tonight", "7:00 PM", 3, "T-05 · Outdoor"));
+    }
+    if (preview == "3")
+    {
+        nextReservations.Add(("R-0049", "Pending", "Oct", "04", "Sunday evening", "8:00 PM", 8, "VIP"));
+    }
 }
 
 @* Example data from the design. Replace with the signed-in customer's data later. *@
@@ -97,35 +115,58 @@
 <div class="row md-grid md-section">
     @* ---------- Next reservation (narrower column) ---------- *@
     <div class="col-lg-5">
-        <section class="md-card h-100">
-            <div class="md-card-header">
-                <span class="md-card-label">Next reservation — <strong class="md-card-code">R-0041</strong></span>
-                <span class="md-badge md-badge-confirmed">Confirmed</span>
-            </div>
-            <div class="md-card-body md-reservation">
-                @* Date tile (month + day) and day/time *@
-                <div class="md-res-datetime">
-                    <div class="md-date-tile" aria-hidden="true">
-                        <span class="md-date-tile-month">Sep</span>
-                        <span class="md-date-tile-day">20</span>
-                    </div>
-                    <div>
-                        <div class="md-res-date">Sunday evening</div>
-                        <div class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>7:30 PM</div>
-                    </div>
+        @* Each reservation links to the Reservations page with its details pop-up open
+           (?view= the reservation code – the Reservations page opens the matching row). *@
+        @if (nextReservations.Count > 0)
+        {
+            var first = nextReservations[0];
+            @* Two slots, each the same layout (big date tile + day, time, guests, table).
+               Header shows the soonest reservation; later slots show their own code + status.
+               1 reservation → bottom slot left blank · 3+ → the slots scroll inside the card. *@
+            <section class="md-card h-100">
+                <div class="md-card-header">
+                    <span class="md-card-label">Next reservation — <strong class="md-card-code">@first.Code</strong></span>
                 </div>
-
-                @* Guests + table *@
-                <div class="md-reservation-details">
-                    <span><i class="bi bi-person" aria-hidden="true"></i>2 <span class="visually-hidden">guests</span></span>
-                    <span>T-07 · Indoor</span>
-                </div>
-                @* View details opens the pop-up (Modify is available inside the pop-up) *@
-                <div class="md-res-actions">
-                    <button type="button" class="btn btn-md-outline" data-bs-toggle="modal" data-bs-target="#reservationModal">View details</button>
-                </div>
-            </div>
-        </section>
+                <ul class="md-next-slots" tabindex="0" aria-label="Reservations in the next 7 days">
+                    @for (int i = 0; i < nextReservations.Count; i++)
+                    {
+                        var r = nextReservations[i];
+                        <li class="md-next-slot md-row-link">
+                            <a class="stretched-link" href="/Customer/Reservations?view=@r.Code" aria-label="View reservation @r.Code"></a>
+                            <div class="md-next-res">
+                                <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
+                                    <span class="md-date-tile-month">@r.Month</span>
+                                    <span class="md-date-tile-day">@r.Day</span>
+                                </div>
+                                <div class="md-next-res-info">
+                                    @* Status tag above the day (the code too from the 2nd slot – the header names the first) *@
+                                    <span class="md-next-slot-code">
+                                        <span class="md-badge md-badge-@r.Status.ToLower()">@r.Status</span>
+                                        @if (i > 0)
+                                        {
+                                            <span class="md-res-code">@r.Code</span>
+                                        }
+                                    </span>
+                                    <div class="md-res-date">@r.DayText</div>
+                                    <div class="md-next-res-row">
+                                        <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>@r.Time</span>
+                                        <span><i class="bi bi-person" aria-hidden="true"></i>@r.Guests <span class="visually-hidden">guests</span></span>
+                                    </div>
+                                    <div class="md-next-res-row">
+                                        <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@r.Table</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    }
+                    @if (nextReservations.Count == 1)
+                    {
+                        @* Blank bottom slot keeps the two-slot layout *@
+                        <li class="md-next-slot is-empty" aria-hidden="true"></li>
+                    }
+                </ul>
+            </section>
+        }
     </div>
 
     @* ---------- Order in progress (wider column for the status line) ---------- *@
@@ -160,5 +201,3 @@
         </section>
     </div>
 </div>
-
-<partial name="_ReservationModal" />
