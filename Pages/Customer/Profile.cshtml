@@ -10,6 +10,9 @@
     // Example data – later from the signed-in Customer
     var dietary = "None";
     var dietaryOptions = new[] { "None", "Vegetarian", "Vegan", "Halal", "Gluten-free", "Nut allergy", "Seafood allergy", "Other" };
+    var seating = "No preference";                                               // Customer.seatingPref
+    var seatingOptions = new[] { "No preference", "Indoor", "Outdoor", "VIP" };  // same as the booking's dining areas
+    string? kitchenNotes = null;                                                 // Customer.kitchenNotes
 
     // Open the Change password pop-up again when OnPostPassword returns Page() with errors
     var reopenPassword = Request.Query["handler"] == "Password" && !ViewData.ModelState.IsValid;
@@ -84,22 +87,23 @@
                         </select>
                     </div>
 
-                    @* Not in the Customer model yet (see ProfileModel notes) – shown so staff can prepare the visit *@
+                    @* Customer.seatingPref – pick one (max 30 characters). Shown so staff can prepare the visit. *@
                     <div class="mb-3">
-                        <span class="md-label">Seating preferences</span>
-                        <div class="md-chips md-chips-ink mt-0" data-chip-group>
-                            <button type="button" class="md-chip active" data-chip="Window seat" aria-pressed="true">Window seat</button>
-                            <button type="button" class="md-chip" data-chip="Quiet area" aria-pressed="false">Quiet area</button>
-                            <button type="button" class="md-chip" data-chip="Outdoor" aria-pressed="false">Outdoor</button>
-                            <button type="button" class="md-chip" data-chip="High chair" aria-pressed="false">High chair</button>
-                            <button type="button" class="md-chip" data-chip="Wheelchair access" aria-pressed="false">Wheelchair access</button>
+                        <span class="md-label" id="seatingLabel">Seating preference</span>
+                        <div class="md-chips md-chips-ink mt-0" role="radiogroup" aria-labelledby="seatingLabel" data-chip-group>
+                            @foreach (var option in seatingOptions)
+                            {
+                                bool on = option == seating;
+                                <button type="button" class="md-chip @(on ? "active" : "")" role="radio" data-chip="@option" aria-checked="@(on ? "true" : "false")">@option</button>
+                            }
                         </div>
-                        <input type="hidden" name="seatingPreferences" value="Window seat" data-chip-value />
+                        <input type="hidden" name="Customer.seatingPref" value="@seating" data-chip-value />
                     </div>
 
+                    @* Customer.kitchenNotes – optional, max 300 characters *@
                     <div>
-                        <label class="md-label" for="kitchenNotes">Other notes for the kitchen</label>
-                        <input class="form-control md-input" id="kitchenNotes" name="kitchenNotes" type="text" placeholder="e.g. no coriander" />
+                        <label class="md-label" for="Customer_kitchenNotes">Other notes for the kitchen</label>
+                        <input class="form-control md-input" id="Customer_kitchenNotes" name="Customer.kitchenNotes" type="text" maxlength="300" placeholder="e.g. no coriander" value="@kitchenNotes" />
                         <p class="md-hint mt-2 mb-0">Shared with restaurant staff only, to prepare your visit.</p>
                     </div>
 
@@ -190,15 +194,18 @@
             });
         })();
 
-        // Seating preference chips: on/off, kept in the hidden field as "Window seat · Quiet area"
+        // Seating preference chips: pick one – the chosen value goes into Customer.seatingPref
         document.querySelectorAll('[data-chip-group]').forEach(function (group) {
             var hidden = group.parentElement.querySelector('[data-chip-value]');
-            group.querySelectorAll('.md-chip').forEach(function (chip) {
+            var chips = group.querySelectorAll('.md-chip');
+            chips.forEach(function (chip) {
                 chip.addEventListener('click', function () {
-                    var on = !chip.classList.contains('active');
-                    chip.classList.toggle('active', on);
-                    chip.setAttribute('aria-pressed', on);
-                    hidden.value = Array.prototype.map.call(group.querySelectorAll('.md-chip.active'), function (c) { return c.dataset.chip; }).join(' · ');
+                    chips.forEach(function (c) {
+                        var on = c === chip;
+                        c.classList.toggle('active', on);
+                        c.setAttribute('aria-checked', on);
+                    });
+                    hidden.value = chip.dataset.chip;
                 });
             });
         });

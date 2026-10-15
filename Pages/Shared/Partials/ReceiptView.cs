@@ -7,7 +7,8 @@ namespace RestaurantManagementSystem.Pages.Shared.Partials
     //   ReceiptNo      "RCP-" + Payment.paymentID.ToString("0000")
     //   OrderCode      "ORD-" + Order.orderID.ToString("0000")
     //   IsDineIn       Order.reservationID != null  (takeaway orders have no reservation)
-    //   Items          one line per OrderItem: quantity, Menu.menuName, unitPrice
+    //   PickupTime     Order.pickupDateTime?.ToString("HH:mm")  (takeaway; null for dine-in)
+    //   Items          one line per OrderItem: quantity, Menu.menuName, unitPrice, itemRemark
     //   PaymentMethod  Payment.paymentMethod,  PaymentStatus  Payment.paymentStatus
     //   PaidAt         Payment.paymentDate
     //
@@ -23,7 +24,7 @@ namespace RestaurantManagementSystem.Pages.Shared.Partials
         public bool IsDineIn { get; set; }
         public string? ReservationCode { get; set; }      // dine-in, e.g. "R-0038"
         public string? TableCode { get; set; }            // dine-in, e.g. "T-12"
-        public string? PickupTime { get; set; }           // takeaway – no field in Order yet, leave null to hide
+        public string? PickupTime { get; set; }           // takeaway: Order.pickupDateTime as "21:30" (null hides the line)
         public string CustomerName { get; set; } = "";
         public List<ReceiptLine> Items { get; set; } = new();
         public string PaymentMethod { get; set; } = "";
@@ -43,7 +44,7 @@ namespace RestaurantManagementSystem.Pages.Shared.Partials
         public int Quantity { get; set; }
         public string Name { get; set; } = "";
         public decimal UnitPrice { get; set; }            // OrderItem.unitPrice (price when ordered)
-        public string? Note { get; set; }                 // e.g. "Medium rare" – no field in OrderItem yet, leave null to hide
+        public string? Note { get; set; }                 // OrderItem.itemRemark, e.g. "Medium rare" (null hides it)
         public decimal LineTotal => Quantity * UnitPrice;
     }
 }

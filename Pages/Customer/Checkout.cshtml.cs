@@ -7,13 +7,16 @@ namespace RestaurantManagementSystem.Pages.Customer
     // Static UI for now – backend notes:
     //  - OnGet: load the cart (e.g. Session) with Menu prices; load the customer's Confirmed reservations
     //    for today/upcoming for the dine-in dropdown.
-    //  - OnPost (fields: orderType "Takeaway"/"DineIn", reservationId (dine-in), pickupTime + contactPhone
-    //    (takeaway), items[i].menuId / items[i].quantity / items[i].note):
-    //      create Order (orderStatus "Order placed", reservationID = null for takeaway) + OrderItems
-    //      (unitPrice = current Menu price), totalAmount = subtotal (+ SST, + service charge for dine-in).
+    //  - OnPost (fields: orderType "Takeaway"/"DineIn", reservationId (dine-in), pickupDateTime + contactPhone
+    //    (takeaway), items[i].menuId / items[i].quantity / items[i].itemRemark):
+    //      create Order (orderStatus "Order placed", reservationID = null for takeaway,
+    //      pickupDateTime = chosen time for takeaway / null for dine-in) + OrderItems
+    //      (unitPrice = current Menu price, itemRemark = the note, max 200),
+    //      totalAmount = subtotal (+ SST, + service charge for dine-in).
     //      Takeaway → RedirectToPage("/Customer/Payment") (paid online first).
     //      Dine-in  → RedirectToPage("/Customer/Orders") (paid on the bill at the table).
-    //  - Not in the model yet (ask the leader): item note, pick-up time, contact phone for the order.
+    //  - contactPhone has no field in Order: it is pre-filled from Customer.custPhone (update the customer's
+    //    phone if it was changed, or leave it out).
     public class CheckoutModel : PageModel
     {
         public void OnGet()

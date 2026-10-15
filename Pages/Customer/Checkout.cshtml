@@ -27,7 +27,7 @@
                             <span class="md-cart-name">Wagyu Beef Tenderloin</span>
                             <span class="md-cart-each">RM 168.00 each</span>
                             <input type="hidden" name="items[0].menuId" value="3" />
-                            <input class="form-control md-input md-cart-note" name="items[0].note" placeholder="Note for the kitchen" value="Medium rare" aria-label="Note for Wagyu Beef Tenderloin" />
+                            <input class="form-control md-input md-cart-note" name="items[0].itemRemark" maxlength="200" placeholder="Note for the kitchen" value="Medium rare" aria-label="Note for Wagyu Beef Tenderloin" />
                         </div>
                         <div class="md-qty" aria-label="Quantity">
                             <button type="button" data-step="-1" aria-label="One less">−</button>
@@ -42,7 +42,7 @@
                             <span class="md-cart-name">Valrhona Chocolate Fondant</span>
                             <span class="md-cart-each">RM 36.00 each</span>
                             <input type="hidden" name="items[1].menuId" value="7" />
-                            <input class="form-control md-input md-cart-note" name="items[1].note" placeholder="Note for the kitchen" aria-label="Note for Valrhona Chocolate Fondant" />
+                            <input class="form-control md-input md-cart-note" name="items[1].itemRemark" maxlength="200" placeholder="Note for the kitchen" aria-label="Note for Valrhona Chocolate Fondant" />
                         </div>
                         <div class="md-qty" aria-label="Quantity">
                             <button type="button" data-step="-1" aria-label="One less">−</button>
@@ -68,14 +68,14 @@
                         <label for="typeDineIn">Dine-in with my reservation</label>
                     </div>
 
-                    @* Takeaway: pick-up time + phone *@
+                    @* Takeaway: pick-up time (Order.pickupDateTime – value is the date + time) + phone *@
                     <div class="row g-3" data-type-panel="Takeaway">
                         <div class="col-sm-6">
-                            <label class="md-label" for="pickupTime">Pick-up time</label>
-                            <select class="form-select md-input" id="pickupTime" name="pickupTime">
-                                <option>Today 21:00</option>
-                                <option selected>Today 21:30</option>
-                                <option>Today 22:00</option>
+                            <label class="md-label" for="pickupDateTime">Pick-up time</label>
+                            <select class="form-select md-input" id="pickupDateTime" name="pickupDateTime">
+                                <option value="2026-09-16T21:00">Today 21:00</option>
+                                <option value="2026-09-16T21:30" selected>Today 21:30</option>
+                                <option value="2026-09-16T22:00">Today 22:00</option>
                             </select>
                         </div>
                         <div class="col-sm-6">
