@@ -1,33 +1,33 @@
-// Opens the shared notification pop-up (_NotificationModal) when a notification is clicked.
+// Opens the shared notification pop-up (_NotificationPopup) when a notification is clicked.
 // Each clickable item needs class "md-notice-btn" and these data-* values:
 //   data-type, data-title, data-message, data-time, and optionally data-link + data-link-text.
 (function () {
-    var modalElement = document.getElementById('notificationModal');
-    if (!modalElement) return;
+    var popupElement = document.getElementById('notificationPopup');
+    if (!popupElement) return;
 
-    var modal = new bootstrap.Modal(modalElement);
+    var popup = new bootstrap.Modal(popupElement);
 
     document.querySelectorAll('.md-notice-btn').forEach(function (item) {
         item.addEventListener('click', function () {
-            document.getElementById('notificationModalType').textContent = item.dataset.type || 'Notification';
-            document.getElementById('notificationModalTitle').textContent = item.dataset.title || '';
-            document.getElementById('notificationModalMessage').textContent = item.dataset.message || '';
-            document.getElementById('notificationModalTime').textContent = item.dataset.time || '';
+            document.getElementById('notificationPopupType').textContent = item.dataset.type || 'Notification';
+            document.getElementById('notificationPopupTitle').textContent = item.dataset.title || '';
+            document.getElementById('notificationPopupMessage').textContent = item.dataset.message || '';
+            document.getElementById('notificationPopupTime').textContent = item.dataset.time || '';
 
-            var link = document.getElementById('notificationModalLink');
+            // Action button in the footer; the footer is hidden when there is no link (close with ×)
+            var link = document.getElementById('notificationPopupLink');
+            var footer = document.getElementById('notificationPopupFooter');
             if (item.dataset.link) {
                 link.href = item.dataset.link;
                 link.textContent = item.dataset.linkText || 'View';
-                link.classList.remove('d-none');
-            } else {
-                link.classList.add('d-none');
             }
+            if (footer) footer.classList.toggle('d-none', !item.dataset.link);
 
             // Mark as read on screen. Saving the "read" status is for the team to add later.
             var notice = item.closest('.md-notice');
             if (notice) notice.classList.remove('unread');
 
-            modal.show();
+            popup.show();
         });
     });
 })();
