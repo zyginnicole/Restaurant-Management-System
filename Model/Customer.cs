@@ -31,6 +31,15 @@ namespace RestaurantManagementSystem.Model
 
         public string DietaryPref { get; set; } = "None";
 
+        // ---- Profile preferences ----
+        [MaxLength(30)]
+        // No preference, Indoor, Outdoor, VIP (examples)
+        public string seatingPref { get; set; } = "No preference";
+
+        //// e.g. "Please keep dishes mild" (optional)
+        [MaxLength(300, ErrorMessage = "Kitchen notes cannot exceed 300 characters.")]
+        public string? kitchenNotes { get; set; }                    
+
         // ---- Promotions: ticked "Send me promotions and member offers" at registration ----
         public bool promoOptIn { get; set; } = false;
 

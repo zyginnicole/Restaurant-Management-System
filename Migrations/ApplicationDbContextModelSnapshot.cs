@@ -126,11 +126,20 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<int>("failedLoginCount")
                         .HasColumnType("int");
 
+                    b.Property<string>("kitchenNotes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<DateTimeOffset?>("lockoutEnd")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<bool>("promoOptIn")
                         .HasColumnType("bit");
+
+                    b.Property<string>("seatingPref")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.HasKey("custID");
 
@@ -297,6 +306,9 @@ namespace RestaurantManagementSystem.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("pickupDateTime")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("reservationID")
                         .HasColumnType("int");
 
@@ -324,6 +336,10 @@ namespace RestaurantManagementSystem.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("orderItemID"));
+
+                    b.Property<string>("itemRemark")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<int>("menuID")
                         .HasColumnType("int");
