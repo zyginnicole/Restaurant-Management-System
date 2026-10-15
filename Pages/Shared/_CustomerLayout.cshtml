@@ -1,6 +1,7 @@
-@{
+﻿@{
     // Each customer page sets ViewData["ActiveNav"] so the matching sidebar link is highlighted.
     string active = ViewData["ActiveNav"] as string ?? "";
+    bool hideBell = ViewData["HideBell"] as bool? ?? false;   // e.g. the Notifications page hides the bell
     string NavClass(string name) => name == active ? "md-nav-link active" : "md-nav-link";
 }
 <!DOCTYPE html>
@@ -26,7 +27,11 @@
             <i class="bi bi-list"></i>
         </button>
         <span class="md-mobilebar-brand">@ViewData["Brand"]</span>
-        <a class="md-bell" href="/Customer/Notifications" aria-label="Notifications"><i class="bi bi-bell"></i><span class="md-bell-dot">2</span></a>
+        @* Bell hidden on the Notifications page itself (ViewData["HideBell"] = true) *@
+        @if (!hideBell)
+        {
+            <a class="md-bell" href="/Customer/Notifications" aria-label="Notifications"><i class="bi bi-bell"></i><span class="md-bell-dot">2</span></a>
+        }
     </header>
 
     @* Sidebar: always visible on desktop, slides in on phones *@
@@ -39,13 +44,14 @@
         </div>
 
         @* Signed-in customer – replace with the real name from the session later *@
-        <div class="md-sidebar-user">
+        @* Clicking the name opens the Profile page *@
+        <a class="md-sidebar-user" href="/Customer/Profile" aria-label="Open my profile">
             <span class="md-avatar">AB</span>
             <div>
                 <div class="md-sidebar-user-name">Alexandra Beaumont</div>
                 <div class="md-sidebar-user-meta">Member since Mar 2025</div>
             </div>
-        </div>
+        </a>
 
         <nav class="md-nav">
             <a class="@NavClass("Overview")" href="/Customer/Dashboard"><i class="bi bi-grid"></i>Overview</a>
@@ -53,11 +59,13 @@
             <a class="@NavClass("Reservations")" href="/Customer/Reservations"><i class="bi bi-calendar3"></i>Reservations</a>
             <a class="@NavClass("Orders")" href="/Customer/Orders"><i class="bi bi-receipt"></i>Orders</a>
             <a class="@NavClass("History")" href="/Customer/History"><i class="bi bi-clock-history"></i>History</a>
-            <a class="@NavClass("Profile")" href="/Customer/Profile"><i class="bi bi-person"></i>Profile</a>
             <a class="@NavClass("Notifications")" href="/Customer/Notifications"><i class="bi bi-bell"></i>Notifications<span class="md-nav-badge">2</span></a>
+            @* Profile is always the last menu item, for every role *@
+            <a class="@NavClass("Profile")" href="/Customer/Profile"><i class="bi bi-person"></i>Profile</a>
         </nav>
 
-        <a class="md-signout" href="/Customer/Login">Sign out</a>
+        @* Opens the Sign out confirmation pop-up below *@
+        <button type="button" class="md-signout" data-bs-toggle="modal" data-bs-target="#signOutPopup">Sign out</button>
     </aside>
 
     <main class="md-main">
@@ -79,14 +87,32 @@
             </div>
             <div class="md-page-actions">
                 @await RenderSectionAsync("HeaderActions", required: false)
-                <a class="md-bell d-none d-lg-inline-flex" href="/Customer/Notifications" aria-label="Notifications"><i class="bi bi-bell"></i><span class="md-bell-dot">2</span></a>
+                @if (!hideBell)
+                {
+                    <a class="md-bell d-none d-lg-inline-flex" href="/Customer/Notifications" aria-label="Notifications"><i class="bi bi-bell"></i><span class="md-bell-dot">2</span></a>
+                }
             </div>
         </div>
 
         @RenderBody()
     </main>
 
+    @* ---------- Sign out confirmation (shared _ConfirmPopup) ----------
+       "Sign out" posts to /Customer/Logout (OnPost clears the session, then opens the Login page). *@
+    @{
+        var signOutPopup = new ConfirmPopupView
+        {
+            Id = "signOutPopup", Eyebrow = "Account", Title = "Confirm sign-out?",
+            Message = "You'll need to sign in again to book a table, order or view your history.",
+            Page = "/Customer/Logout",
+            BackText = "Stay signed in", ConfirmText = "Sign out"
+        };
+    }
+    <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="signOutPopup" />
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    @* Fills any shared _ConfirmPopup from the button that opened it *@
+    <script src="~/js/confirm-popup.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
