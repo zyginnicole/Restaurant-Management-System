@@ -1,0 +1,206 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Customer.ProfileModel
+@{
+    ViewData["Title"] = "Profile";
+    ViewData["ActiveNav"] = "Profile";
+    ViewData["Eyebrow"] = "Account";
+    ViewData["Heading"] = "Profile";
+    Layout = "_CustomerLayout";
+
+    // Example data – later from the signed-in Customer
+    var dietary = "None";
+    var dietaryOptions = new[] { "None", "Vegetarian", "Vegan", "Halal", "Gluten-free", "Nut allergy", "Seafood allergy", "Other" };
+
+    // Open the Change password pop-up again when OnPostPassword returns Page() with errors
+    var reopenPassword = Request.Query["handler"] == "Password" && !ViewData.ModelState.IsValid;
+}
+
+@* Saved message after saving the profile or the password (TempData["ProfileMessage"] set by the PageModel) *@
+@if (TempData["ProfileMessage"] is string message)
+{
+    <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+}
+
+@* Personal information + Dining preferences are one form. They are read-only until Edit is clicked;
+   the same button then turns into Save changes (green) and posts both cards to OnPostProfile. *@
+<form method="post" asp-page-handler="Profile" id="profileForm">
+<fieldset id="profileFields" class="md-profile-fields" disabled>
+<div class="row md-grid md-section">
+    @* ---------- Personal information ---------- *@
+    <div class="col-lg-6">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Personal information</span>
+                <span class="md-card-meta">Member since Mar 2025</span>
+            </div>
+            <div class="md-card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <label class="md-label" for="Customer_custName">Full name</label>
+                            <input class="form-control md-input" id="Customer_custName" name="Customer.custName" type="text" autocomplete="name" value="Alexandra Beaumont" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="md-label" for="Customer_custEmail">Email address</label>
+                            <input class="form-control md-input" id="Customer_custEmail" name="Customer.custEmail" type="email" autocomplete="email" value="alexandra@example.com" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="md-label" for="Customer_custPhone">Phone number</label>
+                            <input class="form-control md-input" id="Customer_custPhone" name="Customer.custPhone" type="tel" maxlength="11" inputmode="numeric" autocomplete="tel" value="0123456789" />
+                        </div>
+                    </div>
+
+                    @* Customer.promoOptIn *@
+                    <div class="md-switch-row">
+                        <div>
+                            <label class="md-switch-title" for="Customer_promoOptIn">Receive promotions and member offers</label>
+                            <span class="md-hint d-block mt-0">You can change this at any time.</span>
+                        </div>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input md-switch" type="checkbox" role="switch" id="Customer_promoOptIn" name="Customer.promoOptIn" value="true" checked />
+                            @* Sends "false" when the switch is off (same as asp-for on a bool) *@
+                            <input type="hidden" name="Customer.promoOptIn" value="false" />
+                        </div>
+                    </div>
+
+            </div>
+        </section>
+    </div>
+
+    @* ---------- Dining preferences ---------- *@
+    <div class="col-lg-6">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Dining preferences</span>
+            </div>
+            <div class="md-card-body">
+                    @* Customer.DietaryPref – same list as the Register page *@
+                    <div class="mb-3">
+                        <label class="md-label" for="Customer_DietaryPref">Dietary preference</label>
+                        <select class="form-select md-input" id="Customer_DietaryPref" name="Customer.DietaryPref">
+                            @foreach (var option in dietaryOptions)
+                            {
+                                <option value="@option" selected="@(option == dietary)">@option</option>
+                            }
+                        </select>
+                    </div>
+
+                    @* Not in the Customer model yet (see ProfileModel notes) – shown so staff can prepare the visit *@
+                    <div class="mb-3">
+                        <span class="md-label">Seating preferences</span>
+                        <div class="md-chips md-chips-ink mt-0" data-chip-group>
+                            <button type="button" class="md-chip active" data-chip="Window seat" aria-pressed="true">Window seat</button>
+                            <button type="button" class="md-chip" data-chip="Quiet area" aria-pressed="false">Quiet area</button>
+                            <button type="button" class="md-chip" data-chip="Outdoor" aria-pressed="false">Outdoor</button>
+                            <button type="button" class="md-chip" data-chip="High chair" aria-pressed="false">High chair</button>
+                            <button type="button" class="md-chip" data-chip="Wheelchair access" aria-pressed="false">Wheelchair access</button>
+                        </div>
+                        <input type="hidden" name="seatingPreferences" value="Window seat" data-chip-value />
+                    </div>
+
+                    <div>
+                        <label class="md-label" for="kitchenNotes">Other notes for the kitchen</label>
+                        <input class="form-control md-input" id="kitchenNotes" name="kitchenNotes" type="text" placeholder="e.g. no coriander" />
+                        <p class="md-hint mt-2 mb-0">Shared with restaurant staff only, to prepare your visit.</p>
+                    </div>
+
+            </div>
+        </section>
+    </div>
+</div>
+</fieldset>
+
+@* Change password (opens the pop-up below) + Edit → Save changes, under the Dining preferences card *@
+<div class="md-profile-actions md-section">
+    <button type="button" class="btn btn-md-dark" id="changePasswordButton" data-bs-toggle="modal" data-bs-target="#changePasswordPopup"><i class="bi bi-key me-2"></i>Change password</button>
+    <button type="button" class="btn btn-md-dark" id="profileEditButton"><i class="bi bi-pencil me-2"></i>Edit</button>
+</div>
+</form>
+
+@* ---------- Change password pop-up ----------
+   Posts to OnPostPassword. If the backend finds an error (e.g. wrong current password) it can add it to
+   ModelState and return Page() – the pop-up then opens again by itself (see reopenPassword at the top). *@
+<div class="modal fade md-popup" id="changePasswordPopup" tabindex="-1" aria-labelledby="changePasswordTitle" aria-hidden="true"
+     data-auto-open="@(reopenPassword ? "true" : "false")">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" asp-page-handler="Password">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Account</span>
+                    <h2 class="modal-title md-popup-title" id="changePasswordTitle">Change password</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                    @* Backend error for the password form (ModelState) – hidden while there is none *@
+                    <div asp-validation-summary="ModelOnly" class="md-note-box md-note-box-danger md-password-errors mb-3"></div>
+                    <div class="mb-3">
+                        <label class="md-label" for="currentPassword">Current password</label>
+                        <div class="position-relative">
+                            <input class="form-control md-input pe-5" id="currentPassword" name="currentPassword" type="password" autocomplete="current-password" />
+                            <button type="button" class="md-eye-btn" data-toggle-password="currentPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye"></i></button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="md-label" for="newPassword">New password</label>
+                        <div class="position-relative">
+                            <input class="form-control md-input pe-5" id="newPassword" name="newPassword" type="password" autocomplete="new-password" />
+                            <button type="button" class="md-eye-btn" data-toggle-password="newPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye"></i></button>
+                        </div>
+                        <p class="md-hint mt-2 mb-0">At least 8 characters, with an uppercase letter, a lowercase letter, a number and a symbol (@@ $ ! % * ? &amp;).</p>
+                    </div>
+                    <div>
+                        <label class="md-label" for="confirmPassword">Confirm new password</label>
+                        <div class="position-relative">
+                            <input class="form-control md-input pe-5" id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" />
+                            <button type="button" class="md-eye-btn" data-toggle-password="confirmPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye"></i></button>
+                        </div>
+                    </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-md-green">Update password</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @* function.js (shared, from the Register page): show / hide password eye buttons *@
+    <script src="~/js/function.js" asp-append-version="true"></script>
+    <script>
+        // Change password pop-up: reopen it after a failed save (data-auto-open set by the page)
+        (function () {
+            var popup = document.getElementById('changePasswordPopup');
+            if (popup.dataset.autoOpen === 'true') bootstrap.Modal.getOrCreateInstance(popup).show();
+        })();
+
+        // Edit → Save changes: first click unlocks the two cards, turns the button green and disables Change password;
+        // the second click submits the form (OnPostProfile).
+        (function () {
+            var button = document.getElementById('profileEditButton');
+            var fields = document.getElementById('profileFields');
+            button.addEventListener('click', function (e) {
+                if (!fields.disabled) return;                      // already editing → let it submit
+                e.preventDefault();
+                fields.disabled = false;
+                document.getElementById('changePasswordButton').disabled = true;   // finish saving the profile first
+                button.classList.replace('btn-md-dark', 'btn-md-green');
+                button.innerHTML = '<i class="bi bi-check2 me-2"></i>Save changes';
+                setTimeout(function () { button.type = 'submit'; }, 0);
+                document.getElementById('Customer_custName').focus();
+            });
+        })();
+
+        // Seating preference chips: on/off, kept in the hidden field as "Window seat · Quiet area"
+        document.querySelectorAll('[data-chip-group]').forEach(function (group) {
+            var hidden = group.parentElement.querySelector('[data-chip-value]');
+            group.querySelectorAll('.md-chip').forEach(function (chip) {
+                chip.addEventListener('click', function () {
+                    var on = !chip.classList.contains('active');
+                    chip.classList.toggle('active', on);
+                    chip.setAttribute('aria-pressed', on);
+                    hidden.value = Array.prototype.map.call(group.querySelectorAll('.md-chip.active'), function (c) { return c.dataset.chip; }).join(' · ');
+                });
+            });
+        });
+    </script>
+}
