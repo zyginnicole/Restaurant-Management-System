@@ -1,0 +1,23 @@
+@* Shared notification pop-up. Used by the Customer Overview and Notifications pages.
+   It is filled in by wwwroot/js/notifications.js from the clicked item's data-* values. *@
+<div class="modal fade md-popup" id="notificationPopup" tabindex="-1" aria-labelledby="notificationPopupTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow" id="notificationPopupType">Notification</span>
+                    <h2 class="modal-title md-popup-title" id="notificationPopupTitle">Notification</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="md-popup-message" id="notificationPopupMessage"></p>
+                <span class="md-notice-time" id="notificationPopupTime"></span>
+            </div>
+            @* Only the action button (Track order, View reservation …); hidden when the notification has no link. Close with × *@
+            <div class="modal-footer d-none" id="notificationPopupFooter">
+                <a class="btn btn-md-dark" id="notificationPopupLink" href="#">View</a>
+            </div>
+        </div>
+    </div>
+</div>
