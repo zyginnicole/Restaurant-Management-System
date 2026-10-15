@@ -33,13 +33,13 @@
     }
 
     // ---------- Auto-open pop-ups ----------
-    // Any modal marked data-auto-show opens when the page loads (used for success messages)
+    // Any popup marked data-auto-show opens when the page loads (used for success messages)
     document.addEventListener('DOMContentLoaded', function () {
-        const modals = document.querySelectorAll('.modal[data-auto-show]');
-        if (modals.length === 0) return;
+        const popups = document.querySelectorAll('.modal[data-auto-show]');
+        if (popups.length === 0) return;
 
         withBootstrap(function () {
-            modals.forEach(function (el) {
+            popups.forEach(function (el) {
                 bootstrap.Modal.getOrCreateInstance(el).show();
             });
         });
