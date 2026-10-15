@@ -40,6 +40,8 @@ namespace RestaurantManagementSystem.Services
                 || await _context.Admins.AnyAsync(a => a.adminEmail == normalised);
         }
 
+        // ---------- Customer ----------
+
         // Saves a new customer. The password is hashed BEFORE it reaches the database.
         public async Task RegisterCustomerAsync(Customer customer)
         {
@@ -107,6 +109,46 @@ namespace RestaurantManagementSystem.Services
             await _context.SaveChangesAsync();
 
             return LoginResult.Success(customer.custID, UserRoles.Customer, customer.custName);
+        }
+
+        // ---------- Staff Portal (Staff and Administrator) ----------
+
+        // Checks an ADMIN email + password (Administrator tab).
+        public async Task<LoginResult> LoginAdminAsync(string email, string password)
+        {
+            string normalised = NormaliseEmail(email);
+
+            Admin? admin = await _context.Admins
+                .FirstOrDefaultAsync(a => a.adminEmail == normalised);
+
+            if (admin == null || !_passwordService.VerifyPassword(admin.adminPassword, password))
+            {
+                return LoginResult.Failed(WrongDetailsMessage);
+            }
+
+            return LoginResult.Success(admin.adminID, UserRoles.Admin, admin.adminName);
+        }
+
+        // Checks a STAFF email + password (Staff tab). Deactivated staff are refused.
+        public async Task<LoginResult> LoginStaffAsync(string email, string password)
+        {
+            string normalised = NormaliseEmail(email);
+
+            Staff? staff = await _context.StaffMembers
+                .FirstOrDefaultAsync(s => s.staffEmail == normalised);
+
+            if (staff == null || !_passwordService.VerifyPassword(staff.staffPassword, password))
+            {
+                return LoginResult.Failed(WrongDetailsMessage);
+            }
+
+            // Only say "deactivated" AFTER the password is right, so strangers learn nothing
+            if (!staff.staffActive)
+            {
+                return LoginResult.Failed("This account has been deactivated. Please contact management.");
+            }
+
+            return LoginResult.Success(staff.staffID, UserRoles.Staff, staff.staffName);
         }
     }
 }
