@@ -8,44 +8,42 @@
     Layout = "_CustomerLayout";
 }
 
-@* Example data from the design. Later, loop over the Menu table instead of the hard-coded cards.
-   Card values map to the Menu model: menuName, menuDescription, menuCategory, menuPrice, isAvailable, menuImageUrl. *@
+@functions {
+    static string DayRange(RestaurantManagementSystem.Model.Promotion p) =>
+        p.startDay == DayOfWeek.Monday && p.endDay == DayOfWeek.Sunday
+            ? "Every day"
+            : p.startDay.ToString()[..3] + "–" + p.endDay.ToString()[..3];
+}
+
+@* Card values map to the Menu model: menuName, menuDescription, menuCategory, menuPrice, isAvailable, menuImageUrl. *@
 
 @* ---------- Promotion banner (full width, top of page) ----------
    One slide per active promotion. Values map to the Promotion model:
    promoTitle, promoDescription, promoLabel, promoCode, promoActive. *@
 @section TopBanner {
-    <div class="md-promo-strip" id="promoStrip" role="region" aria-label="Current promotions">
-        <div id="promoCarousel" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="5000">
-            <div class="carousel-inner">
-                @* Clicking a slide opens the Promotions tab at that promotion (data-promo-target = section id) *@
-                <div class="carousel-item active">
-                    <button type="button" class="md-promo-slide" data-promo-target="promo-weekend-tasting">
-                        <span class="md-promo-label">Promotion</span>
-                        <span class="md-promo-text"><strong>Weekend Tasting Menu</strong> — eight courses, RM 388 per guest · Fri–Sun until 27 Sep</span>
-                        <i class="bi bi-arrow-right md-promo-arrow" aria-hidden="true"></i>
-                    </button>
+    @if (Model.Promotions.Any())
+    {
+        <div class="md-promo-strip" id="promoStrip" role="region" aria-label="Current promotions">
+            <div id="promoCarousel" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="5000">
+                <div class="carousel-inner">
+                    @for (int i = 0; i < Model.Promotions.Count; i++)
+                    {
+                        var promo = Model.Promotions[i];
+                        <div class="carousel-item @(i == 0 ? "active" : "")">
+                            <button type="button" class="md-promo-slide" data-promo-target="promo-@promo.promoID">
+                                <span class="md-promo-label">Promotion</span>
+                                <span class="md-promo-text"><strong>@promo.promoTitle</strong> — @promo.promoLabel</span>
+                                <i class="bi bi-arrow-right md-promo-arrow" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    }
                 </div>
-                <div class="carousel-item">
-                    <button type="button" class="md-promo-slide" data-promo-target="promo-early-dinner">
-                        <span class="md-promo-label">Promotion</span>
-                        <span class="md-promo-text"><strong>Early Dinner</strong> — 15% off selected mains before 18:30 · Tue–Sun until 31 Oct</span>
-                        <i class="bi bi-arrow-right md-promo-arrow" aria-hidden="true"></i>
-                    </button>
-                </div>
-                <div class="carousel-item">
-                    <button type="button" class="md-promo-slide" data-promo-target="promo-birthday-dessert">
-                        <span class="md-promo-label">Members</span>
-                        <span class="md-promo-text"><strong>Birthday Dessert</strong> — complimentary dessert in your birthday month · code <span class="md-promo-code">BIRTHDAY</span></span>
-                        <i class="bi bi-arrow-right md-promo-arrow" aria-hidden="true"></i>
-                    </button>
-                </div>
+                <button class="md-promo-nav prev" type="button" data-bs-target="#promoCarousel" data-bs-slide="prev" aria-label="Previous promotion"><i class="bi bi-chevron-left"></i></button>
+                <button class="md-promo-nav next" type="button" data-bs-target="#promoCarousel" data-bs-slide="next" aria-label="Next promotion"><i class="bi bi-chevron-right"></i></button>
             </div>
-            <button class="md-promo-nav prev" type="button" data-bs-target="#promoCarousel" data-bs-slide="prev" aria-label="Previous promotion"><i class="bi bi-chevron-left"></i></button>
-            <button class="md-promo-nav next" type="button" data-bs-target="#promoCarousel" data-bs-slide="next" aria-label="Next promotion"><i class="bi bi-chevron-right"></i></button>
+            <button type="button" class="md-promo-close" id="promoClose" aria-label="Hide promotions"><i class="bi bi-x-lg"></i></button>
         </div>
-        <button type="button" class="md-promo-close" id="promoClose" aria-label="Hide promotions"><i class="bi bi-x-lg"></i></button>
-    </div>
+    }
 }
 
 @section HeaderActions {
@@ -74,75 +72,20 @@
    Recommendations tab
    ===================================================== *@
 <div id="recommendationsPanel">
-
-    @* Based on the customer's dining preferences and past orders *@
     <h2 class="md-section-title">Based on your preferences</h2>
     <div class="row md-grid md-section">
-        <div class="col-sm-6 col-xl-4">
-            <article class="md-menu-card">
-                <div class="md-photo">Mains · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-                <div class="md-menu-card-body">
-                    <div class="md-menu-card-head"><h3>Wagyu Beef Tenderloin</h3><span class="md-price">RM 168.00</span></div>
-                    <p>A5 wagyu, truffle jus, bone marrow</p>
-                    <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="168">Add to order</button>
-                </div>
-            </article>
-        </div>
-        <div class="col-sm-6 col-xl-4">
-            <article class="md-menu-card">
-                <div class="md-photo">Mains · Photo<span class="md-photo-badges"><span class="md-badge md-badge-available">Available</span><span class="md-badge md-badge-promo">15% off before 18:30</span></span></div>
-                <div class="md-menu-card-body">
-                    <div class="md-menu-card-head"><h3>Pan-Seared Sea Bass</h3><span class="md-price">RM 98.00</span></div>
-                    <p>Wild-caught sea bass, saffron beurre blanc, fennel confit</p>
-                    <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="98">Add to order</button>
-                </div>
-            </article>
-        </div>
-        <div class="col-sm-6 col-xl-4">
-            <article class="md-menu-card">
-                <div class="md-photo">Mains · Photo<span class="md-photo-badges"><span class="md-badge md-badge-available">Available</span><span class="md-badge md-badge-promo">15% off before 18:30</span></span></div>
-                <div class="md-menu-card-body">
-                    <div class="md-menu-card-head"><h3>Duck à l'Orange</h3><span class="md-price">RM 92.00</span></div>
-                    <p>Blood orange reduction, pommes dauphine</p>
-                    <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="92">Add to order</button>
-                </div>
-            </article>
-        </div>
+        @foreach (var item in Model.RecommendedItems)
+        {
+            <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="item" /></div>
+        }
     </div>
 
-    @* Most ordered dishes this month *@
     <h2 class="md-section-title">Popular selection</h2>
     <div class="row md-grid">
-        <div class="col-sm-6 col-xl-4">
-            <article class="md-menu-card">
-                <div class="md-photo">Desserts · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-                <div class="md-menu-card-body">
-                    <div class="md-menu-card-head"><h3>Valrhona Chocolate Fondant</h3><span class="md-price">RM 36.00</span></div>
-                    <p>Valrhona dark chocolate, vanilla ice cream, praline</p>
-                    <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="36">Add to order</button>
-                </div>
-            </article>
-        </div>
-        <div class="col-sm-6 col-xl-4">
-            <article class="md-menu-card">
-                <div class="md-photo">Starters · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-                <div class="md-menu-card-body">
-                    <div class="md-menu-card-head"><h3>Caviar &amp; Soft Egg</h3><span class="md-price">RM 85.00</span></div>
-                    <p>Oscietra caviar, 63°C egg, crème fraîche</p>
-                    <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="85">Add to order</button>
-                </div>
-            </article>
-        </div>
-        <div class="col-sm-6 col-xl-4">
-            <article class="md-menu-card is-unavailable">
-                <div class="md-photo">Mains · Photo<span class="md-badge md-badge-neutral md-photo-badge">Sold out today</span></div>
-                <div class="md-menu-card-body">
-                    <div class="md-menu-card-head"><h3>Lobster Thermidor</h3><span class="md-price">RM 128.00</span></div>
-                    <p>Half lobster, cognac cream, gruyère</p>
-                    <button type="button" class="btn btn-md-outline w-100" disabled>Unavailable</button>
-                </div>
-            </article>
-        </div>
+        @foreach (var item in Model.PopularItems)
+        {
+            <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="item" /></div>
+        }
     </div>
 </div>
 
@@ -151,220 +94,51 @@
    followed by the dishes it applies to
    ===================================================== *@
 <div class="d-none" id="promotionsPanel">
+    @foreach (var promo in Model.Promotions)
+    {
+        <section class="md-promo-section" id="promo-@promo.promoID">
+            <div class="md-promo-info">
+                <span class="md-badge md-badge-promo">Promotion</span>
+                <h2 class="md-section-title">@promo.promoTitle</h2>
+                <p>@promo.promoDescription</p>
+                <div class="md-promo-meta">
+                    <span><i class="bi bi-calendar3"></i>@DayRange(promo)@(promo.validUntil.HasValue ? " · until " + promo.validUntil.Value.ToString("d MMM") : "")</span>
+                    <span><i class="bi bi-tag"></i>@promo.promoLabel</span>
+                    <span><i class="bi bi-ticket-perforated"></i>Code <strong>@promo.promoCode</strong></span>
+                    @if (promo.autoApply)
+                    {
+                        <span><i class="bi bi-magic"></i>Applied automatically</span>
+                    }
+                </div>
+            </div>
 
-    @* ---------- Weekend Tasting Menu ---------- *@
-    <section class="md-promo-section" id="promo-weekend-tasting">
-        <div class="md-promo-info">
-            <span class="md-badge md-badge-promo">Promotion</span>
-            <h2 class="md-section-title">Weekend Tasting Menu</h2>
-            <p>The chef's eight-course tasting experience with optional wine pairing.</p>
-            <div class="md-promo-meta">
-                <span><i class="bi bi-calendar3"></i>Fri–Sun · 18–27 Sep</span>
-                <span><i class="bi bi-tag"></i>Set price RM 388 per guest</span>
-                <span><i class="bi bi-ticket-perforated"></i>Code <strong>WEEKEND15</strong></span>
-            </div>
-        </div>
-        <div class="row md-grid">
-            <div class="col-sm-6 col-xl-4">
-                <article class="md-menu-card">
-                    <div class="md-photo">Set menu · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-                    <div class="md-menu-card-body">
-                        <div class="md-menu-card-head"><h3>Eight-Course Tasting Menu</h3><span class="md-price">RM 388.00</span></div>
-                        <p>Seasonal courses chosen by the chef · per guest · weekends only</p>
-                        <a class="btn btn-md-dark w-100" href="/Customer/Reservations">Reserve a table</a>
-                    </div>
-                </article>
-            </div>
-        </div>
-    </section>
-
-    @* ---------- Early Dinner ---------- *@
-    <section class="md-promo-section" id="promo-early-dinner">
-        <div class="md-promo-info">
-            <span class="md-badge md-badge-promo">Promotion</span>
-            <h2 class="md-section-title">Early Dinner · 15% off</h2>
-            <p>15% off selected mains when you dine before 18:30.</p>
-            <div class="md-promo-meta">
-                <span><i class="bi bi-calendar3"></i>Tue–Sun · until 31 Oct</span>
-                <span><i class="bi bi-clock"></i>Before 18:30</span>
-                <span><i class="bi bi-magic"></i>Applied automatically</span>
-            </div>
-        </div>
-        <div class="row md-grid">
-            <div class="col-sm-6 col-xl-4">
-                <article class="md-menu-card">
-                    <div class="md-photo">Mains · Photo<span class="md-photo-badges"><span class="md-badge md-badge-available">Available</span><span class="md-badge md-badge-promo">15% off before 18:30</span></span></div>
-                    <div class="md-menu-card-body">
-                        <div class="md-menu-card-head"><h3>Duck à l'Orange</h3><span class="md-price">RM 92.00</span></div>
-                        <p>Blood orange reduction, pommes dauphine</p>
-                        <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="92">Add to order</button>
-                    </div>
-                </article>
-            </div>
-            <div class="col-sm-6 col-xl-4">
-                <article class="md-menu-card">
-                    <div class="md-photo">Mains · Photo<span class="md-photo-badges"><span class="md-badge md-badge-available">Available</span><span class="md-badge md-badge-promo">15% off before 18:30</span></span></div>
-                    <div class="md-menu-card-body">
-                        <div class="md-menu-card-head"><h3>Pan-Seared Sea Bass</h3><span class="md-price">RM 98.00</span></div>
-                        <p>Wild-caught sea bass, saffron beurre blanc, fennel confit</p>
-                        <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="98">Add to order</button>
-                    </div>
-                </article>
-            </div>
-        </div>
-    </section>
-
-    @* ---------- Birthday Dessert ---------- *@
-    <section class="md-promo-section" id="promo-birthday-dessert">
-        <div class="md-promo-info">
-            <span class="md-badge md-badge-promo">Members</span>
-            <h2 class="md-section-title">Birthday Dessert</h2>
-            <p>A complimentary dessert for members during their birthday month.</p>
-            <div class="md-promo-meta">
-                <span><i class="bi bi-gift"></i>Members only · birthday month</span>
-                <span><i class="bi bi-ticket-perforated"></i>Code <strong>BIRTHDAY</strong></span>
-            </div>
-        </div>
-        <div class="row md-grid">
-            <div class="col-sm-6 col-xl-4">
-                <article class="md-menu-card">
-                    <div class="md-photo">Desserts · Photo<span class="md-photo-badges"><span class="md-badge md-badge-available">Available</span><span class="md-badge md-badge-promo">Free in birthday month</span></span></div>
-                    <div class="md-menu-card-body">
-                        <div class="md-menu-card-head"><h3>Mille-Feuille</h3><span class="md-price">RM 32.00</span></div>
-                        <p>Caramelised pastry, custard, seasonal berries</p>
-                        <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="32">Add to order</button>
-                    </div>
-                </article>
-            </div>
-            <div class="col-sm-6 col-xl-4">
-                <article class="md-menu-card">
-                    <div class="md-photo">Desserts · Photo<span class="md-photo-badges"><span class="md-badge md-badge-available">Available</span><span class="md-badge md-badge-promo">Free in birthday month</span></span></div>
-                    <div class="md-menu-card-body">
-                        <div class="md-menu-card-head"><h3>Valrhona Chocolate Fondant</h3><span class="md-price">RM 36.00</span></div>
-                        <p>Valrhona dark chocolate, vanilla ice cream, praline</p>
-                        <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="36">Add to order</button>
-                    </div>
-                </article>
-            </div>
-        </div>
-    </section>
+            @if (promo.Menus.Any())
+            {
+                <div class="row md-grid">
+                    @foreach (var dish in promo.Menus)
+                    {
+                        <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="dish" /></div>
+                    }
+                </div>
+            }
+            else
+            {
+                <a class="btn btn-md-dark" href="/Customer/Reservations">Reserve a table</a>
+            }
+        </section>
+    }
 </div>
 
 @* =====================================================
    All / category tabs
    ===================================================== *@
 <div class="row md-grid d-none" id="menuGrid">
-
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Starters" data-name="Oyster Selection">
-        <article class="md-menu-card">
-            <div class="md-photo">Starters · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Oyster Selection</h3><span class="md-price">RM 68.00</span></div>
-                <p>Six Brittany oysters, mignonette, lemon</p>
-                <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="68">Add to order</button>
-            </div>
-        </article>
+@foreach (var item in Model.MenuItems)
+{
+    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="@item.MenuCategory?.categoryName" data-name="@item.menuName">
+        <partial name="_MenuCard" model="item" />
     </div>
-
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Starters" data-name="Caviar & Soft Egg">
-        <article class="md-menu-card">
-            <div class="md-photo">Starters · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Caviar &amp; Soft Egg</h3><span class="md-price">RM 85.00</span></div>
-                <p>Oscietra caviar, 63°C egg, crème fraîche</p>
-                <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="85">Add to order</button>
-            </div>
-        </article>
-    </div>
-
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Mains" data-name="Wagyu Beef Tenderloin">
-        <article class="md-menu-card">
-            <div class="md-photo">Mains · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Wagyu Beef Tenderloin</h3><span class="md-price">RM 168.00</span></div>
-                <p>A5 wagyu, truffle jus, bone marrow</p>
-                <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="168">Add to order</button>
-            </div>
-        </article>
-    </div>
-
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Mains" data-name="Duck à l'Orange">
-        <article class="md-menu-card">
-            <div class="md-photo">Mains · Photo<span class="md-photo-badges"><span class="md-badge md-badge-available">Available</span><span class="md-badge md-badge-promo">15% off before 18:30</span></span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Duck à l'Orange</h3><span class="md-price">RM 92.00</span></div>
-                <p>Blood orange reduction, pommes dauphine</p>
-                <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="92">Add to order</button>
-            </div>
-        </article>
-    </div>
-
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Mains" data-name="Pan-Seared Sea Bass">
-        <article class="md-menu-card">
-            <div class="md-photo">Mains · Photo<span class="md-photo-badges"><span class="md-badge md-badge-available">Available</span><span class="md-badge md-badge-promo">15% off before 18:30</span></span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Pan-Seared Sea Bass</h3><span class="md-price">RM 98.00</span></div>
-                <p>Wild-caught sea bass, saffron beurre blanc, fennel confit</p>
-                <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="98">Add to order</button>
-            </div>
-        </article>
-    </div>
-
-    @* Unavailable item (isAvailable = false) *@
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Mains" data-name="Lobster Thermidor">
-        <article class="md-menu-card is-unavailable">
-            <div class="md-photo">Mains · Photo<span class="md-badge md-badge-neutral md-photo-badge">Sold out today</span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Lobster Thermidor</h3><span class="md-price">RM 128.00</span></div>
-                <p>Half lobster, cognac cream, gruyère</p>
-                <button type="button" class="btn btn-md-outline w-100" disabled>Unavailable</button>
-            </div>
-        </article>
-    </div>
-
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Desserts" data-name="Mille-Feuille">
-        <article class="md-menu-card">
-            <div class="md-photo">Desserts · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Mille-Feuille</h3><span class="md-price">RM 32.00</span></div>
-                <p>Caramelised pastry, custard, seasonal berries</p>
-                <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="32">Add to order</button>
-            </div>
-        </article>
-    </div>
-
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Desserts" data-name="Valrhona Chocolate Fondant">
-        <article class="md-menu-card">
-            <div class="md-photo">Desserts · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Valrhona Chocolate Fondant</h3><span class="md-price">RM 36.00</span></div>
-                <p>Valrhona dark chocolate, vanilla ice cream, praline</p>
-                <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="36">Add to order</button>
-            </div>
-        </article>
-    </div>
-
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Beverages" data-name="Château Margaux 2018 · glass">
-        <article class="md-menu-card">
-            <div class="md-photo">Beverages · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Château Margaux 2018 · glass</h3><span class="md-price">RM 120.00</span></div>
-                <p>Bordeaux red, served by the glass</p>
-                <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="120">Add to order</button>
-            </div>
-        </article>
-    </div>
-
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="Beverages" data-name="Sparkling Water">
-        <article class="md-menu-card">
-            <div class="md-photo">Beverages · Photo<span class="md-badge md-badge-available md-photo-badge">Available</span></div>
-            <div class="md-menu-card-body">
-                <div class="md-menu-card-head"><h3>Sparkling Water</h3><span class="md-price">RM 18.00</span></div>
-                <p>Chilled sparkling mineral water, 750 ml</p>
-                <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="18">Add to order</button>
-            </div>
-        </article>
-    </div>
+}
 </div>
 
 <p class="md-empty d-none" id="menuEmpty">No dishes match your search. Try another name or category.</p>

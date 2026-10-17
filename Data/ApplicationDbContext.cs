@@ -5,9 +5,9 @@ namespace RestaurantManagementSystem.Data
 {
     public class ApplicationDbContext : DbContext
     {
-        public ApplicationDbContext (
+        public ApplicationDbContext(
             DbContextOptions<ApplicationDbContext> options)
-            : base (options)
+            : base(options)
         {
         }
 
@@ -25,6 +25,12 @@ namespace RestaurantManagementSystem.Data
         public DbSet<Promotion> Promotions { get; set; }
         public DbSet<Announcement> Announcements { get; set; }
 
+        // ---- Developer 2: Restaurant setup & menu
+        public DbSet<Restaurant> Restaurants { get; set; }
+        public DbSet<OperatingHour> OperatingHours { get; set; }
+        public DbSet<DiningArea> DiningAreas { get; set; }
+        public DbSet<MenuCategory> MenuCategories { get; set; }
+
         //Deletion safeguards
         //Restrict = "You can't delete this while something still points to it"
         // handles cascade error or those with special delete rule.
@@ -36,6 +42,34 @@ namespace RestaurantManagementSystem.Data
             modelBuilder.Entity<Customer>().HasIndex(c => c.custEmail).IsUnique();
             modelBuilder.Entity<Staff>().HasIndex(s => s.staffEmail).IsUnique();
             modelBuilder.Entity<Admin>().HasIndex(a => a.adminEmail).IsUnique();
+            modelBuilder.Entity<MenuCategory>().HasIndex(c => c.categoryName).IsUnique();
+            modelBuilder.Entity<DiningArea>().HasIndex(a => a.areaName).IsUnique();
+
+            // ---------- Menu ----------
+            modelBuilder.Entity<Menu>()
+                .HasOne(m => m.MenuCategory)
+                .WithMany(c => c.Menus)
+                .HasForeignKey(m => m.categoryID)
+                .OnDelete(DeleteBehavior.Restrict);         // can't delete a category that still has items
+
+            // ---------- DiningTable ----------
+            modelBuilder.Entity<DiningTable>()
+                .HasOne(t => t.DiningArea)
+                .WithMany(a => a.DiningTables)
+                .HasForeignKey(t => t.areaID)
+                .OnDelete(DeleteBehavior.Restrict);         // can't delete an area that still has tables
+
+            // ---------- Restaurant -> OperatingHour ----------
+            modelBuilder.Entity<OperatingHour>()
+                .HasOne(h => h.Restaurant)
+                .WithMany(r => r.OperatingHours)
+                .HasForeignKey(h => h.restaurantID)
+                .OnDelete(DeleteBehavior.Cascade);          // deleting the restaurant removes its hours
+
+            // one row per weekday per restaurant
+            modelBuilder.Entity<OperatingHour>()
+                .HasIndex(h => new { h.restaurantID, h.dayOfWeek })
+                .IsUnique();
 
             // ---------- Reservation ----------
             modelBuilder.Entity<Reservation>()

@@ -18,7 +18,8 @@ namespace RestaurantManagementSystem.Model
         public int tableCapacity { get; set; }
 
         [Required]
-        public string diningArea { get; set; } = "Indoor"; // Indoor, Outdoor, VIP
+        public int areaID { get; set; }
+        public DiningArea? DiningArea { get; set; } 
 
         [Required]
         public string tableStatus { get; set; } = "Available"; // Available, Occupied, Reserved, Maintenance
