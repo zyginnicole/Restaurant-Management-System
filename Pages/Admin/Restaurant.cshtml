@@ -1,0 +1,364 @@
+﻿@page
+@{
+    Layout = "_DashboardLayout";
+    ViewData["Title"] = "Restaurant Setup";
+    ViewData["Module"] = "Admin";
+    ViewData["ActiveNav"] = "Restaurant";
+    ViewData["Subtitle"] = "Manage the floor plan, service schedules and menu structure";
+
+    // ---------- Hardcoded sample data (replace with the page model later) ----------
+    var areas = new[]
+    {
+        new { Name = "Main Hall",      Tables = 12, Covers = 96, Active = true  },
+        new { Name = "Private Dining", Tables = 3,  Covers = 36, Active = true  },
+        new { Name = "Terrace",        Tables = 8,  Covers = 48, Active = true  },
+        new { Name = "Bar Lounge",     Tables = 6,  Covers = 24, Active = false }
+    };
+
+    var tables = new[]
+    {
+        new { Id = "T-01", Seats = 2,  Status = "Available",   Area = "Main Hall" },
+        new { Id = "T-02", Seats = 4,  Status = "Occupied",    Area = "Main Hall" },
+        new { Id = "T-03", Seats = 4,  Status = "Reserved",    Area = "Main Hall" },
+        new { Id = "T-04", Seats = 2,  Status = "Available",   Area = "Main Hall" },
+        new { Id = "T-05", Seats = 6,  Status = "Occupied",    Area = "Main Hall" },
+        new { Id = "T-06", Seats = 2,  Status = "Occupied",    Area = "Main Hall" },
+        new { Id = "T-07", Seats = 4,  Status = "Available",   Area = "Main Hall" },
+        new { Id = "T-08", Seats = 8,  Status = "Reserved",    Area = "Terrace" },
+        new { Id = "T-09", Seats = 4,  Status = "Occupied",    Area = "Terrace" },
+        new { Id = "T-10", Seats = 2,  Status = "Available",   Area = "Terrace" },
+        new { Id = "T-11", Seats = 4,  Status = "Occupied",    Area = "Bar Lounge" },
+        new { Id = "T-12", Seats = 6,  Status = "Occupied",    Area = "Bar Lounge" },
+        new { Id = "T-13", Seats = 4,  Status = "Available",   Area = "Bar Lounge" },
+        new { Id = "T-14", Seats = 2,  Status = "Reserved",    Area = "Bar Lounge" },
+        new { Id = "T-15", Seats = 4,  Status = "Maintenance", Area = "Bar Lounge" },
+        new { Id = "T-20", Seats = 12, Status = "Reserved",    Area = "Private Dining" },
+        new { Id = "T-21", Seats = 10, Status = "Available",   Area = "Private Dining" },
+        new { Id = "T-22", Seats = 14, Status = "Available",   Area = "Private Dining" }
+    };
+
+    var hours = new[]
+    {
+        new { Day = "Monday",    Open = false, From = "12:00", To = "22:30" },
+        new { Day = "Tuesday",   Open = true,  From = "12:00", To = "22:30" },
+        new { Day = "Wednesday", Open = true,  From = "12:00", To = "22:30" },
+        new { Day = "Thursday",  Open = true,  From = "12:00", To = "22:30" },
+        new { Day = "Friday",    Open = true,  From = "12:00", To = "23:30" },
+        new { Day = "Saturday",  Open = true,  From = "12:00", To = "23:30" },
+        new { Day = "Sunday",    Open = true,  From = "12:00", To = "21:30" }
+    };
+
+    var categories = new[]
+    {
+        new { Name = "Starters",  Desc = "Cold and warm small plates",      Items = 6, Active = true  },
+        new { Name = "Mains",     Desc = "Meat, fish and vegetarian mains", Items = 9, Active = true  },
+        new { Name = "Desserts",  Desc = "Pastry and sweet finishes",       Items = 5, Active = true  },
+        new { Name = "Wines",     Desc = "By the glass and by the bottle",  Items = 8, Active = true  },
+        new { Name = "Beverages", Desc = "Soft drinks, coffee and tea",     Items = 7, Active = true  },
+        new { Name = "Set Menus", Desc = "Seasonal tasting menus",          Items = 2, Active = false }
+    };
+
+    // Bookable slot times every 30 minutes, from/to given in minutes after midnight
+    List<string> Slots(int fromMin, int toMin)
+    {
+        var list = new List<string>();
+        for (var m = fromMin; m <= toMin; m += 30) list.Add($"{m / 60:00}:{m % 60:00}");
+        return list;
+    }
+    var lunchSlots = Slots(12 * 60, 14 * 60);
+    var dinnerSlots = Slots(18 * 60, 21 * 60 + 30);
+    var offSlots = new[] { "13:30", "20:30" };
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin-setup.css" asp-append-version="true" />
+}
+
+@section HeaderActions {
+    <div class="a-tabs" role="tablist">
+        <button class="a-tab active" type="button" role="tab" data-bs-toggle="pill" data-bs-target="#tab-layout">Layout &amp; Tables</button>
+        <button class="a-tab" type="button" role="tab" data-bs-toggle="pill" data-bs-target="#tab-hours">Operating Hours &amp; Slots</button>
+        <button class="a-tab" type="button" role="tab" data-bs-toggle="pill" data-bs-target="#tab-categories">Menu Categories</button>
+    </div>
+}
+
+<div class="tab-content">
+
+    @* ================= TAB 1: Layout & Tables ================= *@
+    <div class="tab-pane fade show active" id="tab-layout" role="tabpanel">
+
+        <section class="a-card clip">
+            <div class="a-card-head">
+                <h2 class="a-card-title">Dining Areas</h2>
+                <button type="button" class="a-btn" data-bs-toggle="modal" data-bs-target="#areaModal"><i class="bi bi-plus-lg"></i>Add area</button>
+            </div>
+            <div class="a-areas">
+                @foreach (var a in areas)
+                {
+                    <div class="a-area" data-switch-scope>
+                        <div class="a-area-top">
+                            <h3 class="a-area-name">@a.Name</h3>
+                            <input type="checkbox" class="a-switch" @(a.Active ? "checked" : "") data-on="Active" data-off="Inactive" aria-label="@a.Name active" />
+                        </div>
+                        <div class="a-area-meta">@a.Tables tables<br />@a.Covers covers</div>
+                        <span class="a-badge @(a.Active ? "active" : "inactive")" data-switch-text>@(a.Active ? "Active" : "Inactive")</span>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="a-card">
+            <div class="a-card-head">
+                <h2 class="a-card-title">Tables</h2>
+                <div class="a-tools">
+                    <select id="capFilter" class="form-select a-input a-input-sm w-auto" aria-label="Filter by capacity">
+                        <option value="">All capacities</option>
+                        <option value="2">2 seats</option>
+                        <option value="4">4 seats</option>
+                        <option value="6">6 seats</option>
+                        <option value="8">8+ seats</option>
+                    </select>
+                    <div class="a-legend">
+                        <span style="--dot:var(--a-ok)">Available</span>
+                        <span style="--dot:var(--a-warn)">Occupied</span>
+                        <span style="--dot:var(--a-info)">Reserved</span>
+                        <span style="--dot:var(--a-bad)">Maintenance</span>
+                    </div>
+                    <button type="button" class="a-btn" data-bs-toggle="modal" data-bs-target="#tableModal"><i class="bi bi-plus-lg"></i>Add table</button>
+                </div>
+            </div>
+            <div class="a-tiles" id="tileGrid">
+                @foreach (var t in tables)
+                {
+                    <button type="button" class="a-tile" data-bs-toggle="modal" data-bs-target="#tableModal"
+                            data-id="@t.Id" data-seats="@t.Seats" data-status="@t.Status" data-area="@t.Area">
+                        <strong>@t.Id</strong>
+                        <small>@(t.Seats)p</small>
+                        <span class="a-badge @t.Status.ToLower()">@t.Status</span>
+                    </button>
+                }
+            </div>
+        </section>
+    </div>
+
+    @* ================= TAB 2: Operating Hours & Slots ================= *@
+    <div class="tab-pane fade" id="tab-hours" role="tabpanel">
+
+        <section class="a-card">
+            <div class="a-card-head">
+                <h2 class="a-card-title">Weekly Opening Hours</h2>
+                <button type="button" class="a-btn solid" data-toast="Opening hours saved">Save hours</button>
+            </div>
+            @foreach (var h in hours)
+            {
+                <div class="a-hours @(h.Open ? "" : "is-closed")">
+                    <strong>@h.Day</strong>
+                    <label class="a-switch-wrap" data-switch-scope>
+                        <input type="checkbox" class="a-switch" auto-complete="off" @(h.Open ? "checked" : "") data-on="Open" data-off="Closed" />
+                        <span data-switch-text>@(h.Open ? "Open" : "Closed")</span>
+                    </label>
+                    <div class="times">
+                        <input type="time" class="form-control a-input a-input-sm" value="@h.From" aria-label="@h.Day opens" />
+                        <span class="a-card-note">to</span>
+                        <input type="time" class="form-control a-input a-input-sm" value="@h.To" aria-label="@h.Day closes" />
+                    </div>
+                </div>
+            }
+        </section>
+
+        <section class="a-card">
+            <div class="a-card-head">
+                <h2 class="a-card-title">Service Periods &amp; Booking Slots</h2>
+                <span class="a-card-note">Click a slot to stop guests booking it</span>
+            </div>
+            <div class="a-card-body">
+                <div class="row g-3 mb-4">
+                    <div class="col-sm-6 col-lg-3">
+                        <label class="a-label" for="slotGap">Slot interval</label>
+                        <select id="slotGap" class="form-select a-input"><option>15 minutes</option><option selected>30 minutes</option><option>60 minutes</option></select>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <label class="a-label" for="lastSeat">Last seating before close</label>
+                        <select id="lastSeat" class="form-select a-input"><option>30 minutes</option><option selected>60 minutes</option><option>90 minutes</option></select>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="a-label">Lunch · 12:00 – 15:00</div>
+                    <div class="a-chips">
+                        @foreach (var s in lunchSlots)
+                        {
+                            var on = !offSlots.Contains(s);
+                            <button type="button" class="a-chip @(on ? "on" : "")" aria-pressed="@(on ? "true" : "false")">@s</button>
+                        }
+                    </div>
+                </div>
+                <div>
+                    <div class="a-label">Dinner · 18:00 – 22:30</div>
+                    <div class="a-chips">
+                        @foreach (var s in dinnerSlots)
+                        {
+                            var on = !offSlots.Contains(s);
+                            <button type="button" class="a-chip @(on ? "on" : "")" aria-pressed="@(on ? "true" : "false")">@s</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    @* ================= TAB 3: Menu Categories ================= *@
+    <div class="tab-pane fade" id="tab-categories" role="tabpanel">
+        <section class="a-card">
+            <div class="a-card-head">
+                <h2 class="a-card-title">Menu Categories</h2>
+                <button type="button" class="a-btn" data-bs-toggle="modal" data-bs-target="#categoryModal"><i class="bi bi-plus-lg"></i>Add category</button>
+            </div>
+            @foreach (var c in categories)
+            {
+                <div class="a-row" data-switch-scope>
+                    <i class="bi bi-grip-vertical a-grip" aria-hidden="true"></i>
+                    <div class="grow">
+                        <strong>@c.Name</strong>
+                        <small>@c.Desc</small>
+                    </div>
+                    <span class="a-card-note d-none d-sm-inline">@c.Items items</span>
+                    <label class="a-switch-wrap">
+                        <input type="checkbox" class="a-switch" autocomplete="off" @(c.Active ? "checked" : "") data-on="Visible" data-off="Hidden" />
+                        <span data-switch-text>@(c.Active ? "Visible" : "Hidden")</span>
+                    </label>
+                    <button type="button" class="a-icon-btn" data-bs-toggle="modal" data-bs-target="#categoryModal" aria-label="Edit @c.Name"><i class="bi bi-pencil"></i></button>
+                    <button type="button" class="a-icon-btn danger" data-remove=".a-row" data-toast="Category deleted" aria-label="Delete @c.Name"><i class="bi bi-trash"></i></button>
+                </div>
+            }
+        </section>
+    </div>
+</div>
+
+@* ================= Modals ================= *@
+<div class="modal fade" id="areaModal" tabindex="-1" aria-labelledby="areaModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header"><h2 class="modal-title fs-5" id="areaModalTitle">Add dining area</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label class="a-label" for="areaName">Area name</label><input id="areaName" class="form-control a-input" placeholder="e.g. Wine Cellar" /></div>
+                <div class="mb-3"><label class="a-label" for="areaNote">Description</label><textarea id="areaNote" class="form-control a-input" rows="2"></textarea></div>
+                <label class="a-switch-wrap"><input type="checkbox" class="a-switch" autocomplete="off" checked /> Open for reservations</label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="a-btn quiet" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="a-btn solid" data-bs-dismiss="modal" data-toast="Dining area saved">Save area</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="tableModal" tabindex="-1" aria-labelledby="tableModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header"><h2 class="modal-title fs-5" id="tableModalTitle">Edit table</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-6"><label class="a-label" for="tId">Table number</label><input id="tId" class="form-control a-input" placeholder="T-23" /></div>
+                    <div class="col-6"><label class="a-label" for="tSeats">Seats</label><input id="tSeats" type="number" min="1" max="30" class="form-control a-input" /></div>
+                    <div class="col-6">
+                        <label class="a-label" for="tArea">Dining area</label>
+                        <select id="tArea" class="form-select a-input">
+                            @foreach (var a in areas) { <option>@a.Name</option> }
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="a-label" for="tStatus">Status</label>
+                        <select id="tStatus" class="form-select a-input"><option>Available</option><option>Occupied</option><option>Reserved</option><option>Maintenance</option></select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" id="tableDelete" class="a-btn danger" data-bs-dismiss="modal" data-toast="Table deleted"><i class="bi bi-trash"></i>Delete</button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="a-btn quiet" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="tableSave" class="a-btn solid" data-bs-dismiss="modal" data-toast="Table saved">Save table</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="categoryModal" tabindex="-1" aria-labelledby="categoryModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header"><h2 class="modal-title fs-5" id="categoryModalTitle">Menu category</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label class="a-label" for="catName">Category name</label><input id="catName" class="form-control a-input" placeholder="e.g. Cheese Course" /></div>
+                <div class="mb-3"><label class="a-label" for="catDesc">Description</label><input id="catDesc" class="form-control a-input" /></div>
+                <label class="a-switch-wrap"><input type="checkbox" class="a-switch" autocomplete="off" checked /> Visible to customers</label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="a-btn quiet" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="a-btn solid" data-bs-dismiss="modal" data-toast="Category saved">Save category</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/admin-setup.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            const $ = id => document.getElementById(id);
+            const modalEl = $('tableModal');
+            let current = null;
+
+            // Capacity filter
+            function applyFilter() {
+                const v = $('capFilter').value;
+                document.querySelectorAll('#tileGrid .a-tile').forEach(t => {
+                    const s = +t.dataset.seats;
+                    t.classList.toggle('d-none', v !== '' && (v === '8' ? s < 8 : s !== +v));
+                });
+            }
+            $('capFilter').addEventListener('change', applyFilter);
+
+            // Fill the table modal from the tile that opened it (or empty for "Add table")
+            modalEl.addEventListener('show.bs.modal', e => {
+                const b = e.relatedTarget;
+                current = b && b.classList.contains('a-tile') ? b : null;
+                $('tableModalTitle').textContent = current ? 'Edit table' : 'Add table';
+                $('tId').value = current ? current.dataset.id : '';
+                $('tSeats').value = current ? current.dataset.seats : 4;
+                $('tArea').value = current ? current.dataset.area : $('tArea').options[0].value;
+                $('tStatus').value = current ? current.dataset.status : 'Available';
+                $('tableDelete').classList.toggle('d-none', !current);
+            });
+
+            function paint(tile) {
+                tile.querySelector('strong').textContent = tile.dataset.id;
+                tile.querySelector('small').textContent = tile.dataset.seats + 'p';
+                const badge = tile.querySelector('.a-badge');
+                badge.textContent = tile.dataset.status;
+                badge.className = 'a-badge ' + tile.dataset.status.toLowerCase();
+            }
+
+            $('tableSave').addEventListener('click', () => {
+                let tile = current;
+                if (!tile) {
+                    tile = document.createElement('button');
+                    tile.type = 'button';
+                    tile.className = 'a-tile';
+                    tile.dataset.bsToggle = 'modal';
+                    tile.dataset.bsTarget = '#tableModal';
+                    tile.innerHTML = '<strong></strong><small></small><span class="a-badge"></span>';
+                    $('tileGrid').appendChild(tile);
+                }
+                tile.dataset.id = $('tId').value || 'T-new';
+                tile.dataset.seats = $('tSeats').value || 2;
+                tile.dataset.area = $('tArea').value;
+                tile.dataset.status = $('tStatus').value;
+                paint(tile);
+                applyFilter();
+            });
+
+            $('tableDelete').addEventListener('click', () => { if (current) current.remove(); });
+        })();
+    </script>
+}

@@ -599,6 +599,112 @@ namespace RestaurantManagementSystem.Migrations
                     b.ToTable("Staff");
                 });
 
+            modelBuilder.Entity("RestaurantManagementSystem.Model.SystemSetting", b =>
+                {
+                    b.Property<int>("settingID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("settingID"));
+
+                    b.Property<bool>("acceptCard")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("acceptCash")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("acceptEwallet")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("acceptFpx")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("address")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("autoConfirm")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("bookingWindowDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("cancelWindowHours")
+                        .HasColumnType("int");
+
+                    b.Property<int>("diningMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("email")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("idleTimeoutMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("lateHoldMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("maxFailedLogins")
+                        .HasColumnType("int");
+
+                    b.Property<int>("maxPartySize")
+                        .HasColumnType("int");
+
+                    b.Property<int>("minNoticeHours")
+                        .HasColumnType("int");
+
+                    b.Property<int>("minPartySize")
+                        .HasColumnType("int");
+
+                    b.Property<int>("passwordMinLength")
+                        .HasColumnType("int");
+
+                    b.Property<string>("phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("receiptFooter")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("requireNumber")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("requireSymbol")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("requireTwoStep")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("requireUpper")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("restaurantName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("serviceChargePct")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("sstPct")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("tagline")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("timeZone")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.HasKey("settingID");
+
+                    b.ToTable("SystemSettings");
+                });
+
             modelBuilder.Entity("MenuPromotion", b =>
                 {
                     b.HasOne("RestaurantManagementSystem.Model.Menu", null)

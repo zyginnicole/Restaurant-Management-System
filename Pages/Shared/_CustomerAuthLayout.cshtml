@@ -1,3 +1,9 @@
+@using Microsoft.EntityFrameworkCore
+@inject RestaurantManagementSystem.Data.ApplicationDbContext Db
+@{
+    var brand = await Db.SystemSettings.AsNoTracking().FirstOrDefaultAsync()
+                ?? new RestaurantManagementSystem.Model.SystemSetting();
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,7 +23,7 @@
         @* Left: restaurant photo + brand *@
         <aside class="md-auth-photo">
             <span class="md-auth-photo-label">INTERIOR PHOTO</span>
-            <span class="md-eyebrow">@ViewData["BrandTagline"]</span>
+            <span class="md-eyebrow">@ViewData["BrandTagLine"]</span>
             <div class="md-auth-brand">@ViewData["Brand"]</div>
             <p class="md-auth-tagline">Where every meal becomes a memory, and every occasion is elevated to an art form.</p>
         </aside>

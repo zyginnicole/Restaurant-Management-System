@@ -1,4 +1,10 @@
-﻿@{
+﻿@using Microsoft.EntityFrameworkCore
+@inject RestaurantManagementSystem.Data.ApplicationDbContext Db
+@{
+    var brand = await Db.SystemSettings.AsNoTracking().FirstOrDefaultAsync()
+                ?? new RestaurantManagementSystem.Model.SystemSetting();
+}
+@{
     // Each customer page sets ViewData["ActiveNav"] so the matching sidebar link is highlighted.
     string active = ViewData["ActiveNav"] as string ?? "";
     bool hideBell = ViewData["HideBell"] as bool? ?? false;   // e.g. the Notifications page hides the bell
@@ -37,7 +43,7 @@
     @* Sidebar: always visible on desktop, slides in on phones *@
     <aside class="md-sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="mdSidebar" aria-label="Customer menu">
         <div class="md-sidebar-brand">
-            <span class="md-eyebrow">@ViewData["BrandTagline"]</span>
+            <span class="md-eyebrow">@ViewData["BrandTagLine"]</span>
             <div class="md-sidebar-name">@ViewData["Brand"]</div>
             <span class="md-sidebar-module">Member</span>
             <button type="button" class="btn-close btn-close-white d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#mdSidebar" aria-label="Close menu"></button>

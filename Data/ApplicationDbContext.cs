@@ -30,6 +30,7 @@ namespace RestaurantManagementSystem.Data
         public DbSet<OperatingHour> OperatingHours { get; set; }
         public DbSet<DiningArea> DiningAreas { get; set; }
         public DbSet<MenuCategory> MenuCategories { get; set; }
+        public DbSet<SystemSetting> SystemSettings { get; set; }
 
         //Deletion safeguards
         //Restrict = "You can't delete this while something still points to it"
