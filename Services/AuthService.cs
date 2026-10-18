@@ -9,21 +9,19 @@ namespace RestaurantManagementSystem.Services
     // Pages call this service instead of using the database directly (3-tier).
     public class AuthService
     {
-        // Wrong passwords in a row -> account locked for this many minutes.
-        // How many wrong passwords are allowed comes from Admin > Settings > Security.
+        // 5 wrong passwords in a row -> account locked for 15 minutes
+        public const int MaxFailedAttempts = 5;
         public const int LockoutMinutes = 15;
 
         private const string WrongDetailsMessage = "Incorrect email or password.";
 
         private readonly ApplicationDbContext _context;
         private readonly PasswordService _passwordService;
-        private readonly SettingsService _settings;
 
-        public AuthService(ApplicationDbContext context, PasswordService passwordService, SettingsService settings)
+        public AuthService(ApplicationDbContext context, PasswordService passwordService)
         {
             _context = context;
             _passwordService = passwordService;
-            _settings = settings;
         }
 
         // Same email format everywhere: no spaces around it, all lowercase
@@ -83,14 +81,12 @@ namespace RestaurantManagementSystem.Services
                     $"This account is locked after too many failed attempts. Try again in {minutesLeft} minute(s).");
             }
 
-            // 3. Wrong password: count it, lock when the limit from Settings is reached
+            // 3. Wrong password: count it, lock on the 5th
             if (!_passwordService.VerifyPassword(customer.custPassword, password))
             {
-                int maxAttempts = (await _settings.GetAsync()).maxFailedLogins;
-
                 customer.FailedLoginAttempts++;
 
-                if (customer.FailedLoginAttempts >= maxAttempts)
+                if (customer.FailedLoginAttempts >= MaxFailedAttempts)
                 {
                     customer.FailedLoginAttempts = 0;
                     customer.LockoutEnd = now.AddMinutes(LockoutMinutes);
@@ -102,7 +98,7 @@ namespace RestaurantManagementSystem.Services
 
                 await _context.SaveChangesAsync();
 
-                int attemptsLeft = maxAttempts - customer.FailedLoginAttempts;
+                int attemptsLeft = MaxFailedAttempts - customer.FailedLoginAttempts;
                 return LoginResult.Failed(
                     $"{WrongDetailsMessage} {attemptsLeft} attempt(s) left before the account is locked for {LockoutMinutes} minutes.");
             }

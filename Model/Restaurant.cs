@@ -18,11 +18,5 @@ namespace RestaurantManagementSystem.Model
         public string? restaurantPhone { get; set; }
 
         public ICollection<OperatingHour> OperatingHours { get; set; } = new List<OperatingHour>();
-
-        // ---- Booking slot settings (slots are generated from OperatingHours) ----
-        public int slotIntervalMinutes { get; set; } = 30;      // 15, 30 or 60
-        public int lastSeatingMinutes { get; set; } = 60;       // last booking = closing time minus this
-
-        public ICollection<BlockedSlot> BlockedSlots { get; set; } = new List<BlockedSlot>();
     }
 }

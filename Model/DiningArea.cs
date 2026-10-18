@@ -13,12 +13,6 @@ namespace RestaurantManagementSystem.Model
         [Required(ErrorMessage = "Area name is required!")]
         public string areaName { get; set; }              // Indoor, Outdoor, VIP
 
-        [StringLength(200)]
-        public string? areaDescription { get; set; }
-
-        // Inactive areas are closed for reservations (Admin > Restaurant > Dining Areas switch)
-        public bool areaActive { get; set; } = true;
-
         public ICollection<DiningTable> DiningTables { get; set; } = new List<DiningTable>();
     }
 }

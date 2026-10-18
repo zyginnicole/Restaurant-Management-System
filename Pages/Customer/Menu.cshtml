@@ -54,20 +54,15 @@
 }
 
 @* ---------- Tabs + search ---------- *@
-<style>
-    /* Many categories: keep the tabs on one line and let them scroll sideways */
-    .md-menu-toolbar .md-tabs { display: flex; flex-wrap: nowrap; flex: 1 1 0; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
-    .md-menu-toolbar .md-tabs button { flex: 0 0 auto; white-space: nowrap; }
-</style>
 <div class="md-menu-toolbar">
     <nav class="md-tabs" aria-label="Menu categories">
         <button type="button" class="active" data-filter="Recommendations">Recommendations</button>
         <button type="button" data-filter="Promotions">Promotions</button>
         <button type="button" data-filter="All">All</button>
-        @foreach (var categoryName in Model.CategoryNames)
-        {
-            <button type="button" data-filter="@categoryName">@categoryName</button>
-        }
+        <button type="button" data-filter="Starters">Starters</button>
+        <button type="button" data-filter="Mains">Mains</button>
+        <button type="button" data-filter="Desserts">Desserts</button>
+        <button type="button" data-filter="Beverages">Beverages</button>
     </nav>
     <input class="form-control md-input md-search" id="menuSearch" type="search" placeholder="Search dishes" aria-label="Search dishes" />
 </div>
@@ -186,26 +181,4 @@
 
 @section Scripts {
     <script src="~/js/menu.js" asp-append-version="true"></script>
-    <script>
-        (function () {
-            const tabs = document.querySelector('.md-tabs');
-            if (!tabs) return;
-
-            // mouse wheel over the tabs scrolls them sideways (page scrolls normally at either end)
-            tabs.addEventListener('wheel', e => {
-                if (tabs.scrollWidth <= tabs.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-                const atStart = tabs.scrollLeft <= 0 && e.deltaY < 0;
-                const atEnd = tabs.scrollLeft + tabs.clientWidth >= tabs.scrollWidth - 1 && e.deltaY > 0;
-                if (atStart || atEnd) return;
-                e.preventDefault();
-                tabs.scrollLeft += e.deltaY;
-            }, { passive: false });
-
-            // keep the chosen tab in view
-            tabs.addEventListener('click', e => {
-                const b = e.target.closest('button');
-                if (b) b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-            });
-        })();
-    </script>
 }

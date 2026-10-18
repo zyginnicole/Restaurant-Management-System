@@ -28,7 +28,6 @@ namespace RestaurantManagementSystem.Data
         // ---- Developer 2: Restaurant setup & menu
         public DbSet<Restaurant> Restaurants { get; set; }
         public DbSet<OperatingHour> OperatingHours { get; set; }
-        public DbSet<BlockedSlot> BlockedSlots { get; set; }
         public DbSet<DiningArea> DiningAreas { get; set; }
         public DbSet<MenuCategory> MenuCategories { get; set; }
         public DbSet<SystemSetting> SystemSettings { get; set; }
@@ -61,11 +60,6 @@ namespace RestaurantManagementSystem.Data
                 .HasForeignKey(t => t.areaID)
                 .OnDelete(DeleteBehavior.Restrict);         // can't delete an area that still has tables
 
-            // one table number per area (the same number can repeat in a different area)
-            modelBuilder.Entity<DiningTable>()
-                .HasIndex(t => new { t.areaID, t.tableNumber })
-                .IsUnique();
-
             // ---------- Restaurant -> OperatingHour ----------
             modelBuilder.Entity<OperatingHour>()
                 .HasOne(h => h.Restaurant)
@@ -76,18 +70,6 @@ namespace RestaurantManagementSystem.Data
             // one row per weekday per restaurant
             modelBuilder.Entity<OperatingHour>()
                 .HasIndex(h => new { h.restaurantID, h.dayOfWeek })
-                .IsUnique();
-
-            // ---------- Restaurant -> BlockedSlot (slots the admin stopped customers booking) ----------
-            modelBuilder.Entity<BlockedSlot>()
-                .HasOne(b => b.Restaurant)
-                .WithMany(r => r.BlockedSlots)
-                .HasForeignKey(b => b.restaurantID)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // a slot can only be blocked once
-            modelBuilder.Entity<BlockedSlot>()
-                .HasIndex(b => new { b.restaurantID, b.slotStart })
                 .IsUnique();
 
             // ---------- Reservation ----------

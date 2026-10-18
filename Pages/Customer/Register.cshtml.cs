@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Mvc.Filters;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -11,12 +10,10 @@ namespace RestaurantManagementSystem.Pages.Customer
     public class RegisterModel : PageModel
     {
         private readonly AuthService _authService;
-        private readonly SettingsService _settingsService;
 
-        public RegisterModel(AuthService authService, SettingsService settingsService)
+        public RegisterModel(AuthService authService)
         {
             _authService = authService;
-            _settingsService = settingsService;
         }
 
         // The form fields (Customer.custName, custEmail, custPhone, DietaryPref, custPassword) bind to this object
@@ -34,17 +31,6 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         [BindProperty]
         public bool PromoOptIn { get; set; }                          // optional, copied to Customer.promoOptIn
-
-        // Password rule sentence shown under the password box (built from Admin > Settings > Security)
-        public string PasswordHint { get; set; } = string.Empty;
-
-        // Runs before OnGet / OnPost, so the hint is also filled when the form is shown again after an error
-        public override async Task OnPageHandlerExecutionAsync(
-            PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
-        {
-            PasswordHint = PasswordPolicy.Describe(await _settingsService.GetAsync());
-            await next();
-        }
 
         public IActionResult OnGet()
         {
@@ -82,13 +68,6 @@ namespace RestaurantManagementSystem.Pages.Customer
                 ModelState.AddModelError(
                     nameof(AgreeTerms),
                     "You must agree to the Terms and Privacy Policy.");
-            }
-
-            var settings = await _settingsService.GetAsync();
-            string? passwordError = PasswordPolicy.Check(Customer.custPassword, settings);
-            if (passwordError != null)
-            {
-                ModelState.AddModelError("Customer.custPassword", passwordError);
             }
 
             if (!ModelState.IsValid)
