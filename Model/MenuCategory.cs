@@ -13,9 +13,6 @@ namespace RestaurantManagementSystem.Model
         [Required(ErrorMessage = "Category name is required!")]
         public string categoryName { get; set; }          // Appetizer, Main, Dessert, Beverage
 
-        [MaxLength(200)]
-        public string? categoryDescription { get; set; }
-
         public bool categoryActive { get; set; } = true;  // false = hidden from customers
 
         public ICollection<Menu> Menus { get; set; } = new List<Menu>();

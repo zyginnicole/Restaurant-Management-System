@@ -104,7 +104,6 @@ namespace RestaurantManagementSystem.Pages.Admin
                 {
                     Id = c.categoryID,
                     Name = c.categoryName,
-                    Description = c.categoryDescription ?? "",
                     Active = c.categoryActive,
                     Items = c.Menus.Count
                 })
@@ -266,17 +265,14 @@ namespace RestaurantManagementSystem.Pages.Admin
         // =====================================================================
         //  MENU CATEGORIES: add / edit, visible switch, delete
         // =====================================================================
-        public async Task<IActionResult> OnPostSaveCategoryAsync(int? id, string? name, string? description, bool active)
+        public async Task<IActionResult> OnPostSaveCategoryAsync(int? id, string? name, bool active)
         {
             name = name?.Trim();
-            description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
 
             if (string.IsNullOrWhiteSpace(name))
                 return BackTo("tab-categories", "Please enter a category name.");
             if (name.Length > 50)
                 return BackTo("tab-categories", "The category name can be at most 50 characters.");
-            if (description != null && description.Length > 200)
-                return BackTo("tab-categories", "The description can be at most 200 characters.");
 
             var thisId = id ?? 0;
             if (await _db.MenuCategories.AnyAsync(c => c.categoryName == name && c.categoryID != thisId))
@@ -295,7 +291,6 @@ namespace RestaurantManagementSystem.Pages.Admin
             }
 
             category.categoryName = name;
-            category.categoryDescription = description;
             category.categoryActive = active;
 
             await _db.SaveChangesAsync();
@@ -598,12 +593,11 @@ namespace RestaurantManagementSystem.Pages.Admin
         {
             public int Id { get; set; }
             public string Name { get; set; } = "";
-            public string Description { get; set; } = "";
             public bool Active { get; set; }
             public int Items { get; set; }
 
             // Used by the Edit button to fill the form
-            public string Json => JsonSerializer.Serialize(new { id = Id, name = Name, desc = Description });
+            public string Json => JsonSerializer.Serialize(new { id = Id, name = Name });
         }
 
         public class TableRow
