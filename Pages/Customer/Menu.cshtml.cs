@@ -1,17 +1,21 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
     public class MenuModel : PageModel
     {
         private readonly ApplicationDbContext _context;
+        private readonly RecommendationService _recommendations;
 
-        public MenuModel(ApplicationDbContext context)
+        public MenuModel(ApplicationDbContext context, RecommendationService recommendations)
         {
             _context = context;
+            _recommendations = recommendations;
         }
 
         public List<Menu> MenuItems { get; set; } = new();
@@ -49,30 +53,17 @@ namespace RestaurantManagementSystem.Pages.Customer
                          && (p.validUntil == null || p.validUntil >= today))
                 .ToListAsync();
 
-            // Popular = most ordered dishes; falls back to available dishes until orders exist
-            var topIds = await _context.OrderItems
-                .GroupBy(oi => oi.menuID)
-                .OrderByDescending(g => g.Count())
-                .Select(g => g.Key)
-                .Take(3)
-                .ToListAsync();
+            // Popular = most ordered dishes; Recommended = based on the signed-in customer's order history
+            PopularItems = await _recommendations.GetPopularAsync();
+            RecommendedItems = await _recommendations.GetRecommendedAsync(CurrentCustomerId());
+        }
 
-            PopularItems = MenuItems.Where(m => m.isAvailable && topIds.Contains(m.menuID)).ToList();
-
-            if (PopularItems.Count < 3)
-            {
-                var filler = MenuItems
-                    .Where(m => m.isAvailable && !PopularItems.Contains(m))
-                    .Take(3 - PopularItems.Count)
-                    .ToList();
-                PopularItems.AddRange(filler);
-            }
-
-            // Placeholder until personalised recommendations are built (needs the logged-in customer's order history)
-            RecommendedItems = MenuItems
-                .Where(m => m.isAvailable && m.MenuCategory?.categoryName == "Mains")
-                .Take(3)
-                .ToList();
+        // The signed-in customer's ID, or null for a guest / staff / admin (they see popular dishes)
+        private int? CurrentCustomerId()
+        {
+            return HttpContext.Session.IsSignedInAs(UserRoles.Customer)
+                ? HttpContext.Session.GetUserId()
+                : null;
         }
     }
 }

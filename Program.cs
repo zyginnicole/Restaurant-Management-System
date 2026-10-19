@@ -23,6 +23,7 @@ builder.Services.AddSession(options =>
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<SettingsService>();
+builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddScoped<DemoAccountSeeder>();
 
 var app = builder.Build();
