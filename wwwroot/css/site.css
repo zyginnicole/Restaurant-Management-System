@@ -128,6 +128,8 @@ a:hover { color: var(--md-ink); }
 /* Main action button: white with gold text and a gold outline (fills gold on hover) */
 .btn-md-dark { background: var(--md-white); color: var(--md-gold-dark); border: 1px solid var(--md-gold); }
 .btn-md-dark:hover, .btn-md-dark:focus { background: var(--md-gold); color: var(--md-black); border-color: var(--md-gold); }
+/* Gold while pressed too (Bootstrap's own pressed colour would otherwise show) */
+.btn.btn-md-dark:active, .btn.btn-md-dark:first-child:active { background: var(--md-gold); color: var(--md-black); border-color: var(--md-gold); }
 .btn-md-dark:disabled { background: var(--md-white); color: var(--md-gold-dark); opacity: .5; }
 
 .btn-md-gold { background: var(--md-gold); color: var(--md-black); border: 1px solid var(--md-gold); }
@@ -570,6 +572,9 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
 
 .md-page-title { font-size: 2.1rem; margin: .3rem 0 0; }
 
+/* Header buttons level with the page title, not the eyebrow (set on every Staff / Admin page by _DashboardLayout) */
+.md-actions-at-title .md-page-actions { margin-top: 1.75rem; }
+
 @media (max-width: 575.98px) {
     .md-page-title { font-size: 1.8rem; }
 }
@@ -625,11 +630,13 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
     border-bottom: 1px solid var(--md-line);
 }
 
+/* Card headings: a little darker than other labels, same as the stat card titles (every module) */
 .md-card-label {
     font-size: var(--md-text-label);
     letter-spacing: .2em;
     text-transform: uppercase;
-    color: var(--md-muted);
+    color: #4f4a42;
+    font-weight: 500;
 }
 
 .md-card-link { font-size: var(--md-text-meta); }
@@ -644,7 +651,8 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
     padding: 1rem 1.25rem;
 }
 
-.md-stat .md-label { font-size: var(--md-text-label); letter-spacing: .2em; }
+/* Stat card titles: a little darker than other labels so they read clearly (all stat cards, every module) */
+.md-stat .md-label { font-size: var(--md-text-label); letter-spacing: .2em; color: #4f4a42; font-weight: 500; }
 
 .md-stat-value {
     font-family: var(--md-font-heading);
@@ -2458,7 +2466,6 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
 .md-dot-legend i { display: inline-block; width: .65rem; height: .65rem; border-radius: 50%; }
 
 /* "Tonight" card titles: slightly stronger contrast than other card labels */
-.md-live .md-card-label { color: #4a463f; font-weight: 500; }
 
 /* Recent activity inside a "Tonight" card: compact rows */
 .md-list-compact .md-list-row { padding: .6rem 1.25rem; }
@@ -2580,7 +2587,10 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
 .md-pill.is-confirmed { background: #e5eef9; color: #1d4e89; border-color: #c9daf0; }
 .md-pill.is-seated    { background: #fff6cc; color: #7a5c00; border-color: #f3e08a; }
 .md-pill.is-completed { background: #e3f2e8; color: #1e6b43; border-color: #c4e3cf; }
-.md-pill.is-cancelled { background: #f1f0ed; color: #7a756b; border-color: #e0ddd6; }
+/* No-show and Declined: grey like Cancelled (the booking ended without a visit) */
+.md-pill.is-cancelled,
+.md-pill.is-noshow,
+.md-pill.is-declined { background: #f1f0ed; color: #7a756b; border-color: #e0ddd6; }
 
 /* Order statuses: Order placed yellow · Preparing orange · Served blue · Completed green · Cancelled grey
    (Completed and Cancelled reuse .is-completed / .is-cancelled above; neither is shown on the dashboard overview) */
@@ -2608,10 +2618,13 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
 .md-guest.is-seated    { box-shadow: inset 3px 0 0 #e6b800; }
 .md-guest.is-completed { box-shadow: inset 3px 0 0 #3f9b72; }
 
-/* Cancelled: greyed out (faded row, grey edge) */
-.md-guest.is-cancelled { box-shadow: inset 3px 0 0 #c9c5bc; color: var(--md-muted); }
-.md-guest.is-cancelled .md-guest-time,
-.md-guest.is-cancelled .md-guest-name { color: var(--md-muted); }
+/* Cancelled, No-show, Declined: greyed out (faded row, grey edge) */
+.md-guest.is-cancelled,
+.md-guest.is-noshow,
+.md-guest.is-declined { box-shadow: inset 3px 0 0 #c9c5bc; color: var(--md-muted); }
+.md-guest.is-cancelled .md-guest-time, .md-guest.is-cancelled .md-guest-name,
+.md-guest.is-noshow .md-guest-time, .md-guest.is-noshow .md-guest-name,
+.md-guest.is-declined .md-guest-time, .md-guest.is-declined .md-guest-name { color: var(--md-muted); }
 
 .md-order.is-placed    { box-shadow: inset 3px 0 0 #e6b800; }
 .md-order.is-preparing { box-shadow: inset 3px 0 0 #e8701a; }
@@ -3296,6 +3309,12 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
 .md-profile-fields:disabled .md-input { background-color: #faf8f3; color: var(--md-ink); opacity: 1; }
 .md-profile-fields:disabled .md-chip:not(.active) { opacity: .7; }
 .md-profile-fields:disabled .md-switch { opacity: .85; }
+/* Staff My profile: work details are managed by an administrator – stay greyed while editing too */
+.md-profile-fields .md-input.md-input-locked { background-color: #f1eee8; color: var(--md-muted); cursor: not-allowed; box-shadow: none; }
+
+/* Staff Reservation details pop-up: read-only bookings show no dropdown arrow or calendar icon */
+.md-detail-fields:disabled .form-select { background-image: none; padding-right: .75rem; }
+.md-detail-fields:disabled input[type="date"]::-webkit-calendar-picker-indicator { display: none; }
 
 /* Edit / Save changes button under the Dining preferences card (right side) */
 .md-profile-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; margin-top: calc(-1 * var(--md-section-gap) + 1rem); }
@@ -3389,3 +3408,323 @@ input[type="password"]::-ms-clear { display: none; }
     .md-main { margin: 0 !important; padding: 0 !important; }
     .md-confirm-wrap { max-width: none; }
 }
+
+/* =========================================================
+   Staff – Reservations (floor status, booking rows, filters)
+   ========================================================= */
+
+/* Floor status: one tile per table. Colours match the reservation status tags:
+   Seated yellow · Reserved blue · Free white · Unavailable grey */
+.md-floor {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+    gap: .5rem;
+}
+
+.md-floor-table {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    padding: .6rem .7rem;
+    border: 1px solid var(--md-line);
+    background: var(--md-white);
+}
+
+.md-floor-table b { font-family: var(--md-font-heading); font-weight: 400; font-size: 1rem; font-variant-numeric: lining-nums; }
+.md-floor-table span { font-size: var(--md-text-meta); line-height: 1.25; color: var(--md-muted); }
+
+.md-floor-table.is-seated      { background: #fff6cc; border-color: #f3e08a; }
+.md-floor-table.is-seated span { color: #7a5c00; }
+.md-floor-table.is-reserved    { background: #e5eef9; border-color: #c9daf0; }
+.md-floor-table.is-reserved span { color: #1d4e89; }
+.md-floor-table.is-unavailable { background: #f1f0ed; border-color: #e0ddd6; }
+.md-floor-table.is-unavailable b,
+.md-floor-table.is-unavailable span { color: #a8a398; }
+
+.md-floor-legend {
+    list-style: none;
+    margin: 1rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.5rem;
+    font-size: var(--md-text-meta);
+    color: var(--md-muted);
+}
+
+.md-floor-legend li { display: flex; align-items: center; gap: .45rem; }
+.md-floor-legend b { color: var(--md-ink); font-weight: 500; }
+.md-floor-legend i { width: .75rem; height: .75rem; display: inline-block; border: 1px solid var(--md-line); background: var(--md-white); }
+.md-floor-legend i.is-seated      { background: #fff6cc; border-color: #e6b800; }
+.md-floor-legend i.is-reserved    { background: #e5eef9; border-color: #5165ad; }
+.md-floor-legend i.is-unavailable { background: #f1f0ed; border-color: #c9c5bc; }
+
+/* Clickable tiles: booked → details pop-up, free → Reserve a Table */
+button.md-floor-table { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+button.md-floor-table:hover, button.md-floor-table:focus-visible { border-color: var(--md-gold); box-shadow: 0 0 0 1px var(--md-gold); outline: 0; }
+.md-floor > li { display: flex; }
+.md-floor > li > .md-floor-table { flex: 1; }
+
+/* Bookings card: one row of filters (date, service, area, status, search), starting at the same edge
+   as the booking rows. Every control has the same height so they line up. */
+.md-res-filters {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-res-filter-row { --md-filter-h: 2.5rem; display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.md-res-filter-row .md-input,
+.md-res-filter-row .md-res-date .btn,
+.md-res-filter-row .md-segment { height: var(--md-filter-h); }
+.md-res-filter-row .md-input { padding-top: 0; padding-bottom: 0; }
+.md-res-filter-row .md-res-date .btn { width: var(--md-filter-h); display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.md-res-filter-row .md-segment { display: inline-flex; align-items: stretch; }
+.md-res-date { display: flex; align-items: center; gap: .4rem; }
+.md-res-date .md-input { width: 8.5rem; padding-left: .6rem; padding-right: .6rem; }
+.md-res-area.form-select { width: 8.25rem; }
+.md-res-status.form-select { flex: 0 0 9.75rem; width: 9.75rem; }
+/* Status + search: one group that never splits, so the search box always sits beside the status dropdown */
+.md-res-filter-end { flex: 1 1 17rem; display: flex; gap: .75rem; min-width: 0; }
+.md-res-search.form-control { flex: 1 1 auto; min-width: 0; padding-left: .8rem; padding-right: .8rem; }
+
+/* Booking rows: time | guest | status + actions */
+.md-staff-res { grid-template-columns: 4.5rem minmax(0, 1fr) auto; align-items: center; }
+
+.md-staff-res-side { display: flex; align-items: center; gap: .75rem; justify-content: flex-end; }
+/* The row is a link to the details page; action buttons sit above the stretched link so they still work */
+.md-staff-res .md-order-actions { position: relative; z-index: 2; }
+.md-staff-res-side form { margin: 0; }
+
+.md-res-note { font-size: var(--md-text-meta); font-style: italic; color: var(--md-ink); }
+
+.md-allergy {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    margin-top: .2rem;
+    padding: .15rem .55rem;
+    font-size: var(--md-text-meta);
+    color: #a8323a;
+    background: #fbe9eb;
+    border: 1px solid #f1c6cb;
+}
+
+/* Confirm / Complete: green outline (solid green is Seat) */
+.md-btn-confirm { background: var(--md-white); border: 1px solid #b9dcc8; color: #1e6b43; }
+.md-btn-confirm:hover, .md-btn-confirm:focus { background: #e3f2e8; border-color: #2f7d5a; color: #1e6b43; }
+
+/* Narrow screens: status + actions go under the guest details */
+@media (max-width: 991.98px) {
+    .md-staff-res { grid-template-columns: 4.5rem minmax(0, 1fr); }
+    .md-staff-res-side { grid-column: 2; justify-content: flex-start; flex-wrap: wrap; }
+}
+
+@media (max-width: 575.98px) {
+    .md-res-filters { padding: 1rem; }
+}
+
+/* =========================================================
+   Staff – Reservation details (booking form, visit history, guest profile)
+   ========================================================= */
+.md-detail-table .form-select { max-width: 22rem; }
+
+/* Visit history table */
+.md-visit-table { width: 100%; border-collapse: collapse; font-size: var(--md-text-body); font-variant-numeric: lining-nums; }
+.md-visit-table th {
+    padding: .7rem 1.5rem;
+    font-size: var(--md-text-label);
+    font-weight: 400;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--md-muted);
+    border-bottom: 1px solid var(--md-line);
+    white-space: nowrap;
+}
+.md-visit-table td { padding: .8rem 1.5rem; border-bottom: 1px solid var(--md-line); white-space: nowrap; }
+.md-visit-table tbody tr:last-child td { border-bottom: 0; }
+.md-visit-table tr.is-current td { background: #faf8f3; font-weight: 500; }
+
+/* Guest profile card */
+.md-guest-id { display: flex; align-items: center; gap: .9rem; margin-bottom: 1.25rem; }
+.md-guest-id .md-avatar { width: 3rem; height: 3rem; color: var(--md-gold-dark); }
+.md-guest-id .md-guest-meta { line-height: 1.5; }
+
+.md-guest-stats { display: grid; gap: .5rem; margin-bottom: 1.25rem; }
+.md-guest-stats > div { padding: .7rem .9rem; border: 1px solid var(--md-line); }
+.md-guest-stats .md-label { display: block; margin-bottom: .2rem; }
+.md-guest-stats b { font-family: var(--md-font-heading); font-weight: 400; font-size: 1.4rem; font-variant-numeric: lining-nums; }
+
+/* Read-only chips (preferences) – not buttons */
+.md-guest-profile .md-chip { cursor: default; }
+.md-guest-profile .md-chip:hover { border-color: var(--md-line); }
+
+/* Header pill next to "Back to list" */
+.md-page-actions .md-pill { align-self: center; }
+
+/* =========================================================
+   Staff – Seat a walk-in
+   ========================================================= */
+/* "Book here" at the bottom right of the Guest details card */
+.md-walkin-foot { display: flex; justify-content: flex-end; padding: 1rem 1.5rem; border-top: 1px solid var(--md-line); }
+.md-walkin-foot .btn { min-width: 11rem; }
+
+/* =========================================================
+   Staff – Orders (order list, order panel, new order)
+   ========================================================= */
+.md-staff-order { position: relative; cursor: pointer; transition: background-color .15s ease; }
+.md-staff-order:hover { background: #faf8f3; }
+.md-staff-order.is-selected { background: #f7efdc; }
+.md-staff-order-btn {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    font-size: var(--md-text-body);
+    font-weight: 500;
+    color: var(--md-ink);
+}
+.md-staff-order-btn:focus-visible { outline: none; }
+.md-staff-order-btn:focus-visible::after { outline: 2px solid var(--md-gold); outline-offset: -2px; }
+.md-staff-orders .md-card-body { border-top: 1px solid var(--md-line); }
+
+/* Draft pill (only on screen while building a new order) */
+.md-pill.is-draft { background: #f1f0ed; color: #7a756b; border-color: #e0ddd6; }
+
+/* Subtotal row */
+.md-draft-total { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--md-text-body); }
+.md-draft-total b { font-weight: 500; font-variant-numeric: lining-nums; }
+
+/* New order: item rows */
+.md-draft-items { list-style: none; margin: 0; padding: 0; }
+.md-draft-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 6rem auto;
+    align-items: center;
+    gap: 1rem;
+    padding: .9rem 1.5rem;
+    border-bottom: 1px solid var(--md-line);
+}
+.md-draft-main { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.md-draft-name { font-weight: 500; }
+.md-draft-line { text-align: right; font-variant-numeric: lining-nums; white-space: nowrap; }
+.md-draft-item .md-qty span { min-width: 2rem; text-align: center; font-variant-numeric: lining-nums; }
+.md-draft-foot { border-top: 0; }
+
+/* Add items: menu grid */
+.md-add-head { flex-wrap: wrap; gap: .75rem; }
+.md-add-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: .75rem;
+}
+.md-add-item { display: flex; flex-direction: column; gap: .3rem; padding: .85rem .9rem; border: 1px solid var(--md-line); background: var(--md-white); }
+.md-add-cat { font-size: var(--md-text-label); letter-spacing: .16em; text-transform: uppercase; color: var(--md-gold-dark); }
+.md-add-name { font-weight: 500; line-height: 1.3; }
+.md-add-foot { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-top: auto; padding-top: .3rem; font-size: var(--md-text-meta); font-variant-numeric: lining-nums; }
+.md-add-item.is-soldout .md-add-name,
+.md-add-item.is-soldout .md-add-foot span { color: #a8a398; }
+
+@media (max-width: 575.98px) {
+    .md-draft-item { grid-template-columns: minmax(0, 1fr) auto; padding: .9rem 1rem; }
+    .md-draft-line { grid-column: 1; text-align: left; }
+}
+
+/* Order list rows: table badge | name + code, then status pill and amount on one line under them */
+.md-staff-order { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); align-items: start; column-gap: .9rem; row-gap: .5rem; }
+.md-staff-order .md-order-side {
+    grid-column: 2;
+    min-width: 0;                       /* stay inside the card, never wider than its column */
+    flex-direction: row;
+    flex-wrap: wrap;                    /* narrow column: the amount drops under the pill instead of overflowing */
+    justify-content: space-between;
+    align-items: center;
+    gap: .4rem .75rem;
+}
+.md-staff-order .md-order-side .md-order-amount { margin-left: auto; }
+
+/* New order view: the order-type card stays in view while the item list on the right grows */
+@media (min-width: 992px) {
+    .md-new-order-card { position: sticky; top: 1.5rem; }
+}
+
+/* =========================================================
+   Dropdown that always opens below (wwwroot/js/md-select.js, <select data-md-select>)
+   ========================================================= */
+.md-select { position: relative; }
+.md-select-native { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.md-select-button { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.md-select-button:disabled { opacity: 1; }
+.md-select-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 1070;
+    margin: 0;
+    padding: .3rem 0;
+    list-style: none;
+    max-height: 16rem;
+    overflow-y: auto;
+    background: var(--md-white);
+    border: 1px solid var(--md-line);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .08);
+}
+.md-select-list li { padding: .55rem 1rem; font-size: var(--md-text-body); cursor: pointer; }
+.md-select-list li:hover,
+.md-select-list li:focus { background: #f7efdc; outline: none; }
+.md-select-list li[aria-selected="true"] { font-weight: 500; }
+.md-select-list li[aria-disabled="true"] { color: #a8a398; cursor: not-allowed; background: none; }
+
+/* Reservations: when the page scrolls to the booking list, leave a little room above it
+   (and clear the black top bar on phones / tablets) */
+.md-res-bookings { scroll-margin-top: 1.5rem; }
+@media (max-width: 991.98px) { .md-res-bookings { scroll-margin-top: 4.9rem; } }
+
+/* =========================================================
+   Staff – Billing (bill table, totals with promotion, record payment)
+   ========================================================= */
+.md-bill-table td { white-space: normal; }
+.md-bill-table td .md-item-note { margin-top: .15rem; }
+.md-bill-sum .md-bill-promo { align-items: center; }
+.md-bill-sum .md-bill-promo dd { width: min(20rem, 60%); }
+.md-bill-sum .md-bill-promo label { margin: 0; }
+.md-bill-change { padding: .7rem 0; font-size: 1.15rem; font-variant-numeric: lining-nums; }
+.md-bill-change.is-short { color: #a8323a; }
+
+/* =========================================================
+   Staff – Guests (guest list, profile, visit history)
+   ========================================================= */
+.md-guest-search { border-bottom: 1px solid var(--md-line); }
+.md-guest-search .md-input { padding: .5rem .8rem; }
+.md-guest-initials { font-family: var(--md-font-body); font-size: .78rem; letter-spacing: .05em; color: var(--md-gold-dark); }
+.md-guest-flag { font-size: var(--md-text-meta); color: #a8323a; }
+.md-guest-profile .md-card-header .btn i { margin-right: .35rem; }
+
+/* Stats in one row on the Guests page */
+.md-guest-stats-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.md-guest-stats b.is-warn { color: #a8323a; }
+
+/* Dietary needs stand out: allergies red, other needs (Vegetarian, Halal …) amber */
+.md-guest-profile .md-chip.is-allergy { border-color: #f1c6cb; background: #fbe9eb; color: #a8323a; }
+.md-guest-profile .md-chip.is-diet { border-color: #efdfbb; background: #fbf3e2; color: #7a4f00; }
+
+.md-visit-table a { color: var(--md-gold-dark); text-underline-offset: 3px; }
+
+@media (max-width: 575.98px) {
+    .md-guest-stats-row { grid-template-columns: 1fr; }
+}
+
+/* PDF downloads (pdf-download.js): .md-pdf-only shows only in the PDF, never on screen */
+.md-pdf-only { display: none; }
+.md-pdf-capture .md-pdf-only { display: block; }
+.md-pdf-capture span.md-pdf-only { display: inline; }
+.md-pdf-head { margin-bottom: 1rem; padding-bottom: .8rem; border-bottom: 1px solid var(--md-line); }
+.md-pdf-head b { display: block; font-family: var(--md-font-heading); font-weight: 400; font-size: 1.4rem; }
+.md-pdf-head span { font-size: var(--md-text-meta); color: var(--md-muted); }
