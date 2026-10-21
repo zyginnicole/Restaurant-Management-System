@@ -9,7 +9,7 @@
 }
 
 @* Example data from the design. Only finished activity is shown here:
-   Reservation – Completed green · Cancelled grey
+   Reservation – Completed green · Cancelled, No-show, Declined grey (Reservation.reservationStatus, stored exactly so)
    Order       – Completed green · Cancelled grey
    Payment     – Paid green · Refunded grey · Failed red
    Upcoming reservations and open orders stay on the Reservations and Orders pages. *@
@@ -30,6 +30,8 @@
                 <option value="">All statuses</option>
                 <option value="Completed">Completed</option>
                 <option value="Cancelled">Cancelled</option>
+                <option value="No-show">No-show</option>
+                <option value="Declined">Declined</option>
             </select>
             <select class="form-select md-input" data-filter="month" aria-label="Filter by month">
                 <option value="">All months</option>
@@ -159,6 +161,38 @@
                 </div>
                 <span class="md-res-item-info">12 Jun 2026 · 19:30 · 2 guests</span>
                 <span class="md-res-item-note">Cancelled by you on 11 Jun · Change of plans</span>
+            </div>
+            <div class="md-history-side"><span class="md-res-item-note">—</span></div>
+        </li>
+        @* No-show: the guest didn't arrive; staff marked it after the grace period (grey, not clickable – like Cancelled) *@
+        <li class="md-res-item md-history-item is-noshow" data-status="No-show" data-month="5" data-year="2026">
+            <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                <span class="md-date-tile-month">May</span>
+                <span class="md-date-tile-day">22</span>
+            </div>
+            <div class="md-res-item-main">
+                <div class="md-res-item-top">
+                    <span class="md-res-code">R-0020</span>
+                    <span class="md-badge md-badge-noshow">No-show</span>
+                </div>
+                <span class="md-res-item-info">22 May 2026 · 20:00 · 3 guests</span>
+                <span class="md-res-item-note">Marked as no-show at 20:15 · the table was released</span>
+            </div>
+            <div class="md-history-side"><span class="md-res-item-note">—</span></div>
+        </li>
+        @* Declined: the restaurant couldn't accept the request (reason from Reservation.cancelReason) *@
+        <li class="md-res-item md-history-item is-declined" data-status="Declined" data-month="4" data-year="2026">
+            <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                <span class="md-date-tile-month">Apr</span>
+                <span class="md-date-tile-day">18</span>
+            </div>
+            <div class="md-res-item-main">
+                <div class="md-res-item-top">
+                    <span class="md-res-code">R-0016</span>
+                    <span class="md-badge md-badge-declined">Declined</span>
+                </div>
+                <span class="md-res-item-info">18 Apr 2026 · 20:30 · 10 guests</span>
+                <span class="md-res-item-note">Declined by the restaurant · Party too large for available tables</span>
             </div>
             <div class="md-history-side"><span class="md-res-item-note">—</span></div>
         </li>

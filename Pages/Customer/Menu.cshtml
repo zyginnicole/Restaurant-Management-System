@@ -149,6 +149,13 @@
     <i class="bi bi-chat-right-dots"></i>
 </button>
 
+@* Floating cart: same design as the chatbot button, just above it. Shown only when the header's Cart button
+   has scrolled out of view (cart-fab.js); the count follows #cartCount. *@
+<a class="md-chat-fab md-cart-fab is-hidden" id="cartFab" href="/Customer/Checkout" aria-label="Open cart" title="Open cart" tabindex="-1" aria-hidden="true">
+    <i class="bi bi-bag"></i>
+    <span class="md-cart-fab-count" id="cartFabCount">2</span>
+</a>
+
 <section class="md-chat-panel d-none" id="chatPanel" aria-label="@ViewData["Brand"] assistant">
     <div class="md-chat-header">
         <div>
@@ -181,4 +188,5 @@
 
 @section Scripts {
     <script src="~/js/menu.js" asp-append-version="true"></script>
+    <script src="~/js/cart-fab.js" asp-append-version="true"></script>
 }

@@ -690,7 +690,9 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
 .md-badge-paid,
 .md-badge-available { background: #e3f2e8; color: #1e6b43; border-color: #c4e3cf; }
 
-.md-badge-cancelled { background: #f1f0ed; color: #7a756b; border-color: #e0ddd6; }
+.md-badge-cancelled,
+.md-badge-noshow,
+.md-badge-declined { background: #f1f0ed; color: #7a756b; border-color: #e0ddd6; }   /* Cancelled, No-show, Declined: grey */
 
 .md-badge-failed { background: #fbe9eb; color: var(--md-danger); border-color: #f0c2c6; }
 
@@ -3388,4 +3390,35 @@ input[type="password"]::-ms-clear { display: none; }
     .md-sidebar, .md-mobilebar, .md-page-actions, .md-confirm-actions, .md-confirm-foot { display: none !important; }
     .md-main { margin: 0 !important; padding: 0 !important; }
     .md-confirm-wrap { max-width: none; }
+}
+
+/* History: No-show and Declined reservations – grey like Cancelled, but not crossed out
+   (the note explains what happened). Not clickable. */
+.md-history-item.is-noshow,
+.md-history-item.is-declined { background: #f1f0ed; }
+.md-history-item.is-noshow .md-res-code,
+.md-history-item.is-declined .md-res-code,
+.md-history-item.is-noshow .md-res-item-info,
+.md-history-item.is-declined .md-res-item-info { color: #8f8a80; }
+.md-history-item.is-noshow .md-date-tile,
+.md-history-item.is-declined .md-date-tile { background: #e8e6e1; }
+.md-history-item.is-noshow .md-date-tile-month,
+.md-history-item.is-declined .md-date-tile-month,
+.md-history-item.is-noshow .md-date-tile-day,
+.md-history-item.is-declined .md-date-tile-day { color: #a8a398; }
+
+/* Menu: floating cart button – same look as the chatbot button (.md-chat-fab), stacked just above it */
+.md-cart-fab { bottom: calc(1.5rem + 3.5rem + .75rem); text-decoration: none; transition: opacity .2s ease, transform .2s ease, background-color .15s ease; }
+.md-cart-fab:hover { color: var(--md-white); }
+.md-cart-fab.is-hidden { opacity: 0; transform: translateY(.5rem); pointer-events: none; }
+.md-cart-fab-count {
+    position: absolute; top: -.35rem; right: -.35rem;
+    min-width: 1.35rem; height: 1.35rem; padding: 0 .3rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 1rem; background: var(--md-gold); color: var(--md-ink);
+    font-size: .72rem; font-weight: 600; line-height: 1; font-variant-numeric: lining-nums;
+    box-shadow: 0 0 0 2px var(--md-white);
+}
+@media (max-width: 575.98px) {
+    .md-cart-fab { bottom: calc(1rem + 3.5rem + .75rem); }
 }
