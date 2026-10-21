@@ -4,75 +4,77 @@ using RestaurantManagementSystem.Filters;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Services;
 
+// QuestPDF requires the application to declare the license used by this project.
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Razor Pages + role protection per folder.
-// Every page in these folders needs the matching role; login/register pages are marked [AllowAnonymous].
 builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AddFolderApplicationModelConvention("/Customer",
         model => model.Filters.Add(new RequireRoleFilter(UserRoles.Customer, "/Customer/Login")));
-
     options.Conventions.AddFolderApplicationModelConvention("/Staff",
         model => model.Filters.Add(new RequireRoleFilter(UserRoles.Staff, "/Staff/Login")));
-
     options.Conventions.AddFolderApplicationModelConvention("/Admin",
         model => model.Filters.Add(new RequireRoleFilter(UserRoles.Admin, "/Staff/Login")));
 });
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")));
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlServerOptionsAction: sqlOptions => sqlOptions.EnableRetryOnFailure()));
 
-// Session: keeps the signed-in user's ID, role and name between pages
+// Session stores the signed-in user's ID, role and name between pages.
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
-    options.IdleTimeout = TimeSpan.FromHours(8);   // signed out after 8 hours of no activity
-    options.Cookie.HttpOnly = true;                   // JavaScript cannot read the session cookie
-    options.Cookie.IsEssential = true;                // session works without a cookie-consent banner
+    options.IdleTimeout = TimeSpan.FromHours(8);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
 });
 
-// Email (Gmail SMTP): the Gmail address and App Password come from User Secrets, never from GitHub
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
-
-// Server memory: holds password reset codes for 10 minutes
 builder.Services.AddMemoryCache();
 
-// Account services (business logic layer)
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<ReservationService>();
-// Closes unanswered Pending requests (15 min before the booking) and earlier days' open bookings (on start, then every minute)
 builder.Services.AddHostedService<ReservationCleanupService>();
 builder.Services.AddScoped<RecommendationService>();
-builder.Services.AddScoped<PromotionService>();      // server-side promotion rules (Checkout, staff Orders/Billing, Payment)
+builder.Services.AddScoped<PromotionService>();
 builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<DemoAccountSeeder>();
+builder.Services.AddScoped<ReportService>();
+builder.Services.AddScoped<ExportService>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<ChatbotService>();
+
+builder.Services.AddHttpClient<OllamaClient>((services, client) =>
+{
+    var config = services.GetRequiredService<IConfiguration>();
+    client.BaseAddress = new Uri(config["Ollama:BaseUrl"] ?? "http://localhost:11434");
+    client.Timeout = TimeSpan.FromSeconds(config.GetValue("Ollama:TimeoutSeconds", 60));
+});
 
 var app = builder.Build();
 
-// ---------- Database setup: create/update DB, then seed ----------
+// Apply migrations before seeding so the database matches the current model.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-    // 1. Create the database if missing and apply all pending migrations
     db.Database.Migrate();
 
-    // 2. Development only: demo admin and staff accounts (must come BEFORE Seed,
-    //    because promotions need an existing Admin)
     if (app.Environment.IsDevelopment())
     {
         var demoSeeder = scope.ServiceProvider.GetRequiredService<DemoAccountSeeder>();
         await demoSeeder.SeedAsync();
     }
 
-    // 3. Menu, tables, restaurant, promotions (safe to run on every startup)
     DbSeeder.Seed(db);
 }
 
@@ -82,39 +84,47 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/Error");   // shows the Error page for 404 / return NotFound();
-
+app.UseStatusCodePagesWithReExecute("/Error");
 app.UseHttpsRedirection();
-
 app.UseStaticFiles();
-
 app.UseRouting();
-
 app.UseSession();
 
 app.Use(async (context, next) =>
 {
     var session = context.Session;
-    if (session.Keys.Any())   // someone is signed in
+    if (session.Keys.Any())
     {
-        var s = await context.RequestServices.GetRequiredService<SettingsService>().GetAsync();
+        var settings = await context.RequestServices.GetRequiredService<SettingsService>().GetAsync();
         var last = session.GetString("LastActive");
 
-        if (last != null && DateTimeOffset.TryParse(last, out var t) &&
-            DateTimeOffset.Now - t > TimeSpan.FromMinutes(s.idleTimeoutMinutes))
+        if (last != null && DateTimeOffset.TryParse(last, out var time) &&
+            DateTimeOffset.Now - time > TimeSpan.FromMinutes(settings.idleTimeoutMinutes))
         {
-            session.Clear();   // idle too long: signed out
+            session.Clear();
         }
         else
         {
             session.SetString("LastActive", DateTimeOffset.Now.ToString("o"));
         }
     }
+
     await next();
 });
 
 app.UseAuthorization();
-
 app.MapRazorPages();
+
+// Chatbot endpoint used by the customer menu and dashboard widgets.
+app.MapPost("/api/chat", async (ChatRequest request, ChatbotService bot) =>
+{
+    var navigation = bot.GetNavigation(request.Message);
+    return Results.Ok(new
+    {
+        reply = await bot.GetReplyAsync(request.Message),
+        linkUrl = navigation?.Url,
+        linkText = navigation?.Text
+    });
+});
 
 app.Run();
