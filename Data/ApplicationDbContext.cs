@@ -5,9 +5,9 @@ namespace RestaurantManagementSystem.Data
 {
     public class ApplicationDbContext : DbContext
     {
-        public ApplicationDbContext (
+        public ApplicationDbContext(
             DbContextOptions<ApplicationDbContext> options)
-            : base (options)
+            : base(options)
         {
         }
 
@@ -25,6 +25,14 @@ namespace RestaurantManagementSystem.Data
         public DbSet<Promotion> Promotions { get; set; }
         public DbSet<Announcement> Announcements { get; set; }
 
+        // ---- Developer 2: Restaurant setup & menu
+        public DbSet<Restaurant> Restaurants { get; set; }
+        public DbSet<OperatingHour> OperatingHours { get; set; }
+        public DbSet<BlockedSlot> BlockedSlots { get; set; }
+        public DbSet<DiningArea> DiningAreas { get; set; }
+        public DbSet<MenuCategory> MenuCategories { get; set; }
+        public DbSet<SystemSetting> SystemSettings { get; set; }
+
         //Deletion safeguards
         //Restrict = "You can't delete this while something still points to it"
         // handles cascade error or those with special delete rule.
@@ -36,6 +44,51 @@ namespace RestaurantManagementSystem.Data
             modelBuilder.Entity<Customer>().HasIndex(c => c.custEmail).IsUnique();
             modelBuilder.Entity<Staff>().HasIndex(s => s.staffEmail).IsUnique();
             modelBuilder.Entity<Admin>().HasIndex(a => a.adminEmail).IsUnique();
+            modelBuilder.Entity<MenuCategory>().HasIndex(c => c.categoryName).IsUnique();
+            modelBuilder.Entity<DiningArea>().HasIndex(a => a.areaName).IsUnique();
+
+            // ---------- Menu ----------
+            modelBuilder.Entity<Menu>()
+                .HasOne(m => m.MenuCategory)
+                .WithMany(c => c.Menus)
+                .HasForeignKey(m => m.categoryID)
+                .OnDelete(DeleteBehavior.Restrict);         // can't delete a category that still has items
+
+            // ---------- DiningTable ----------
+            modelBuilder.Entity<DiningTable>()
+                .HasOne(t => t.DiningArea)
+                .WithMany(a => a.DiningTables)
+                .HasForeignKey(t => t.areaID)
+                .OnDelete(DeleteBehavior.Restrict);         // can't delete an area that still has tables
+
+            // one table number per area (the same number can repeat in a different area)
+            modelBuilder.Entity<DiningTable>()
+                .HasIndex(t => new { t.areaID, t.tableNumber })
+                .IsUnique();
+
+            // ---------- Restaurant -> OperatingHour ----------
+            modelBuilder.Entity<OperatingHour>()
+                .HasOne(h => h.Restaurant)
+                .WithMany(r => r.OperatingHours)
+                .HasForeignKey(h => h.restaurantID)
+                .OnDelete(DeleteBehavior.Cascade);          // deleting the restaurant removes its hours
+
+            // one row per weekday per restaurant
+            modelBuilder.Entity<OperatingHour>()
+                .HasIndex(h => new { h.restaurantID, h.dayOfWeek })
+                .IsUnique();
+
+            // ---------- Restaurant -> BlockedSlot (slots the admin stopped customers booking) ----------
+            modelBuilder.Entity<BlockedSlot>()
+                .HasOne(b => b.Restaurant)
+                .WithMany(r => r.BlockedSlots)
+                .HasForeignKey(b => b.restaurantID)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // a slot can only be blocked once
+            modelBuilder.Entity<BlockedSlot>()
+                .HasIndex(b => new { b.restaurantID, b.slotStart })
+                .IsUnique();
 
             // ---------- Reservation ----------
             modelBuilder.Entity<Reservation>()

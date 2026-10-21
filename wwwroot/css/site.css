@@ -116,6 +116,7 @@ a:hover { color: var(--md-ink); }
 /* ---------- Buttons ---------- */
 .btn-md-dark,
 .btn-md-gold,
+.btn-md-green,
 .btn-md-outline {
     border-radius: 0;
     padding: .85rem 1.5rem;
@@ -131,6 +132,16 @@ a:hover { color: var(--md-ink); }
 
 .btn-md-gold { background: var(--md-gold); color: var(--md-black); border: 1px solid var(--md-gold); }
 .btn-md-gold:hover, .btn-md-gold:focus { background: var(--md-gold-bright); color: var(--md-black); }
+
+/* Green "proceed" button (Save changes, Continue to payment, Pay …) – same green as the Staff Confirm button */
+.btn-md-green { background: #2f7d5a; color: var(--md-white); border: 1px solid #2f7d5a; }
+.btn-md-green:hover, .btn-md-green:focus { background: #256649; color: var(--md-white); border-color: #256649; }
+.btn-md-green:disabled { background: #2f7d5a; color: var(--md-white); opacity: .5; }
+
+/* Soft green: green border + light green fill (Confirm reservation); solid green on hover */
+.btn-md-green-soft { border-radius: 0; padding: .85rem 1.5rem; font-size: .78rem; letter-spacing: .18em; text-transform: uppercase;
+                     background: rgba(47, 125, 90, .1); color: #256649; border: 1px solid #2f7d5a; }
+.btn-md-green-soft:hover, .btn-md-green-soft:focus { background: #2f7d5a; color: var(--md-white); border-color: #2f7d5a; }
 
 .btn-md-outline { background: var(--md-white); color: var(--md-ink); border: 1px solid var(--md-line); }
 .btn-md-outline:hover, .btn-md-outline:focus { border-color: var(--md-ink); color: var(--md-ink); }
@@ -434,6 +445,12 @@ a:hover { color: var(--md-ink); }
     letter-spacing: .05em;
 }
 
+/* The user block is a link to the profile page */
+a.md-sidebar-user { text-decoration: none; transition: background-color .15s ease; }
+a.md-sidebar-user:hover { background: #1a1a1a; }
+a.md-sidebar-user:hover .md-sidebar-user-name { color: var(--md-gold-bright); }
+a.md-sidebar-user:focus-visible { outline: 2px solid var(--md-gold); outline-offset: -2px; }
+
 .md-sidebar-user-name { color: var(--md-white); font-size: .9rem; }
 .md-sidebar-user-meta { color: #8f897c; font-size: var(--md-text-meta); }
 
@@ -502,6 +519,9 @@ a:hover { color: var(--md-ink); }
 }
 
 .md-signout:hover { color: var(--md-white); }
+
+/* Sign out as a button (opens the confirmation pop-up) – looks the same as the link */
+button.md-signout { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-top: 1px solid #222; }
 
 /* ---------- Mobile top bar ---------- */
 .md-mobilebar {
@@ -600,6 +620,7 @@ a:hover { color: var(--md-ink); }
     justify-content: space-between;
     align-items: center;
     gap: .75rem;
+    min-height: 3.25rem;              /* same height with or without a status tag, so side-by-side cards line up */
     padding: .8rem 1.25rem;
     border-bottom: 1px solid var(--md-line);
 }
@@ -818,35 +839,55 @@ a:hover { color: var(--md-ink); }
 }
 
 .md-order-total { font-family: var(--md-font-heading); font-size: 1.35rem; font-weight: 400; color: var(--md-ink); white-space: nowrap; }
-/* ---------- Pop-up (modal) ---------- */
-.md-modal .modal-content {
+/* ---------- Pop-up (.md-popup on Bootstrap's .modal – see Pages/Shared/README.md) ---------- */
+.md-popup .modal-content {
     border: 1px solid var(--md-line);
     border-radius: 0;
 }
 
-.md-modal .modal-header {
+/* Wider pop-ups (Bootstrap default is 500px) so the details aren't packed; phones keep the full width */
+@media (min-width: 576px) {
+    .md-popup .modal-dialog { max-width: 620px; }
+
+    /* History → reservation details: the pop-up hugs its content, so the space on the left and right of the
+       content is the same (the body padding) and the header lines up with it */
+    .md-popup.md-popup-narrow .modal-dialog { width: fit-content; min-width: 22rem; max-width: min(760px, calc(100vw - 2rem)); }
+    .md-popup.md-popup-narrow .md-detail-grid { grid-template-columns: auto auto; gap: 1rem 2.5rem; justify-content: start; }
+    /* Long notes wrap to the content width instead of making the pop-up wider */
+    .md-popup.md-popup-narrow .md-popup-note { width: 0; min-width: 100%; }
+}
+
+/* Reservation details pop-up: the same wide space (2.5rem) on the left, right and bottom of the content;
+   the header uses the same side space so RESERVATION / code line up with the content */
+.md-popup.md-popup-narrow .modal-header { padding-left: 2.5rem; padding-right: 2.5rem; }
+.md-popup.md-popup-narrow .modal-body { padding: 1.5rem 2.5rem 2.5rem; }
+/* When action buttons follow (Cancel / Edit, Edit details / Confirm booking) they carry the bottom space */
+.md-popup.md-popup-narrow .modal-body:not(:last-child) { padding-bottom: 1.5rem; }
+.md-popup.md-popup-narrow .modal-footer { padding: 1rem 2.5rem 2rem; }
+
+.md-popup .modal-header {
     align-items: flex-start;
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--md-line);
 }
 
-.md-modal-title {
+.md-popup-title {
     font-family: var(--md-font-heading);
     font-size: 1.8rem;
     margin: .35rem 0 0;
 }
 
-.md-modal .modal-body { padding: 1.5rem; }
+.md-popup .modal-body { padding: 1.5rem; }
 
-.md-modal-message { font-size: 1rem; line-height: 1.6; margin-bottom: .75rem; }
+.md-popup-message { font-size: 1rem; line-height: 1.6; margin-bottom: .75rem; }
 
-.md-modal .modal-footer {
+.md-popup .modal-footer {
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--md-line);
     gap: .5rem;
 }
 
-.md-modal .modal-footer .btn { padding: .65rem 1.25rem; margin: 0; }
+.md-popup .modal-footer .btn { padding: .65rem 1.25rem; margin: 0; }
 /* =========================================================
    Customer Menu page
    ========================================================= */
@@ -931,7 +972,31 @@ a:hover { color: var(--md-ink); }
 
 .md-menu-tags { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
 
+/* Status + promo tags stacked on the photo's top-right corner (promo under the status) */
+.md-photo-badges {
+    position: absolute;
+    top: .75rem;
+    right: .75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .35rem;
+}
+.md-photo-badges .md-badge { letter-spacing: .12em; }
+
 .md-menu-card .btn { margin-top: auto; padding: .7rem 1rem; }
+
+/* Add to order: small quantity stepper (shown once the dish is in the order) stacked above the button */
+.md-add-row { display: flex; flex-direction: column; align-items: flex-end; gap: .5rem; margin-top: auto; }
+.md-add-row .btn { margin-top: 0; }
+.md-add-row .md-qty { border-color: #dcdcdc; }
+.md-add-row .md-qty button { width: 1.8rem; height: 1.8rem; font-size: .9rem; line-height: 1; padding: 0; }
+.md-add-row .md-qty span { min-width: 1.6rem; text-align: center; font-size: .85rem; font-variant-numeric: lining-nums; }
+/* "Added" (green, same as btn-md-green) for a moment, then back to the default white "Add to order" */
+.md-add-btn.is-added,
+.md-add-btn.is-added:hover,
+.md-add-btn.is-added:focus { background: #2f7d5a; color: var(--md-white); border-color: #2f7d5a; }
+.md-add-btn.is-reset:hover, .md-add-btn.is-reset:focus { background: var(--md-white); color: var(--md-gold-dark); border-color: var(--md-gold); }
 
 .md-badge-promo { background: #fbf0d9; color: #7a4f00; border-color: #f0dcae; }
 
@@ -1106,8 +1171,8 @@ a:hover { color: var(--md-ink); }
 .md-chat-title { font-size: .95rem; font-weight: 500; }
 .md-chat-subtitle { font-size: .75rem; color: #a8a294; }
 
-.md-chat-close.btn { padding: .4rem .7rem; background: transparent; color: var(--md-white); border-color: #444; }
-.md-chat-close.btn:hover { color: var(--md-white); border-color: var(--md-white); }
+.md-chat-close.btn-close { flex: 0 0 auto; opacity: .75; }
+.md-chat-close.btn-close:hover { opacity: 1; }
 
 .md-chat-body {
     display: flex;
@@ -1665,8 +1730,8 @@ a:hover { color: var(--md-ink); }
 /* ---------- Detail list inside pop-ups (label / value rows) ---------- */
 .md-detail-list {
     display: grid;
-    grid-template-columns: 9.5rem 1fr;
-    gap: .55rem 1rem;
+    grid-template-columns: 10.5rem 1fr;
+    gap: .7rem 1.25rem;
     margin: 0;
     font-size: var(--md-text-body);
 }
@@ -1682,7 +1747,7 @@ a:hover { color: var(--md-ink); }
 
 .md-detail-list dd { margin: 0; }
 
-.md-modal-note {
+.md-popup-note {
     margin: 1.1rem 0 0;
     padding-top: .9rem;
     border-top: 1px solid var(--md-line);
@@ -1695,8 +1760,8 @@ a:hover { color: var(--md-ink); }
     .md-detail-list dd { margin-bottom: .5rem; }
 }
 /* Pop-up header: title on the left, badge and close on the right */
-.md-modal .modal-header { justify-content: space-between; gap: 1rem; }
-.md-modal .modal-header .btn-close { margin: 0; }
+.md-popup .modal-header { justify-content: space-between; gap: 1rem; }
+.md-popup .modal-header .btn-close { margin: 0; }
 
 /* Single action button sits on the right, where Modify used to be */
 .md-res-actions { justify-content: flex-end; }
@@ -1731,6 +1796,95 @@ a:hover { color: var(--md-ink); }
 .md-res-date { font-size: 1.5rem; line-height: 1.15; }
 
 .md-res-time i { color: var(--md-gold-dark); }
+
+/* Lamp icon in front of every table / dining area (all modules) */
+.md-lamp { margin-right: .3rem; font-size: .95em; color: var(--md-gold-dark); }
+.md-next-res-row .md-lamp { margin-right: 0; font-size: 1.1rem; }
+
+/* Customer Overview – next reservation: big date tile + day, time/guests, table/area */
+.md-next-res { display: flex; align-items: center; gap: 1.5rem; }
+.md-date-tile-lg { width: 7rem; height: 7rem; }
+.md-date-tile-lg .md-date-tile-day { font-size: 2.6rem; }
+.md-next-res-info { display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
+.md-next-res-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 2.5rem; font-size: var(--md-text-body); }
+.md-next-res-row > span { display: inline-flex; align-items: center; gap: .5rem; }
+.md-next-res-row .md-res-time { margin-top: 0; }
+.md-next-res-row i { font-size: 1.1rem; line-height: 1; }
+
+/* Next reservations: two equal slots; with 3+ reservations they scroll inside the card */
+.md-next-slots {
+    flex: 0 0 auto;
+    height: 20rem;                   /* exactly two 10rem slots; a 3rd slot scrolls */
+    margin: 0;
+    padding: 0;                      /* slots run edge to edge so the hover fills the whole slot */
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+.md-next-slots:focus-visible { outline: 2px solid var(--md-gold); outline-offset: -2px; }
+
+.md-next-slot {
+    flex: 0 0 10rem;                 /* two slots fill the list */
+    display: flex;
+    align-items: center;             /* vertically centred in its slot; tiles line up on the left */
+    padding: .5rem 1.5rem 0.5rem 2.25rem;
+    border-bottom: 1px solid var(--md-line);
+}
+
+/* Status tag (and code from the 2nd slot) above the day text; tile centred against the whole block */
+.md-next-slot-code { display: flex; align-items: center; gap: .5rem; }
+
+/* Hover fills the whole slot; the date tile keeps its normal colour */
+.md-next-slot.md-row-link:hover { background-color: #f7f3ea; }
+
+/* Date tile is as tall as the text block beside it (status, day, time, table) */
+.md-next-slot .md-next-res { align-items: stretch; }
+.md-next-slot .md-date-tile-lg { height: auto; min-height: 0; align-self: stretch; }
+
+/* Smaller scale inside the slots: tile, day text and detail rows */
+.md-next-slot .md-next-res { gap: 1.1rem; }
+.md-next-slot .md-date-tile-lg { width: 5.25rem; height: auto; }   /* height follows the text beside it */
+
+/* Details under the block: two columns (Order | Your rating), Special request across; label above value */
+/* Order takes the left 60%, Your rating starts at 60% across (as in the design), not at the far edge */
+.md-detail-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem 1.5rem; margin: 0; }
+.md-detail-grid .is-wide { grid-column: 1 / -1; }
+.md-detail-grid dt { font-weight: 400; font-size: var(--md-text-label); letter-spacing: .18em; text-transform: uppercase; color: var(--md-muted); margin-bottom: .25rem; }
+.md-detail-grid dd { margin: 0; font-size: .92rem; }
+
+@media (max-width: 575.98px) {
+    .md-detail-grid { grid-template-columns: 1fr; }
+}
+
+/* Same block inside pop-ups (History → reservation details) */
+.md-detail-res { align-items: stretch; gap: 1.1rem; margin-bottom: 1.25rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--md-line); }
+.md-detail-res .md-date-tile-lg { width: 5.25rem; height: auto; }
+.md-detail-res .md-date-tile-lg .md-date-tile-day { font-size: 1.9rem; }
+.md-detail-res .md-res-date { font-size: 1.2rem; }
+.md-detail-res .md-next-res-info { gap: .4rem; }
+.md-detail-res .md-next-res-row { font-size: .85rem; gap: .4rem 1.75rem; }
+.md-detail-res .md-next-res-row i { font-size: .95rem; }
+.md-detail-res .md-badge { font-size: .58rem; padding: .18rem .55rem; }
+.md-next-slot .md-date-tile-lg .md-date-tile-day { font-size: 1.9rem; }
+.md-next-slot .md-res-date { font-size: 1.2rem; }
+.md-next-slot .md-next-res-info { gap: .4rem; }
+.md-next-slot .md-next-res-row { font-size: .85rem; gap: .4rem 1.75rem; }
+.md-next-slot .md-next-res-row i { font-size: .95rem; }
+.md-next-slot .md-badge { font-size: .58rem; padding: .18rem .55rem; }
+
+.md-next-slot:last-child { border-bottom: 0; }
+.md-next-slots .md-next-slot.is-empty { border-bottom: 0; }
+.md-next-slot-code { display: flex; align-items: center; gap: .5rem; }
+.md-next-slot-code .md-res-code { font-size: .72rem; color: var(--md-gold-dark); }
+
+@media (max-width: 575.98px) {
+    .md-next-res { gap: 1rem; }
+    .md-date-tile-lg { width: 5.25rem; height: 5.25rem; }
+    .md-date-tile-lg .md-date-tile-day { font-size: 2rem; }
+}
 /* =========================================================
    Staff / Admin dashboards – list rows with status edge
    ========================================================= */
@@ -2616,4 +2770,622 @@ a:hover { color: var(--md-ink); }
     .md-order-summary-strip { margin: 0 1rem; }
     .md-guest { grid-template-columns: 3.6rem minmax(0, 1fr); row-gap: .6rem; }
     .md-guest > .md-pill { grid-column: 2; justify-self: start; }
+}
+
+/* =========================================================
+   Customer Reservations – booking form and upcoming list
+   ========================================================= */
+
+/* Choice buttons (dining area): radio inputs styled as a segmented control */
+.md-choice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding: 3px;
+    background: #efebe2;
+}
+
+.md-choice label {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: .5rem .9rem;
+    font-size: .85rem;
+    color: var(--md-muted);
+    cursor: pointer;
+}
+
+.md-choice label:hover { color: var(--md-ink); }
+.md-choice .btn-check:checked + label { background: var(--md-white); color: var(--md-ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .06); }
+.md-choice .btn-check:focus-visible + label { outline: 2px solid var(--md-gold); outline-offset: -2px; }
+
+/* Time label + legend on one line */
+.md-slot-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .4rem 1rem;
+    margin-bottom: .5rem;
+}
+
+.md-slot-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: .9rem;
+    font-size: var(--md-text-meta);
+    color: var(--md-muted);
+}
+
+.md-slot-legend li { display: flex; align-items: center; gap: .35rem; }
+.md-slot-legend i { width: .65rem; height: .65rem; border: 1px solid var(--md-line); }
+.md-slot-legend .is-full { background: #efebe2; }
+.md-slot-legend .is-selected { background: var(--md-black); border-color: var(--md-black); }
+
+.md-slot-group {
+    display: block;
+    margin: .5rem 0 .35rem;
+    font-size: var(--md-text-meta);
+    color: var(--md-muted);
+}
+
+/* Time slot grid: 4 per row (3 on phones) */
+.md-slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; }
+
+.md-slots label {
+    padding: .6rem .25rem;
+    text-align: center;
+    font-size: .9rem;
+    font-variant-numeric: lining-nums tabular-nums;
+    background: var(--md-white);
+    border: 1px solid var(--md-line);
+    cursor: pointer;
+}
+
+.md-slots label:hover { border-color: var(--md-ink); }
+.md-slots .btn-check:checked + label { background: var(--md-black); border-color: var(--md-black); color: var(--md-white); }
+.md-slots .btn-check:disabled + label { background: #efebe2; border-color: #efebe2; color: #a8a297; text-decoration: line-through; cursor: not-allowed; }
+.md-slots .btn-check:focus-visible + label { outline: 2px solid var(--md-gold); outline-offset: 1px; }
+
+@media (max-width: 575.98px) {
+    .md-slots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .md-choice label { flex-basis: calc(50% - 2px); }   /* dining area as 2 × 2 on phones */
+}
+
+/* Soft notice box (beige); info variant (blue) for policies */
+.md-note-box {
+    margin: .75rem 0 0;
+    padding: .7rem .9rem;
+    background: #fbf3e2;
+    border: 1px solid #f0dfb8;
+    color: #6b4a00;
+    font-size: .85rem;
+}
+
+.md-note-box-info { margin: 0 0 1rem; background: #eef3fb; border-color: #d3e0f2; color: #1d4e89; }
+.md-note-box-danger { background: rgba(181, 27, 27, .12); border-color: rgba(181, 27, 27, .5); color: #b51b1b; }
+
+/* Dark selected style (Reservations): selected time slot, legend square and request chips */
+.md-slots-ink .btn-check:checked + label { background: #2e2e2e; border-color: #2e2e2e; color: var(--md-white); }
+.md-slot-legend-ink .is-selected { background: #2e2e2e; border-color: #2e2e2e; }
+.md-chips-ink .md-chip.active { background: #2e2e2e; border-color: #2e2e2e; color: var(--md-white); }
+
+/* Light grey box around the time section (Reservations) */
+.md-time-box { padding: 1.1rem; border: 1px solid var(--md-line); }
+
+/* Reservations form: more space between each step (party size/date, area, time, request, note) */
+.md-form-section { margin-bottom: 1.75rem; }
+.md-form-section .md-label { margin-bottom: .55rem; }
+.md-time-box .md-slot-head { margin-bottom: .8rem; }
+.md-time-box .md-slot-group { margin: .9rem 0 .5rem; }
+.md-time-box .md-slots { gap: .6rem; }
+.md-time-box .md-note-box { margin-top: 1rem; }
+
+/* Grey border around the dining area selector */
+.md-choice-bordered { border: 1px solid #d8d3c8; }
+
+/* Inline field error (e.g. no time chosen) */
+.md-field-error { margin: .5rem 0 0; font-size: .85rem; color: var(--md-danger); }
+
+/* Request chips */
+.md-chips { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .6rem; }
+
+.md-chip {
+    padding: .4rem .8rem;
+    font-size: .8rem;
+    background: var(--md-white);
+    border: 1px solid var(--md-line);
+    color: var(--md-ink);
+}
+
+.md-chip:hover { border-color: var(--md-ink); }
+.md-chip.active { background: var(--md-black); border-color: var(--md-black); color: var(--md-white); }
+
+/* Small meta text on the right of a card header ("2 active") */
+.md-card-meta { font-size: var(--md-text-meta); color: var(--md-muted); }
+
+/* Upcoming reservations list */
+.md-res-list { list-style: none; margin: 0; padding: 0; }
+
+.md-res-item {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-res-item:last-child { border-bottom: 0; }
+
+/* Coloured left edge by reservation status (same scheme as the badges) */
+.md-res-item.is-pending   { box-shadow: inset 3px 0 0 var(--md-danger); }
+.md-res-item.is-confirmed { box-shadow: inset 3px 0 0 #5165ad; }
+.md-res-item.is-seated    { box-shadow: inset 3px 0 0 #e6b800; }
+.md-res-item.is-completed { box-shadow: inset 3px 0 0 #3f9b72; }
+.md-res-item.is-cancelled { box-shadow: inset 3px 0 0 #c9c5bc; }
+
+.md-date-tile-sm { width: 3.4rem; height: 3.4rem; }
+.md-date-tile-sm .md-date-tile-day { font-size: 1.35rem; }
+
+.md-res-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
+.md-res-item-top { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.md-res-code { font-size: .8rem; font-weight: 600; letter-spacing: .1em; }
+.md-res-item-info { font-size: var(--md-text-body); }
+.md-res-item-note { font-size: var(--md-text-meta); color: var(--md-muted); }
+.md-res-item-actions { display: flex; gap: .5rem; margin-top: .45rem; }
+.md-res-item-actions .btn { text-transform: uppercase; }
+
+/* Reservation details pop-up footer: Cancel on the left, Edit + Close on the right */
+.md-detail-footer { flex-wrap: nowrap; gap: .5rem; }
+.md-detail-footer .btn { padding: .65rem .9rem; font-size: .72rem; letter-spacing: .12em; white-space: nowrap; }
+.md-detail-footer .md-detail-cancel { margin-right: auto !important; border-radius: 0; text-transform: uppercase; }
+
+@media (max-width: 575.98px) {
+    .md-detail-footer { flex-wrap: wrap; }
+}
+
+/* =========================================================
+   Customer Orders – order detail and open orders list
+   ========================================================= */
+
+/* Time under each tracker step */
+.md-tracker-time {
+    display: block;
+    margin-top: .15rem;
+    font-size: .7rem;
+    letter-spacing: 0;
+    text-transform: none;
+    font-variant-numeric: lining-nums;
+    color: var(--md-muted);
+}
+
+/* Order facts: label above value, 4 across (2 on phones) */
+.md-order-facts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .75rem 1rem;
+    margin: 0 0 1rem;
+    padding: .85rem 0;
+    border-top: 1px solid var(--md-line);
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-order-facts dt {
+    font-size: var(--md-text-label);
+    font-weight: 400;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--md-muted);
+}
+
+.md-order-facts dd { margin: .2rem 0 0; font-size: .9rem; }
+
+@media (max-width: 575.98px) {
+    .md-order-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Kitchen note under an item; smaller sub-total rows (SST) */
+.md-item-note { display: block; font-size: var(--md-text-meta); color: var(--md-muted); }
+.md-order-items li.md-order-items-sub { color: var(--md-muted); font-size: .85rem; border-bottom: 0; }
+
+/* Cancel row under a placed order */
+.md-order-cancel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--md-line);
+}
+
+.md-order-cancel .btn { text-transform: uppercase; flex-shrink: 0; }
+
+/* Open orders list: each row is a button that shows the order on the left */
+.md-order-pick { list-style: none; margin: 0; padding: 0; }
+.md-order-pick li { border-bottom: 1px solid var(--md-line); }
+
+.md-order-pick-row {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    text-align: left;
+    background: var(--md-white);
+    border: 0;
+    color: inherit;
+    transition: background-color .15s ease;
+}
+
+.md-order-pick-row:hover { background: #faf8f3; }
+.md-order-pick-row.active { background: #f6f3ec; }
+.md-order-pick-row:focus-visible { outline: 2px solid var(--md-gold); outline-offset: -2px; }
+
+/* Coloured left edge by order status (same scheme as the badges) */
+.md-order-pick-row.is-placed    { box-shadow: inset 3px 0 0 #e6b800; }
+.md-order-pick-row.is-preparing { box-shadow: inset 3px 0 0 #e8701a; }
+.md-order-pick-row.is-served    { box-shadow: inset 3px 0 0 #5165ad; }
+
+.md-order-pick-main { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+.md-order-pick-side { display: flex; flex-direction: column; align-items: flex-end; gap: .4rem; flex-shrink: 0; }
+.md-order-pick-amount { font-size: var(--md-text-body); font-variant-numeric: lining-nums; white-space: nowrap; }
+
+/* Card footer link */
+.md-card-foot { padding: .9rem 1.25rem; }
+
+/* =========================================================
+   Customer Booking confirmed / Edit reservation
+   ========================================================= */
+.md-confirm-wrap { max-width: 54rem; margin-left: auto; margin-right: auto; }
+
+.md-confirm { text-align: center; }
+.md-confirm-title { font-size: 1.9rem; margin: .9rem 0 .35rem; }
+.md-confirm-ref { color: var(--md-muted); font-size: .9rem; margin-bottom: 1.4rem; }
+.md-confirm-ref b { color: var(--md-ink); font-weight: 600; }
+
+/* Details: 3 across, label above value, left-aligned */
+.md-confirm-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem 1.25rem;
+    margin: 0 0 1.25rem;
+    padding: 1.1rem 0;
+    border-top: 1px solid var(--md-line);
+    border-bottom: 1px solid var(--md-line);
+    text-align: left;
+}
+
+.md-confirm-facts dt {
+    font-size: var(--md-text-label);
+    font-weight: 400;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--md-muted);
+}
+
+.md-confirm-facts dd { margin: .25rem 0 0; font-size: .95rem; }
+
+.md-confirm .md-note-box { text-align: left; }
+
+.md-confirm-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; margin-top: 1.25rem; }
+
+.md-confirm-foot { margin-top: .9rem; text-align: center; font-size: var(--md-text-meta); color: var(--md-muted); }
+
+@media (max-width: 575.98px) {
+    .md-confirm-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .md-confirm-actions .btn { width: 100%; }
+}
+
+/* Edit reservation: buttons row, availability grid 3 across */
+.md-edit-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.md-slots-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* =========================================================
+   Customer Checkout / Payment / Payment successful
+   ========================================================= */
+
+/* Cart rows: [photo] [name, price each, note] [− qty +] [line price] */
+.md-cart { list-style: none; margin: 0; padding: 0; }
+
+.md-cart-item {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, 1fr) auto 6.5rem;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-cart-item:last-child { border-bottom: 0; }
+.md-cart-item.is-removed { opacity: .45; }
+
+.md-cart-photo {
+    width: 4rem;
+    height: 4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: repeating-linear-gradient(135deg, #f3eee3 0 8px, #ebe4d4 8px 16px);
+    font-size: .55rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--md-gold-dark);
+}
+
+.md-cart-main { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.md-cart-name { font-weight: 500; }
+.md-cart-each { font-size: var(--md-text-meta); color: var(--md-muted); }
+.md-cart-note.form-control { margin-top: .4rem; padding: .45rem .7rem; font-size: .85rem; }
+.md-cart-line { text-align: right; font-weight: 500; font-variant-numeric: lining-nums; white-space: nowrap; }
+.md-cart-empty { padding: 1.25rem; margin: 0; color: var(--md-muted); }
+
+/* Quantity stepper */
+.md-qty { display: inline-flex; align-items: center; border: 1px solid var(--md-line); }
+
+.md-qty button {
+    width: 2rem;
+    height: 2.2rem;
+    border: 0;
+    background: var(--md-white);
+    color: var(--md-ink);
+}
+
+.md-qty button:hover { background: #f6f3ec; }
+
+.md-qty input {
+    width: 2.4rem;
+    height: 2.2rem;
+    border: 0;
+    text-align: center;
+    font-variant-numeric: lining-nums;
+    -moz-appearance: textfield;
+}
+
+.md-qty input::-webkit-outer-spin-button,
+.md-qty input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+@media (max-width: 575.98px) {
+    .md-cart-item { grid-template-columns: 3.2rem minmax(0, 1fr) auto; padding: 1rem; }
+    .md-cart-photo { width: 3.2rem; height: 3.2rem; }
+    .md-cart-main { grid-column: 2 / 4; }
+    .md-cart-item .md-qty { grid-column: 2; justify-self: start; }
+    .md-cart-line { grid-column: 3; grid-row: 2; }
+}
+
+/* Summary card stays in view while scrolling on desktop */
+@media (min-width: 992px) {
+    .md-sticky-card { position: sticky; top: 1.5rem; }
+}
+
+/* Summary rows: label left, amount right */
+.md-sum { margin: 0 0 1.25rem; }
+.md-sum > div { display: flex; justify-content: space-between; gap: 1rem; padding: .35rem 0; font-size: .92rem; }
+.md-sum dt { font-weight: 400; color: var(--md-ink); }
+.md-sum dd { margin: 0; text-align: right; font-variant-numeric: lining-nums; white-space: nowrap; }
+.md-sum-total { margin-top: .5rem; padding-top: .8rem !important; border-top: 1px solid var(--md-line); }
+.md-sum-total dt, .md-sum-total dd { font-weight: 600; font-size: 1.05rem; }
+.md-sum-plain { padding-bottom: .9rem; border-bottom: 1px solid var(--md-line); }
+.md-sum-plain dt { color: var(--md-muted); }
+
+/* Payment method options: radio cards */
+.md-pay-methods { display: flex; flex-direction: column; gap: .6rem; }
+
+.md-pay-option {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    padding: .9rem 1.1rem;
+    border: 1px solid var(--md-line);
+    cursor: pointer;
+}
+
+.md-pay-option > i { font-size: 1.3rem; color: var(--md-gold-dark); }
+.md-pay-option b { display: block; font-weight: 500; }
+.md-pay-option small { display: block; font-size: var(--md-text-meta); color: var(--md-muted); }
+.md-pay-option:hover { border-color: #cfc8bb; }
+/* Selected payment method: green outline + light green fill */
+.btn-check:checked + .md-pay-option { border-color: #2f7d5a; box-shadow: inset 0 0 0 1px #2f7d5a; background: #eef6f1; }
+.btn-check:checked + .md-pay-option > i { color: #2f7d5a; }
+.btn-check:focus-visible + .md-pay-option { outline: 2px solid var(--md-gold); outline-offset: 2px; }
+
+/* E-wallet QR placeholder */
+.md-qr { display: flex; align-items: center; gap: 1.25rem; }
+.md-qr-box { flex: 0 0 auto; width: 7rem; height: 7rem; display: flex; align-items: center; justify-content: center; border: 1px solid var(--md-line); font-size: 4rem; }
+
+/* =========================================================
+   Customer History – past reservations, orders, payments, rating
+   ========================================================= */
+.md-history-item { align-items: center; }
+
+/* Right side of a history row: Rate button, stars or amount */
+.md-history-side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: .2rem; text-align: right; }
+.md-history-side .btn { text-transform: uppercase; }
+.md-history-amount { font-variant-numeric: lining-nums; white-space: nowrap; }
+.md-history-amount.is-struck { color: var(--md-muted); text-decoration: line-through; }
+
+.md-rated { color: var(--md-gold); letter-spacing: .1em; }
+.md-rated-off { color: #ddd6c6; }
+
+/* Cancelled rows: grey fill (like the Cancelled tag) and every line struck through */
+.md-history-item.is-cancelled { background: #f1f0ed; }
+.md-history-item.is-cancelled .md-res-code,
+.md-history-item.is-cancelled .md-res-item-info,
+.md-history-item.is-cancelled .md-res-item-note,
+.md-history-item.is-cancelled .md-history-amount { text-decoration: line-through; color: #a8a398; }
+/* Lighter text on cancelled rows (still readable on the grey) */
+.md-history-item.is-cancelled .md-date-tile { background: #e8e6e1; }
+.md-history-item.is-cancelled .md-date-tile-month,
+.md-history-item.is-cancelled .md-date-tile-day,
+.md-history-item.is-cancelled .md-history-side .md-res-item-note { color: #a8a398; }
+
+/* Clickable rows that open a details pop-up (History, Reservations → upcoming) */
+.md-history-click, .md-res-click { cursor: pointer; transition: background-color .15s ease; }
+.md-history-click:hover, .md-res-click:hover { background-color: #faf8f3; }
+.md-history-click.is-failed:hover { background-color: #f8dfe2; }
+.md-history-click:focus-visible, .md-res-click:focus-visible { outline: 2px solid var(--md-gold); outline-offset: -2px; }
+
+/* Failed rows: light red fill (like the Failed tag) */
+.md-history-item.is-failed { background: #fbe9eb; }
+
+/* Filter dropdowns in the card header */
+.md-history-filters { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.md-history-filters .form-select { width: auto; min-width: 7.5rem; padding: .35rem 2rem .35rem .7rem; font-size: .82rem; }
+.md-history-filters .md-card-meta { margin-left: .35rem; white-space: nowrap; }
+.md-history-empty { margin: 0; padding: 1.5rem 1.25rem; color: var(--md-muted); text-align: center; }
+
+@media (max-width: 575.98px) {
+    .md-history-filters { width: 100%; }
+    .md-history-filters .form-select { flex: 1 1 30%; min-width: 0; padding: .35rem 1.5rem .35rem .5rem; font-size: .76rem; background-position: right .4rem center; }
+}
+
+/* Payment row edges: Paid green · Refunded grey · Failed red */
+.md-res-item.is-paid     { box-shadow: inset 3px 0 0 #3f9b72; }
+.md-res-item.is-refunded { box-shadow: inset 3px 0 0 #c9c5bc; }
+.md-res-item.is-failed   { box-shadow: inset 3px 0 0 var(--md-danger); }
+
+.md-badge-refunded { background: #f1f0ed; color: #5f5a50; border-color: #e0ddd6; }
+
+/* Star rating input: hover previews, checked fills up to the chosen star */
+.md-star-input { display: flex; align-items: center; gap: .15rem; }
+/* Stars up to the chosen one are gold, the rest grey */
+.md-star-input label { font-size: 2rem; line-height: 1; color: var(--md-gold); cursor: pointer; padding: 0 .1rem; }
+.md-star-input .btn-check:checked + label ~ label { color: #ddd6c6; }
+/* While hovering: gold up to the hovered star, grey after it */
+.md-star-input:hover .btn-check + label { color: var(--md-gold); }
+.md-star-input:hover .btn-check + label:hover ~ label { color: #ddd6c6; }
+.md-star-input .btn-check:focus-visible + label { outline: 2px solid var(--md-gold); outline-offset: 2px; }
+.md-star-text { margin-left: .6rem; font-size: .85rem; color: var(--md-muted); }
+
+@media (max-width: 575.98px) {
+    .md-history-item { flex-wrap: wrap; }
+    .md-history-side { flex-basis: 100%; align-items: flex-start; text-align: left; }
+}
+
+/* =========================================================
+   Customer Profile / Notifications
+   ========================================================= */
+
+/* Saved message */
+.md-alert-success {
+    padding: .8rem 1rem;
+    background: #e3f2e8;
+    border: 1px solid #c4e3cf;
+    color: #1e6b43;
+    font-size: .9rem;
+}
+
+/* On/off switch row (promotions) */
+.md-switch-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: .9rem 0;
+    border-top: 1px solid var(--md-line);
+    border-bottom: 1px solid var(--md-line);
+}
+
+.md-switch-title { display: block; font-size: var(--md-text-body); cursor: pointer; }
+.md-switch.form-check-input { width: 2.6rem; height: 1.35rem; cursor: pointer; border-color: #cfc8bb; }
+.md-switch.form-check-input:checked { background-color: #2f7d5a; border-color: #2f7d5a; }
+.md-switch.form-check-input:focus { box-shadow: 0 0 0 .2rem rgba(47, 125, 90, .2); border-color: #2f7d5a; }
+
+/* Profile: the two cards are read-only until Edit is clicked (fieldset disabled) */
+.md-profile-fields { margin: 0; padding: 0; border: 0; min-width: 0; }
+.md-profile-fields:disabled .md-input { background-color: #faf8f3; color: var(--md-ink); opacity: 1; }
+.md-profile-fields:disabled .md-chip:not(.active) { opacity: .7; }
+.md-profile-fields:disabled .md-switch { opacity: .85; }
+
+/* Edit / Save changes button under the Dining preferences card (right side) */
+.md-profile-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; margin-top: calc(-1 * var(--md-section-gap) + 1rem); }
+.md-password-errors.validation-summary-valid { display: none; }   /* no backend error → no red box */
+.md-password-errors ul { margin: 0; padding-left: 1.1rem; }
+.md-profile-actions .btn { min-width: 11rem; }
+/* "Edit" (yellow): lighter gold fill on hover */
+.md-profile-actions .btn-md-dark:hover { background: #e8b556; border-color: #e8b556; }
+
+/* Show / hide password eye inside a field */
+.md-eye-btn {
+    position: absolute;
+    top: 50%;
+    right: .75rem;
+    transform: translateY(-50%);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    line-height: 1;
+    font-size: 1rem;
+    color: var(--md-muted);
+}
+
+.md-eye-btn:hover { color: var(--md-ink); }
+
+/* Shared receipt (_Receipt.cshtml) – till-receipt style, dine-in and takeaway */
+.md-receipt {
+    width: 100%;
+    max-width: 340px;
+    margin: 0 auto;
+    padding: 1.75rem 1.5rem 2rem;
+    background: var(--md-white);
+    border: 1px solid #e2e2e2;
+    border-top: 3px dashed #cfcfcf;          /* torn top edge */
+    font-family: 'Abel', var(--md-font-body, sans-serif);
+    font-size: .95rem;
+    letter-spacing: .03em;
+    color: var(--md-ink);
+}
+.md-receipt-head { text-align: center; font-size: .85rem; line-height: 1.5; }
+.md-receipt-brand { font-family: 'Great Vibes', cursive; font-size: 2.6rem; line-height: 1.1; letter-spacing: 0; margin-bottom: .3rem; }
+.md-receipt-line { border: 0; border-top: 1px solid #8f8f8f; opacity: 1; margin: 1rem 0; }
+.md-receipt-dash { border: 0; border-top: 1px dashed #8f8f8f; opacity: 1; margin: 1rem 0; }
+.md-receipt-row { display: flex; justify-content: space-between; gap: .75rem; padding: .25rem 0; }
+.md-receipt-row > span:last-child { text-align: right; white-space: nowrap; }
+.md-receipt-label { color: var(--md-muted); font-size: .85rem; }
+.md-receipt-items { min-height: 6rem; }                       /* blank space under the items, like a till roll */
+.md-receipt-note { display: block; padding-left: 1.4rem; font-size: .78rem; color: var(--md-muted); }
+.md-receipt-total { font-size: 1.15rem; padding-top: .5rem; }
+.md-receipt-pay { margin-top: .9rem; }
+.md-receipt-thanks { text-align: center; font-size: 1.05rem; }
+.md-receipt-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .75rem; margin-top: 1.5rem; }
+
+/* Hide Edge's own built-in eye in password fields – our eye button on the right is used instead */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear { display: none; }
+
+/* Notifications: header actions row (filters + mark all read) */
+.md-notice-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .75rem; }
+.md-notice-toolbar .md-tabs { flex: 0 1 auto; }
+
+/* Notification row with a type icon */
+.md-notice-btn.md-notice-row { display: flex; gap: .9rem; align-items: flex-start; padding-left: 2.4rem; }
+.md-notice-toolbar { padding-top: 0; padding-bottom: 0; }
+.md-notice-toolbar .md-tabs button small { margin-left: .2rem; font-size: .72rem; color: var(--md-muted); }
+.md-notice-icon {
+    flex: 0 0 auto;
+    width: 2.3rem;
+    height: 2.3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #f6f3ec;
+    color: var(--md-gold-dark);
+    font-size: 1rem;
+}
+
+.md-notice-icon.is-reservation { background: #e5eef9; color: #1d4e89; }
+.md-notice-icon.is-order       { background: #fde3cc; color: #8a3c00; }
+.md-notice-icon.is-promotion   { background: #fbf0d9; color: #7a4f00; }
+.md-notice-icon.is-account     { background: #f1f0ed; color: #5f5a50; }
+
+.md-notice-text { flex: 1; min-width: 0; }
+.md-notice-title { display: block; font-weight: 500; margin-bottom: .1rem; }
+.md-notice-empty { margin: 0; padding: 2rem 1.25rem; text-align: center; color: var(--md-muted); }
+
+/* Print (Download confirmation): page content only */
+@media print {
+    .md-sidebar, .md-mobilebar, .md-page-actions, .md-confirm-actions, .md-confirm-foot { display: none !important; }
+    .md-main { margin: 0 !important; padding: 0 !important; }
+    .md-confirm-wrap { max-width: none; }
 }

@@ -75,7 +75,7 @@
                 <i class="bi bi-eye"></i>
             </button>
         </div>
-        <p class="md-hint">At least 8 characters, with an uppercase letter, a lowercase letter, a number and a symbol (@@ $ ! % * ? &amp;).</p>
+        <p class="md-hint">@Model.PasswordHint</p>
         <span class="text-danger small" asp-validation-for="Customer.custPassword"></span>
     </div>
 
@@ -117,7 +117,7 @@
 @* ---------- Success pop-up (opens automatically after a successful registration) ---------- *@
 @if (TempData["SuccessMessage"] is string successMessage)
 {
-    <div class="modal fade" id="registerSuccessModal" tabindex="-1" aria-labelledby="registerSuccessTitle"
+    <div class="modal fade" id="registerSuccessPopup" tabindex="-1" aria-labelledby="registerSuccessTitle"
          aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false" data-auto-show>
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">

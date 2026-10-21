@@ -48,5 +48,6 @@ namespace RestaurantManagementSystem.Model
         public bool promoActive { get; set; } = true;          // the ON/OFF toggle
 
         public DateTimeOffset promoCreateAt { get; set; } = DateTimeOffset.Now;
+        public ICollection<Menu> Menus { get; set; } = new List<Menu>();
     }
 }

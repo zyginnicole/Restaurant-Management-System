@@ -1,0 +1,78 @@
+@model RestaurantManagementSystem.Pages.Shared.Popups.ConfirmPopupView
+@using Microsoft.AspNetCore.Html
+@using System.Text.RegularExpressions
+@*
+    Shared "Are you sure?" pop-up – see ConfirmPopupView.cs for the settings and an example.
+    Note: "modal" class names and data-bs-* attributes belong to Bootstrap (which opens the pop-up) – keep them.
+*@
+@{
+    // "{code}?" → text + <span data-fill="code">, filled from the clicked button's data-code (confirm-popup.js)
+    IHtmlContent Fill(string text)
+    {
+        var html = new HtmlContentBuilder();
+        var parts = Regex.Split(text, @"\{(\w+)\}");
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (i % 2 == 0) html.Append(parts[i]);
+            else html.AppendHtml($"<span data-fill=\"{parts[i]}\">—</span>");
+        }
+        return html;
+    }
+
+    bool hasExtra = Model.Note != null || Model.Reasons != null;
+    string titleId = Model.Id + "Title";
+}
+
+<div class="modal fade md-popup" id="@Model.Id" tabindex="-1" aria-labelledby="@titleId" aria-hidden="true" data-confirm-popup>
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" asp-page="@Model.Page" asp-page-handler="@Model.Handler">
+            <div class="modal-header">
+                <div>
+                    @if (Model.Eyebrow != null)
+                    {
+                        <span class="md-eyebrow">@Model.Eyebrow</span>
+                    }
+                    <h2 class="modal-title md-popup-title" id="@titleId">@Fill(Model.Title)</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @if (Model.IdField != null)
+                {
+                    <input type="hidden" name="@Model.IdField" data-confirm-id />
+                }
+                @if (Model.Message != null)
+                {
+                    <p class="md-popup-message @(hasExtra ? "mb-3" : "mb-0")">@Fill(Model.Message)</p>
+                }
+                @if (Model.Note != null)
+                {
+                    <p class="md-note-box md-note-box-info @(Model.Reasons == null ? "mb-0" : "")">@Fill(Model.Note)</p>
+                }
+                @if (Model.Reasons != null)
+                {
+                    string reasonId = Model.Id + "Reason";
+                    <label class="md-label" for="@reasonId">@Model.ReasonLabel</label>
+                    <select class="form-select md-input" id="@reasonId" name="@Model.ReasonField">
+                        @foreach (var reason in Model.Reasons)
+                        {
+                            <option>@reason</option>
+                        }
+                    </select>
+                }
+            </div>
+            <div class="modal-footer">
+                @if (Model.Danger)
+                {
+                    <button type="button" class="btn md-btn-round md-btn-outline" data-bs-dismiss="modal">@Model.BackText</button>
+                    <button type="submit" class="btn md-btn-round md-btn-danger">@Model.ConfirmText</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-md-outline" data-bs-dismiss="modal">@Model.BackText</button>
+                    <button type="submit" class="btn btn-md-dark">@Model.ConfirmText</button>
+                }
+            </div>
+        </form>
+    </div>
+</div>

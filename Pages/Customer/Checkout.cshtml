@@ -1,0 +1,177 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.CheckoutModel
+@{
+    ViewData["Title"] = "Checkout";
+    ViewData["ActiveNav"] = "Orders";
+    ViewData["Eyebrow"] = "Your selection";
+    ViewData["Heading"] = "Checkout";
+    Layout = "_CustomerLayout";
+}
+
+@* Example cart from the design. Prices come from Menu.menuPrice; data-price is read by the script
+   to work out the totals on screen (the server must recalculate them – never trust the browser). *@
+
+<form method="post" id="checkoutForm">
+    <div class="row md-grid md-section">
+        <div class="col-lg-8">
+            @* ---------- Order items ---------- *@
+            <section class="md-card md-section">
+                <div class="md-card-header">
+                    <span class="md-card-label">Order items</span>
+                    <a class="btn btn-md-outline md-btn-sm" href="/Customer/Menu">Add more</a>
+                </div>
+                <ul class="md-cart" id="cartList">
+                    <li class="md-cart-item" data-price="168.00">
+                        <span class="md-cart-photo" aria-hidden="true">Photo</span>
+                        <div class="md-cart-main">
+                            <span class="md-cart-name">Wagyu Beef Tenderloin</span>
+                            <span class="md-cart-each">RM 168.00 each</span>
+                            <input type="hidden" name="items[0].menuId" value="3" />
+                            <input class="form-control md-input md-cart-note" name="items[0].itemRemark" maxlength="200" placeholder="Note for the kitchen" value="Medium rare" aria-label="Note for Wagyu Beef Tenderloin" />
+                        </div>
+                        <div class="md-qty" aria-label="Quantity">
+                            <button type="button" data-step="-1" aria-label="One less">−</button>
+                            <input type="number" name="items[0].quantity" value="1" min="0" max="20" aria-label="Quantity of Wagyu Beef Tenderloin" />
+                            <button type="button" data-step="1" aria-label="One more">+</button>
+                        </div>
+                        <span class="md-cart-line" data-line>RM 168.00</span>
+                    </li>
+                    <li class="md-cart-item" data-price="36.00">
+                        <span class="md-cart-photo" aria-hidden="true">Photo</span>
+                        <div class="md-cart-main">
+                            <span class="md-cart-name">Valrhona Chocolate Fondant</span>
+                            <span class="md-cart-each">RM 36.00 each</span>
+                            <input type="hidden" name="items[1].menuId" value="7" />
+                            <input class="form-control md-input md-cart-note" name="items[1].itemRemark" maxlength="200" placeholder="Note for the kitchen" aria-label="Note for Valrhona Chocolate Fondant" />
+                        </div>
+                        <div class="md-qty" aria-label="Quantity">
+                            <button type="button" data-step="-1" aria-label="One less">−</button>
+                            <input type="number" name="items[1].quantity" value="1" min="0" max="20" aria-label="Quantity of Valrhona Chocolate Fondant" />
+                            <button type="button" data-step="1" aria-label="One more">+</button>
+                        </div>
+                        <span class="md-cart-line" data-line>RM 36.00</span>
+                    </li>
+                </ul>
+                <p class="md-cart-empty d-none" id="cartEmpty">Your cart is empty. <a href="/Customer/Menu">Browse the menu</a></p>
+            </section>
+
+            @* ---------- Order type ---------- *@
+            <section class="md-card">
+                <div class="md-card-header">
+                    <span class="md-card-label">Order type</span>
+                </div>
+                <div class="md-card-body">
+                    <div class="md-choice mb-3" role="radiogroup" aria-label="Order type">
+                        <input type="radio" class="btn-check" name="orderType" id="typeTakeaway" value="Takeaway" checked />
+                        <label for="typeTakeaway">Takeaway</label>
+                        <input type="radio" class="btn-check" name="orderType" id="typeDineIn" value="DineIn" />
+                        <label for="typeDineIn">Dine-in with my reservation</label>
+                    </div>
+
+                    @* Takeaway: pick-up time (Order.pickupDateTime – value is the date + time) + phone *@
+                    <div class="row g-3" data-type-panel="Takeaway">
+                        <div class="col-sm-6">
+                            <label class="md-label" for="pickupDateTime">Pick-up time</label>
+                            <select class="form-select md-input" id="pickupDateTime" name="pickupDateTime">
+                                <option value="2026-09-16T21:00">Today 21:00</option>
+                                <option value="2026-09-16T21:30" selected>Today 21:30</option>
+                                <option value="2026-09-16T22:00">Today 22:00</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="md-label" for="contactPhone">Contact phone</label>
+                            <input class="form-control md-input" id="contactPhone" name="contactPhone" type="tel" maxlength="11" inputmode="numeric" value="0125553456" />
+                        </div>
+                        <p class="md-hint mb-0">Takeaway orders are paid online now and ready at the counter at your pick-up time.</p>
+                    </div>
+
+                    @* Dine-in: choose one of the customer's Confirmed reservations *@
+                    <div class="row g-3 d-none" data-type-panel="DineIn">
+                        <div class="col-12">
+                            <label class="md-label" for="reservationId">Reservation</label>
+                            <select class="form-select md-input" id="reservationId" name="reservationId">
+                                <option value="41">R-0041 · Sun 20 Sep, 19:30 · 2 guests · T-07 Indoor</option>
+                            </select>
+                        </div>
+                        <p class="md-hint mb-0">Dine-in orders are sent to the kitchen and paid on the bill at your table.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        @* ---------- Summary ---------- *@
+        <div class="col-lg-4">
+            <section class="md-card md-sticky-card">
+                <div class="md-card-header">
+                    <span class="md-card-label">Summary</span>
+                </div>
+                <div class="md-card-body">
+                    <dl class="md-sum">
+                        <div><dt>Subtotal</dt><dd data-sum="subtotal">RM 204.00</dd></div>
+                        <div><dt>Service charge 10%</dt><dd data-sum="service">Dine-in only</dd></div>
+                        <div><dt>SST 6%</dt><dd data-sum="sst">RM 12.24</dd></div>
+                        <div class="md-sum-total"><dt>Total</dt><dd data-sum="total">RM 216.24</dd></div>
+                    </dl>
+                    <button type="submit" class="btn btn-md-green w-100" id="checkoutButton">Continue to payment</button>
+                </div>
+            </section>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        (function () {
+            var form = document.getElementById('checkoutForm');
+            var rm = function (n) { return 'RM ' + n.toFixed(2); };
+
+            // Work out line prices and totals (display only – the server recalculates)
+            function recalc() {
+                var subtotal = 0, count = 0;
+                document.querySelectorAll('.md-cart-item').forEach(function (item) {
+                    var qty = parseInt(item.querySelector('.md-qty input').value, 10) || 0;
+                    var line = qty * parseFloat(item.dataset.price);
+                    item.querySelector('[data-line]').textContent = rm(line);
+                    item.classList.toggle('is-removed', qty === 0);
+                    subtotal += line; count += qty;
+                });
+                var dineIn = form.querySelector('input[name="orderType"]:checked').value === 'DineIn';
+                var service = dineIn ? subtotal * 0.10 : 0;
+                var sst = Math.round((subtotal + service) * 0.06 * 100) / 100;
+                document.querySelector('[data-sum="subtotal"]').textContent = rm(subtotal);
+                document.querySelector('[data-sum="service"]').textContent = dineIn ? rm(service) : 'Dine-in only';
+                document.querySelector('[data-sum="sst"]').textContent = rm(sst);
+                document.querySelector('[data-sum="total"]').textContent = rm(subtotal + service + sst);
+                document.getElementById('cartEmpty').classList.toggle('d-none', count > 0);
+                document.getElementById('checkoutButton').disabled = count === 0;
+            }
+
+            // − / + buttons
+            document.querySelectorAll('.md-qty').forEach(function (box) {
+                var input = box.querySelector('input');
+                box.querySelectorAll('button').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var next = (parseInt(input.value, 10) || 0) + parseInt(btn.dataset.step, 10);
+                        input.value = Math.min(20, Math.max(0, next));
+                        recalc();
+                    });
+                });
+                input.addEventListener('input', recalc);
+            });
+
+            // Takeaway / Dine-in: switch the fields and the button
+            form.querySelectorAll('input[name="orderType"]').forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                    document.querySelectorAll('[data-type-panel]').forEach(function (panel) {
+                        panel.classList.toggle('d-none', panel.dataset.typePanel !== radio.value);
+                    });
+                    document.getElementById('checkoutButton').textContent =
+                        radio.value === 'DineIn' ? 'Place order' : 'Continue to payment';
+                    recalc();
+                });
+            });
+
+            recalc();
+        })();
+    </script>
+}

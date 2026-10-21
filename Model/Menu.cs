@@ -16,7 +16,8 @@ namespace RestaurantManagementSystem.Model
         public string menuDescription { get; set; }
 
         [Required]
-        public string menuCategory { get; set; }          // Appetizer, Main, Dessert, Beverage
+        public int categoryID { get; set; }
+        public MenuCategory? MenuCategory{ get; set; }          // Appetizer, Main, Dessert, Beverage
 
         [Range(0.01, 10000, ErrorMessage = "Price must be greater than 0.")]
         [Column(TypeName = "decimal(10,2)")]
@@ -28,5 +29,6 @@ namespace RestaurantManagementSystem.Model
         public string menuImageUrl { get; set; }
 
         public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
+        public ICollection<Promotion> Promotions { get; set; } = new List<Promotion>();
     }
 }

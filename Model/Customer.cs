@@ -17,12 +17,9 @@ namespace RestaurantManagementSystem.Model
         [EmailAddress(ErrorMessage = "Please enter a valid email address.")]
         public string custEmail { get; set; }
 
-        [Required]
-        [MinLength(6, ErrorMessage = "Password must be at least 6 characters.")]
-        [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$",
-            ErrorMessage = "Password must have at least one uppercase letter, one lowercase letter, one number, and one special character.")]
+        [Required(ErrorMessage = "Password is required!")]
         [DataType(DataType.Password)]
-        public string custPassword { get; set; }
+        public string custPassword { get; set; }   
 
         [Required]
         [MaxLength(11, ErrorMessage = "Maximum 11 digits including the leading 0.")]
