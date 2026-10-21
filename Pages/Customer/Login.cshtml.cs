@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using RestaurantManagementSystem.Helpers;
@@ -6,7 +7,8 @@ using CustomerModel = RestaurantManagementSystem.Model.Customer;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
-    public class LoginModel : PageModel
+ [AllowAnonymous] // must stay open: this is where customers sign in
+ public class LoginModel : PageModel
     {
         private readonly AuthService _authService;
 

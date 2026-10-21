@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using RestaurantManagementSystem.Helpers;
@@ -7,6 +8,7 @@ using CustomerModel = RestaurantManagementSystem.Model.Customer;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
+    [AllowAnonymous] // must stay open: new customers are not signed in yet
     public class RegisterModel : PageModel
     {
         private readonly AuthService _authService;

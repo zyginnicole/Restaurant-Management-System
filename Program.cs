@@ -1,10 +1,24 @@
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Filters;
+using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddRazorPages();
+// Razor Pages + role protection per folder.
+// Every page in these folders needs the matching role; login/register pages are marked [AllowAnonymous].
+builder.Services.AddRazorPages(options =>
+{
+    options.Conventions.AddFolderApplicationModelConvention("/Customer",
+        model => model.Filters.Add(new RequireRoleFilter(UserRoles.Customer, "/Customer/Login")));
+
+    options.Conventions.AddFolderApplicationModelConvention("/Staff",
+        model => model.Filters.Add(new RequireRoleFilter(UserRoles.Staff, "/Staff/Login")));
+
+    options.Conventions.AddFolderApplicationModelConvention("/Admin",
+        model => model.Filters.Add(new RequireRoleFilter(UserRoles.Admin, "/Staff/Login")));
+});
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(

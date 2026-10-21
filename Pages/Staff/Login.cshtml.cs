@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using RestaurantManagementSystem.Helpers;
@@ -9,6 +10,8 @@ namespace RestaurantManagementSystem.Pages.Staff
     // - This page stays open (no login check needed to see it).
     // - The "role" value from the tabs only decides WHICH table to check.
     // - The session role always comes from the table that matched, never from the form.
+
+    [AllowAnonymous] // must stay open: this is where staff and admins sign in
     public class LoginModel : PageModel
     {
         private readonly AuthService _authService;
