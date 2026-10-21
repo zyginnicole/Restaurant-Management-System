@@ -1,0 +1,179 @@
+@page
+@model RestaurantManagementSystem.Pages.Staff.ProfileModel
+@{
+    ViewData["Title"] = "My profile";
+    ViewData["Module"] = "Staff";
+    ViewData["ActiveNav"] = "Profile";
+    ViewData["Eyebrow"] = "Account";
+    ViewData["Heading"] = "My profile";
+    ViewData["Subtitle"] = "Manage your personal information";
+    Layout = "_DashboardLayout";
+
+    // ---------- Example data – later from the signed-in Staff (see ProfileModel) ----------
+    var staffCode = "STF-0042";            // staffID 42
+    var shift = "Evening service";         // no field yet (ask the leader)
+    var since = "Jan 2025";                // staffCreateAt
+    var staffName = "Sophie Clarke";
+    var staffPhone = "+60 12-345 6789";
+    var staffEmail = "sophie.clarke@maisondoree.com";
+    var staffPosition = "Senior Waiter";
+    var systemRole = "Staff";              // always Staff here (admins are in the Admin table)
+
+    string initials = string.Concat(staffName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0]));
+
+    // Open the Change password pop-up again when OnPostPassword returns Page() with errors
+    var reopenPassword = Request.Query["handler"] == "Password" && !ViewData.ModelState.IsValid;
+}
+
+@* Message after saving the profile or the password (TempData["StaffMessage"]) *@
+@if (TempData["StaffMessage"] is string message)
+{
+    <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+}
+
+@* Personal information is read-only until Edit is clicked; the same button then turns into Save changes (green)
+   and posts to OnPostProfile. Work details are always read-only and are not posted (no name attribute). *@
+<form method="post" asp-page-handler="Profile" id="profileForm">
+<fieldset id="profileFields" class="md-profile-fields" disabled>
+<div class="row md-grid md-section">
+    @* ---------- Personal information ---------- *@
+    <div class="col-lg-7">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Personal information</span>
+                <span class="md-card-meta">Staff since @since</span>
+            </div>
+            <div class="md-card-body">
+                <div class="md-guest-id">
+                    <span class="md-avatar">@initials</span>
+                    <div>
+                        <div class="md-guest-name">@staffName</div>
+                        <span class="md-guest-meta">Staff ID @staffCode · @shift</span>
+                    </div>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="md-label" for="Staff_staffName">Full name</label>
+                        <input class="form-control md-input" id="Staff_staffName" name="Staff.staffName" type="text" maxlength="100" autocomplete="name" required value="@staffName" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="md-label" for="Staff_staffPhone">Phone</label>
+                        <input class="form-control md-input" id="Staff_staffPhone" name="Staff.staffPhone" type="tel" maxlength="20" autocomplete="tel" placeholder="+60 1X-XXX XXXX" required value="@staffPhone" />
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    @* ---------- Work details (read-only, managed by an administrator) ---------- *@
+    <div class="col-lg-5">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Work details</span>
+                <span class="md-card-meta"><i class="bi bi-lock me-1"></i>Read-only</span>
+            </div>
+            <div class="md-card-body">
+                <div class="mb-3">
+                    <label class="md-label" for="workEmail">Work email</label>
+                    <input class="form-control md-input md-input-locked" id="workEmail" type="email" readonly tabindex="-1" value="@staffEmail" />
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        @* Staff.staffPosition *@
+                        <label class="md-label" for="jobTitle">Job title</label>
+                        <input class="form-control md-input md-input-locked" id="jobTitle" type="text" readonly tabindex="-1" value="@staffPosition" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="md-label" for="systemRole">System role</label>
+                        <input class="form-control md-input md-input-locked" id="systemRole" type="text" readonly tabindex="-1" value="@systemRole" />
+                    </div>
+                </div>
+                <p class="md-hint mb-0">Email, job title and system role are managed by an administrator.</p>
+            </div>
+        </section>
+    </div>
+</div>
+</fieldset>
+
+@* Change password (opens the pop-up below) + Edit → Save changes, under the cards *@
+<div class="md-profile-actions md-section">
+    <button type="button" class="btn btn-md-dark" id="changePasswordButton" data-bs-toggle="modal" data-bs-target="#changePasswordPopup"><i class="bi bi-key me-2"></i>Change password</button>
+    <button type="button" class="btn btn-md-dark" id="profileEditButton"><i class="bi bi-pencil me-2"></i>Edit</button>
+</div>
+</form>
+
+@* ---------- Change password pop-up ----------
+   Posts to OnPostPassword. If the backend finds an error (e.g. wrong current password) it can add it to
+   ModelState and return Page() – the pop-up then opens again by itself (see reopenPassword at the top). *@
+<div class="modal fade md-popup" id="changePasswordPopup" tabindex="-1" aria-labelledby="changePasswordTitle" aria-hidden="true"
+     data-auto-open="@(reopenPassword ? "true" : "false")">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" asp-page-handler="Password">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Account</span>
+                    <h2 class="modal-title md-popup-title" id="changePasswordTitle">Change password</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @* Backend error for the password form (ModelState) – hidden while there is none *@
+                <div asp-validation-summary="ModelOnly" class="md-note-box md-note-box-danger md-password-errors mb-3"></div>
+                <div class="mb-3">
+                    <label class="md-label" for="currentPassword">Current password</label>
+                    <div class="position-relative">
+                        <input class="form-control md-input pe-5" id="currentPassword" name="currentPassword" type="password" autocomplete="current-password" required />
+                        <button type="button" class="md-eye-btn" data-toggle-password="currentPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye"></i></button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="md-label" for="newPassword">New password</label>
+                    <div class="position-relative">
+                        <input class="form-control md-input pe-5" id="newPassword" name="newPassword" type="password" autocomplete="new-password" required />
+                        <button type="button" class="md-eye-btn" data-toggle-password="newPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye"></i></button>
+                    </div>
+                    <p class="md-hint mt-2 mb-0">At least 8 characters, with an uppercase letter, a lowercase letter, a number and a symbol (@@ $ ! % * ? &amp;).</p>
+                </div>
+                <div>
+                    <label class="md-label" for="confirmPassword">Confirm new password</label>
+                    <div class="position-relative">
+                        <input class="form-control md-input pe-5" id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" required />
+                        <button type="button" class="md-eye-btn" data-toggle-password="confirmPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye"></i></button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-md-green">Update password</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @* function.js (shared, from the Register page): show / hide password eye buttons *@
+    <script src="~/js/function.js" asp-append-version="true"></script>
+    <script>
+        // Change password pop-up: reopen it after a failed save (data-auto-open set by the page)
+        (function () {
+            var popup = document.getElementById('changePasswordPopup');
+            if (popup.dataset.autoOpen === 'true') bootstrap.Modal.getOrCreateInstance(popup).show();
+        })();
+
+        // Edit → Save changes: first click unlocks Personal information, turns the button green and disables
+        // Change password; the second click submits the form (OnPostProfile).
+        (function () {
+            var button = document.getElementById('profileEditButton');
+            var fields = document.getElementById('profileFields');
+            button.addEventListener('click', function (e) {
+                if (!fields.disabled) return;                      // already editing → let it submit
+                e.preventDefault();
+                fields.disabled = false;
+                document.getElementById('changePasswordButton').disabled = true;   // finish saving the profile first
+                button.classList.replace('btn-md-dark', 'btn-md-green');
+                button.innerHTML = '<i class="bi bi-check2 me-2"></i>Save changes';
+                setTimeout(function () { button.type = 'submit'; }, 0);
+                document.getElementById('Staff_staffName').focus();
+            });
+        })();
+    </script>
+}

@@ -41,6 +41,10 @@
                 {
                     <input type="hidden" name="@Model.IdField" data-confirm-id />
                 }
+                @if (Model.ReturnUrl != null)
+                {
+                    <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+                }
                 @if (Model.Message != null)
                 {
                     <p class="md-popup-message @(hasExtra ? "mb-3" : "mb-0")">@Fill(Model.Message)</p>

@@ -24,6 +24,7 @@ namespace RestaurantManagementSystem.Pages.Shared.Popups
         public string? Page { get; set; }
         public string? Handler { get; set; }
         public string? IdField { get; set; }              // hidden input name, e.g. "orderId" (value from data-id)
+        public string? ReturnUrl { get; set; }            // posted as "returnUrl": page to go back to after the action (optional)
 
         // Optional "Reason" dropdown (posted as ReasonField)
         public string[]? Reasons { get; set; }

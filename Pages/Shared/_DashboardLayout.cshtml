@@ -34,7 +34,7 @@
     @await RenderSectionAsync("Styles", required: false)
 </head>
 @* A page can add extra body classes with ViewData["BodyClass"] if it needs page-specific styling *@
-<body class="md-app @ViewData["BodyClass"]">
+<body class="md-app md-actions-at-title @ViewData["BodyClass"]">
 
     @* Phone / tablet top bar with the menu button *@
     <header class="md-mobilebar d-lg-none">
