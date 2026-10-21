@@ -1,11 +1,11 @@
 @page
 @model RestaurantManagementSystem.Pages.Customer.DashboardModel
+@using RestaurantManagementSystem.Helpers
 @{
     ViewData["Title"] = "Overview";
     ViewData["ActiveNav"] = "Overview";
     ViewData["Eyebrow"] = "Good evening";
-    ViewData["Heading"] = "Alexandra Beaumont";
-    Layout = "_CustomerLayout";
+    ViewData["Heading"] = HttpContext.Session.GetUserName() ?? "Welcome";
 
     // Next reservations card: the customer's Pending / Confirmed (incl. Seated) reservations in the next 7 days, soonest first.
     // Backend: replace this list with the query result. The card always has two slots:
