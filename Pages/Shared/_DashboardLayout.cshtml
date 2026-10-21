@@ -34,7 +34,7 @@
     @await RenderSectionAsync("Styles", required: false)
 </head>
 @* A page can add extra body classes with ViewData["BodyClass"] if it needs page-specific styling *@
-<body class="md-app md-actions-at-title @ViewData["BodyClass"]">
+<body class="md-app @ViewData["BodyClass"]">
 
     @* Phone / tablet top bar with the menu button *@
     <header class="md-mobilebar d-lg-none">
@@ -89,9 +89,8 @@
             }
         </nav>
 
-        @* Opens the Sign out confirmation pop-up below. data-id="staff" is posted as "portal",
-           so the (temporary) Customer/Logout page sends Staff and Admin back to the Staff Portal login. *@
-        <button type="button" class="md-signout" data-bs-toggle="modal" data-bs-target="#signOutPopup" data-id="staff">Sign out</button>
+        @* Opens the Sign out confirmation pop-up below *@
+        <button type="button" class="md-signout" data-bs-toggle="modal" data-bs-target="#signOutPopup">Sign out</button>
     </aside>
 
     <main class="md-main">
@@ -119,15 +118,17 @@
     </main>
 
     @* ---------- Sign out confirmation (shared _ConfirmPopup, same as the customer layout) ----------
-       TODO: change Page to "/Logout" (Sophia's page, any role) once feature/auth-login is merged,
-       then remove IdField / data-id and delete Pages/Customer/Logout. *@
+       "Sign out" posts to /Logout, which sends Staff and Admin back to the Staff Portal login. *@
     @{
         var signOutPopup = new ConfirmPopupView
         {
-            Id = "signOutPopup", Eyebrow = "Account", Title = "Confirm sign-out?",
+            Id = "signOutPopup",
+            Eyebrow = "Account",
+            Title = "Confirm sign-out?",
             Message = "You'll need to sign in again through the Staff Portal.",
-            Page = "/Customer/Logout", IdField = "portal",
-            BackText = "Stay signed in", ConfirmText = "Sign out"
+            Page = "/Logout",
+            BackText = "Stay signed in",
+            ConfirmText = "Sign out"
         };
     }
     <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="signOutPopup" />

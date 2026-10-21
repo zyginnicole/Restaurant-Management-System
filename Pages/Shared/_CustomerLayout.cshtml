@@ -109,15 +109,13 @@
     </main>
 
     @* ---------- Sign out confirmation (shared _ConfirmPopup) ----------
-       "Sign out" posts to /Customer/Logout (OnPost clears the session, then opens the Login page).
-       TODO: change Page to "/Logout" (Sophia's page, any role) once feature/auth-login is merged,
-       then delete Pages/Customer/Logout. *@
+       "Sign out" posts to /Logout (any role: clears the session, then opens the right login page). *@
     @{
         var signOutPopup = new ConfirmPopupView
         {
             Id = "signOutPopup", Eyebrow = "Account", Title = "Confirm sign-out?",
             Message = "You'll need to sign in again to book a table, order or view your history.",
-            Page = "/Customer/Logout",
+            Page = "/Logout",
             BackText = "Stay signed in", ConfirmText = "Sign out"
         };
     }
