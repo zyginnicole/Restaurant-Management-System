@@ -1,0 +1,306 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Admin.DashboardModel
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["Module"] = "Admin";
+    ViewData["ActiveNav"] = "Dashboard";
+    ViewData["Eyebrow"] = "Wednesday, 16 September 2026 · Dinner service";
+    ViewData["Heading"] = "Administration";
+    ViewData["Subtitle"] = "Overview of sales, reservations and dining activity";
+    ViewData["BodyClass"] = "md-admin";   // Admin Dashboard scale and indigo/teal colours
+    Layout = "_DashboardLayout";
+}
+
+@* Example data from the design. Replace with figures from Orders, Payments, Reservations,
+   Customers and Feedback later. Statuses use the model values only. *@
+
+@section HeaderActions {
+    <a class="btn btn-md-dark md-header-btn" href="/Admin/Reports"><i class="bi bi-download"></i>Export report</a>
+}
+
+@* ---------- Tabs (left) + period filter (right) ---------- *@
+<div class="md-tabbar">
+    <nav class="md-tabs md-page-tabs" aria-label="Dashboard sections">
+        <button type="button" class="active" data-tab="live">Live operations</button>
+        <button type="button" data-tab="trends">Sales &amp; trends</button>
+    </nav>
+    @* Period selector: pick a single date, a whole month (All days) or a whole year (All months) *@
+    <div class="md-period" role="group" aria-label="Period">
+        <select class="form-select md-period-select" id="periodDay" aria-label="Day">
+            <option value="" selected>All days</option>
+            @for (int d = 1; d <= 31; d++)
+            {
+                <option value="@d">@d</option>
+            }
+        </select>
+        <select class="form-select md-period-select" id="periodMonth" aria-label="Month">
+            <option value="">All months</option>
+            @foreach (var month in System.Globalization.CultureInfo.GetCultureInfo("en-GB").DateTimeFormat.MonthNames.Where(m => m != ""))
+            {
+                <option value="@month" selected="@(month == "September")">@month</option>
+            }
+        </select>
+        <select class="form-select md-period-select" id="periodYear" aria-label="Year">
+            <option value="2024">2024</option>
+            <option value="2025">2025</option>
+            <option value="2026" selected>2026</option>
+        </select>
+    </div>
+</div>
+@* =====================================================
+   Live operations
+   ===================================================== *@
+<div data-pane="live">
+    @* ---------- KPI cards with micro-visuals (Option A) ----------
+ *@
+    <div class="row md-grid md-section">
+        <div class="col-6 col-xl-3">
+            <div class="md-stat md-kpi">
+                <span class="md-label">Revenue · <span data-period-label>September</span></span>
+                <div class="md-kpi-top">
+                    <div class="md-stat-value">RM 148,390</div>
+                </div>
+                <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>12% vs August</div>
+                <div class="md-kpi-progress" aria-label="93% of the RM 160,000 target"><i style="width: 93%"></i></div>
+                <div class="md-stat-note">93% of RM 160,000 target</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="md-stat md-kpi">
+                <span class="md-label">Reservations · <span data-period-label>September</span></span>
+                <div class="md-stat-value">312</div>
+                <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>6% vs August</div>
+                <div class="md-stack md-kpi-stack" role="img" aria-label="268 completed, 26 cancelled, 18 upcoming">
+                    <i class="is-completed" style="width: 85.9%"></i>
+                    <i class="is-cancelled" style="width: 8.3%"></i>
+                    <i class="is-confirmed" style="width: 5.8%"></i>
+                </div>
+                <div class="md-stat-note">268 completed · 26 cancelled · 18 upcoming</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="md-stat md-kpi">
+                <span class="md-label">Registered customers</span>
+                <div class="md-kpi-top">
+                    <div class="md-stat-value">847</div>
+                </div>
+                <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>7 new this week</div>
+                <div class="md-stat-note">51 new in the last 10 weeks</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="md-stat md-kpi">
+                <span class="md-label">Average rating</span>
+                <div class="md-kpi-top">
+                    <div class="md-stat-value">4.7 / 5</div>
+                    @* Gold stars filled to the rating: width = rating ÷ 5 *@
+                    <span class="md-stars" aria-label="4.7 out of 5 stars"><span class="md-stars-fill" style="width: 94%">★★★★★</span>★★★★★</span>
+                </div>
+                <div class="md-rating-bars" aria-label="Rating distribution">
+                    <div><span>5★</span><i><b style="width: 78%"></b></i><em>78%</em></div>
+                    <div><span>4★</span><i><b style="width: 15%"></b></i><em>15%</em></div>
+                    <div><span>3★</span><i><b style="width: 4%"></b></i><em>4%</em></div>
+                    <div><span>2★</span><i><b style="width: 2%"></b></i><em>2%</em></div>
+                    <div><span>1★</span><i><b style="width: 1%"></b></i><em>1%</em></div>
+                </div>
+                <div class="md-stat-note">126 reviews · 3 need follow-up</div>
+            </div>
+        </div>
+    </div>
+
+    @* ---------- Tonight, live (Option B) ---------- *@
+    <h2 class="md-subhead">Tonight <span class="md-live-dot">Live</span></h2>
+    <div class="row md-grid md-section">
+        @* Tables occupied: ring gauge *@
+        <div class="col-md-6 col-xxl-3">
+            <section class="md-card h-100 md-live">
+                <div class="md-card-header"><span class="md-card-label">Tables occupied</span></div>
+                <div class="md-card-body md-live-ring">
+                    <svg viewBox="0 0 36 36" class="md-ring" role="img" aria-label="3 of 24 tables occupied, 13 percent">
+                        <circle class="md-ring-track" cx="18" cy="18" r="15.9155" />
+                        <circle class="md-ring-value" cx="18" cy="18" r="15.9155" stroke-dasharray="12.5 87.5" />
+                    </svg>
+                    <div>
+                        <div class="md-live-value">3 <small>/ 24</small></div>
+                        <div class="md-stat-note">13% of tables · 8 guests</div>
+                        <ul class="md-area-list">
+                            <li><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>Indoor <b>2 / 12</b></li>
+                            <li><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>Outdoor <b>1 / 8</b></li>
+                            <li><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>VIP <b>0 / 4</b></li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        @* Arrivals tonight: timeline 18:00 – 22:00 (position = minutes after 18:00 ÷ 240) *@
+        <div class="col-md-6 col-xxl-3">
+            <section class="md-card h-100 md-live">
+                <div class="md-card-header"><span class="md-card-label">Arrivals tonight</span></div>
+                <div class="md-card-body">
+                    <div class="md-live-value">7 <small>bookings</small></div>
+                    <div class="md-timeline" role="img" aria-label="Dinner bookings from 18:00 to 22:00">
+                        <span class="is-seated" style="left: 0%" title="18:00 Thomas Ashford · seated"></span>
+                        <span class="is-seated" style="left: 25%" title="19:00 Eleanor Whitmore · seated"></span>
+                        <span class="is-seated" style="left: 37.5%" title="19:30 Marcus Delacroix · seated"></span>
+                        <span class="is-pending" style="left: 50%" title="20:00 Sophia Haines · pending"></span>
+                        <span class="is-seated" style="left: 56.25%" title="20:15 Daniel Tan · walk-in seated"></span>
+                        <span class="is-expected" style="left: 68.75%" title="20:45 Victoria Blake · expected"></span>
+                        <span class="is-pending" style="left: 75%" title="21:00 Isabella Chen · pending"></span>
+                    </div>
+                    <div class="md-timeline-scale"><span>18:00</span><span>20:00</span><span>22:00</span></div>
+                    <ul class="md-dot-legend">
+                        <li><i class="is-seated"></i>Seated 4</li>
+                        <li><i class="is-expected"></i>Expected 1</li>
+                        <li><i class="is-pending"></i>Pending 2</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+
+        @* Recent activity: latest 3 events. It shares a row with Collected tonight,
+           so both cards (h-100) end on the same bottom line. *@
+        <div class="col-md-6 col-xxl-3">
+            <section class="md-card h-100 md-live">
+                <div class="md-card-header">
+                    <span class="md-card-label">Recent activity</span>
+                    <a class="md-card-link" href="/Admin/Monitor">View all</a>
+                </div>
+                <ul class="md-list md-list-compact">
+                    @* Edge colour = the status the event moved to (same scheme as the badges) *@
+                    <li class="md-list-row is-seated">
+                        <div class="md-list-main">
+                            <span class="md-list-title">Walk-in seated — Daniel Tan, T-03 <span class="md-list-code">R-0047</span></span>
+                            <span class="md-list-meta">6 minutes ago</span>
+                        </div>
+                    </li>
+                    <li class="md-list-row is-completed">
+                        <div class="md-list-main">
+                            <span class="md-list-title">Payment received — Thomas Ashford, RM 450.08 <span class="md-list-code">ORD-0083</span></span>
+                            <span class="md-list-meta">14 minutes ago</span>
+                        </div>
+                    </li>
+                    <li class="md-list-row is-preparing">
+                        <div class="md-list-main">
+                            <span class="md-list-title">Order accepted, now preparing — T-12 <span class="md-list-code">ORD-0082</span></span>
+                            <span class="md-list-meta">18 minutes ago</span>
+                        </div>
+                    </li>
+                </ul>
+            </section>
+        </div>
+
+        @* Collected tonight: progress vs expected *@
+        <div class="col-md-6 col-xxl-3">
+            <section class="md-card h-100 md-live">
+                <div class="md-card-header"><span class="md-card-label">Collected tonight</span></div>
+                <div class="md-card-body">
+                    <div class="md-live-value">RM 450.08</div>
+                    <div class="md-kpi-progress" aria-label="21% of RM 2,100 expected tonight"><i style="width: 21%"></i></div>
+                    <div class="md-stat-note">21% of RM 2,100 expected tonight</div>
+                    <div class="md-live-pending"><i class="bi bi-receipt"></i>1 bill pending · RM 386.00</div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+@* =====================================================
+   Sales & trends
+   ===================================================== *@
+<div class="d-none" data-pane="trends">
+    <div class="row md-grid md-section">
+        @* ---------- Daily sales ---------- *@
+        <div class="col-xl-8">
+            <section class="md-card h-100">
+                <div class="md-card-header">
+                    <span class="md-card-label">Daily sales · <span data-period-label data-with-year>September 2026</span></span>
+
+                </div>
+                <div class="md-card-body">
+                    <div class="md-chart"><canvas id="salesChart" aria-label="Daily sales chart" role="img"></canvas></div>
+                    <p class="md-chart-note">RM thousands, net of tax. <span class="md-swatch"></span>Highlighted: today (partial).</p>
+                </div>
+            </section>
+        </div>
+
+        @* ---------- Peak dining hours ---------- *@
+        <div class="col-xl-4">
+            <section class="md-card h-100">
+                <div class="md-card-header"><span class="md-card-label">Peak dining hours</span></div>
+                <div class="md-card-body">
+                    <div class="md-chart"><canvas id="peakChart" aria-label="Peak dining hours chart" role="img"></canvas></div>
+                    <p class="md-chart-note">Reservations by start hour, this month. Busiest: <b>20:00</b>.</p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div class="row md-grid md-section">
+        @* ---------- Top menu items: ranked list (2/3 width) ----------
+           Rows are drawn by admin-dashboard.js from the example data there.
+           Real data: OrderItem quantity (portions) and quantity × Menu.menuPrice (revenue), grouped by menuID. *@
+        <div class="col-xl-8">
+            <section class="md-card h-100">
+                <div class="md-card-header md-card-header-plain">
+                    <span class="md-card-label">Top menu items</span>
+                </div>
+                @* Category tabs (left) + rank by Portions / Revenue (right) *@
+                <div class="md-rank-filter">
+                    <nav class="md-tabs" aria-label="Category" id="rankCategory">
+                        <button type="button" class="active" data-category="All">All</button>
+                        <button type="button" data-category="Starters">Starters</button>
+                        <button type="button" data-category="Mains">Mains</button>
+                        <button type="button" data-category="Desserts">Desserts</button>
+                        <button type="button" data-category="Beverages">Beverages</button>
+                    </nav>
+                    <div class="md-segment md-segment-sm" role="group" aria-label="Rank by" id="rankMetric">
+                        <button type="button" class="active" data-metric="portions">Portions</button>
+                        <button type="button" data-metric="revenue">Revenue</button>
+                    </div>
+                </div>
+                <div class="md-rank-row md-rank-head" aria-hidden="true">
+                    <span>#</span><span>Dish</span><span></span><span id="rankValueHead">Sold</span><span>Trend</span>
+                </div>
+                <ol class="md-rank-list" id="rankList"></ol>
+            </section>
+        </div>
+
+        @* ---------- Right column (1/3): utilization + reservations ---------- *@
+        <div class="col-xl-4 d-flex flex-column gap-3">
+            <section class="md-card">
+                <div class="md-card-header"><span class="md-card-label">Table utilization by area</span></div>
+                <div class="md-card-body">
+                    <div class="md-summary"><span class="md-summary-value">76%</span><span>18 of 24 tables</span></div>
+                    <div class="md-meter"><span>Indoor</span><div class="md-meter-bar"><i style="width: 78%"></i></div><b>78%</b></div>
+                    <div class="md-meter"><span>Outdoor</span><div class="md-meter-bar"><i style="width: 62%"></i></div><b>62%</b></div>
+                    <div class="md-meter"><span>VIP</span><div class="md-meter-bar"><i style="width: 41%"></i></div><b>41%</b></div>
+                </div>
+            </section>
+
+            <section class="md-card flex-grow-1">
+                <div class="md-card-header"><span class="md-card-label">Reservations by status</span></div>
+                <div class="md-card-body">
+                    <div class="md-summary"><span class="md-summary-value">312</span><span>8.3% cancelled</span></div>
+                    <div class="md-stack" role="img" aria-label="Completed 268, Cancelled 26, Confirmed 12, Pending 6">
+                        <i class="is-completed" style="width: 85.9%"></i>
+                        <i class="is-cancelled" style="width: 8.3%"></i>
+                        <i class="is-confirmed" style="width: 3.9%"></i>
+                        <i class="is-pending" style="width: 1.9%"></i>
+                    </div>
+                    <ul class="md-legend">
+                        <li><i class="is-completed"></i>Completed <b>268</b></li>
+                        <li><i class="is-cancelled"></i>Cancelled <b>26</b></li>
+                        <li><i class="is-confirmed"></i>Confirmed <b>12</b></li>
+                        <li><i class="is-pending"></i>Pending <b>6</b></li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="~/js/admin-dashboard.js" asp-append-version="true"></script>
+}

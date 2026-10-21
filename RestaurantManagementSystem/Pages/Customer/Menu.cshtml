@@ -1,0 +1,214 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.MenuModel
+@{
+    ViewData["Title"] = "Menu";
+    ViewData["ActiveNav"] = "Menu";
+    ViewData["Eyebrow"] = "À la carte";
+    ViewData["Heading"] = "Our Menu";
+    Layout = "_CustomerLayout";
+}
+
+@functions {
+    static string DayRange(RestaurantManagementSystem.Model.Promotion p) =>
+        p.startDay == DayOfWeek.Monday && p.endDay == DayOfWeek.Sunday
+            ? "Every day"
+            : p.startDay.ToString()[..3] + "–" + p.endDay.ToString()[..3];
+}
+
+@* Card values map to the Menu model: menuName, menuDescription, menuCategory, menuPrice, isAvailable, menuImageUrl. *@
+
+@* ---------- Promotion banner (full width, top of page) ----------
+   One slide per active promotion. Values map to the Promotion model:
+   promoTitle, promoDescription, promoLabel, promoCode, promoActive. *@
+@section TopBanner {
+    @if (Model.Promotions.Any())
+    {
+        <div class="md-promo-strip" id="promoStrip" role="region" aria-label="Current promotions">
+            <div id="promoCarousel" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="5000">
+                <div class="carousel-inner">
+                    @for (int i = 0; i < Model.Promotions.Count; i++)
+                    {
+                        var promo = Model.Promotions[i];
+                        <div class="carousel-item @(i == 0 ? "active" : "")">
+                            <button type="button" class="md-promo-slide" data-promo-target="promo-@promo.promoID">
+                                <span class="md-promo-label">Promotion</span>
+                                <span class="md-promo-text"><strong>@promo.promoTitle</strong> — @promo.promoLabel</span>
+                                <i class="bi bi-arrow-right md-promo-arrow" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    }
+                </div>
+                <button class="md-promo-nav prev" type="button" data-bs-target="#promoCarousel" data-bs-slide="prev" aria-label="Previous promotion"><i class="bi bi-chevron-left"></i></button>
+                <button class="md-promo-nav next" type="button" data-bs-target="#promoCarousel" data-bs-slide="next" aria-label="Next promotion"><i class="bi bi-chevron-right"></i></button>
+            </div>
+            <button type="button" class="md-promo-close" id="promoClose" aria-label="Hide promotions"><i class="bi bi-x-lg"></i></button>
+        </div>
+    }
+}
+
+@section HeaderActions {
+    <a class="btn btn-md-dark md-cart-btn" href="/Customer/Checkout">
+        <i class="bi bi-bag"></i>
+        Cart · <span id="cartCount">@Model.CartCount</span> items · <span id="cartTotal">RM @Model.CartSubtotal.ToString("N2")</span>
+    </a>
+}
+
+@* ---------- Tabs + search ---------- *@
+<style>
+    /* Many categories: keep the tabs on one line and let them scroll sideways */
+    .md-menu-toolbar .md-tabs { display: flex; flex-wrap: nowrap; flex: 1 1 0; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
+    .md-menu-toolbar .md-tabs button { flex: 0 0 auto; white-space: nowrap; }
+</style>
+<div class="md-menu-toolbar">
+    <nav class="md-tabs" aria-label="Menu categories">
+        <button type="button" class="active" data-filter="Recommendations">Recommendations</button>
+        <button type="button" data-filter="Promotions">Promotions</button>
+        <button type="button" data-filter="All">All</button>
+        @foreach (var categoryName in Model.CategoryNames)
+        {
+            <button type="button" data-filter="@categoryName">@categoryName</button>
+        }
+    </nav>
+    <input class="form-control md-input md-search" id="menuSearch" type="search" placeholder="Search dishes" aria-label="Search dishes" />
+</div>
+<p class="md-menu-count" id="menuCount">Picked for you · 6 dishes</p>
+
+@* =====================================================
+   Recommendations tab
+   ===================================================== *@
+<div id="recommendationsPanel">
+    <h2 class="md-section-title">Based on your preferences</h2>
+    <div class="row md-grid md-section">
+        @foreach (var item in Model.RecommendedItems)
+        {
+            <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="item" /></div>
+        }
+    </div>
+
+    <h2 class="md-section-title">Popular selection</h2>
+    <div class="row md-grid">
+        @foreach (var item in Model.PopularItems)
+        {
+            <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="item" /></div>
+        }
+    </div>
+</div>
+
+@* =====================================================
+   Promotions tab – one section per active promotion,
+   followed by the dishes it applies to
+   ===================================================== *@
+<div class="d-none" id="promotionsPanel">
+    @foreach (var promo in Model.Promotions)
+    {
+        <section class="md-promo-section" id="promo-@promo.promoID">
+            <div class="md-promo-info">
+                <span class="md-badge md-badge-promo">Promotion</span>
+                <h2 class="md-section-title">@promo.promoTitle</h2>
+                <p>@promo.promoDescription</p>
+                <div class="md-promo-meta">
+                    <span><i class="bi bi-calendar3"></i>@DayRange(promo)@(promo.validUntil.HasValue ? " · until " + promo.validUntil.Value.ToString("d MMM") : "")</span>
+                    <span><i class="bi bi-tag"></i>@promo.promoLabel</span>
+                    <span><i class="bi bi-ticket-perforated"></i>Code <strong>@promo.promoCode</strong></span>
+                    @if (promo.autoApply)
+                    {
+                        <span><i class="bi bi-magic"></i>Applied automatically</span>
+                    }
+                </div>
+            </div>
+
+            @if (promo.Menus.Any())
+            {
+                <div class="row md-grid">
+                    @foreach (var dish in promo.Menus)
+                    {
+                        <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="dish" /></div>
+                    }
+                </div>
+            }
+            else
+            {
+                <a class="btn btn-md-dark" href="/Customer/Reservations">Reserve a table</a>
+            }
+        </section>
+    }
+</div>
+
+@* =====================================================
+   All / category tabs
+   ===================================================== *@
+<div class="row md-grid d-none" id="menuGrid">
+@foreach (var item in Model.MenuItems)
+{
+    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="@item.MenuCategory?.categoryName" data-name="@item.menuName">
+        <partial name="_MenuCard" model="item" />
+    </div>
+}
+</div>
+
+<p class="md-empty d-none" id="menuEmpty">No dishes match your search. Try another name or category.</p>
+
+@* ---------- Chatbot: floating button + panel ---------- *@
+<button type="button" class="md-chat-fab" id="chatToggle" aria-expanded="false" aria-controls="chatPanel"
+        aria-label="Chat with our assistant" title="Chat with our assistant">
+    <i class="bi bi-chat-right-dots"></i>
+</button>
+
+<section class="md-chat-panel d-none" id="chatPanel" aria-label="@ViewData["Brand"] assistant">
+    <div class="md-chat-header">
+        <div>
+            <div class="md-chat-title">@ViewData["Brand"] assistant</div>
+            <div class="md-chat-subtitle">Answers about bookings, menu and opening hours</div>
+        </div>
+        @* Same × close icon as every pop-up (white version on the dark header) *@
+        <button type="button" class="btn-close btn-close-white md-chat-close" id="chatClose" aria-label="Close chat"></button>
+    </div>
+    <div class="md-chat-body" id="chatBody">
+        @* Example conversation from the design *@
+        <div class="md-chat-msg user">Is there a table for 4 this Sunday at 8pm?</div>
+        <div class="md-chat-msg bot">
+            Sunday 27 Sep at 20:00 is full for 4 guests. The nearest free times are <strong>19:45</strong> (Outdoor) and <strong>20:30</strong> (Indoor).
+        </div>
+        <div class="md-chat-actions">
+            <a class="btn btn-md-outline" href="/Customer/Reservations">Book 19:45</a>
+            <a class="btn btn-md-outline" href="/Customer/Reservations">Book 20:30</a>
+        </div>
+        <div class="md-chat-msg user">Do you have vegetarian mains?</div>
+        <div class="md-chat-msg bot">
+            Yes — the Garden Amuse starter, and the chef can prepare a vegetarian tasting menu with 24 hours' notice.
+        </div>
+    </div>
+    <form class="md-chat-input" id="chatForm">
+        <input class="form-control md-input" id="chatText" type="text" placeholder="Ask about menu, booking or hours" aria-label="Message" />
+        <button type="submit" class="btn btn-md-dark">Send</button>
+    </form>
+</section>
+
+@section Scripts {
+    @* Antiforgery token + the saved cart (dish name -> id, id -> quantity) read by menu.js *@
+    @Html.AntiForgeryToken()
+    <script>window.MD_CART = @Json.Serialize(new { ids = Model.DishIds, quantities = Model.CartQuantities });</script>
+    <script src="~/js/menu.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            const tabs = document.querySelector('.md-tabs');
+            if (!tabs) return;
+
+            // mouse wheel over the tabs scrolls them sideways (page scrolls normally at either end)
+            tabs.addEventListener('wheel', e => {
+                if (tabs.scrollWidth <= tabs.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+                const atStart = tabs.scrollLeft <= 0 && e.deltaY < 0;
+                const atEnd = tabs.scrollLeft + tabs.clientWidth >= tabs.scrollWidth - 1 && e.deltaY > 0;
+                if (atStart || atEnd) return;
+                e.preventDefault();
+                tabs.scrollLeft += e.deltaY;
+            }, { passive: false });
+
+            // keep the chosen tab in view
+            tabs.addEventListener('click', e => {
+                const b = e.target.closest('button');
+                if (b) b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+            });
+        })();
+    </script>
+}
