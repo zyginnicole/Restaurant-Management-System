@@ -1,7 +1,12 @@
+@using RestaurantManagementSystem.Helpers
 @{
     // Each customer page sets ViewData["ActiveNav"] so the matching sidebar link is highlighted.
     string active = ViewData["ActiveNav"] as string ?? "";
     string NavClass(string name) => name == active ? "md-nav-link active" : "md-nav-link";
+
+    // Signed-in customer, read from the session (saved at login)
+    string userName = Context.Session.GetUserName() ?? "Guest";
+    string userInitials = NameFormatter.GetInitials(userName);
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -38,12 +43,12 @@
             <button type="button" class="btn-close btn-close-white d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#mdSidebar" aria-label="Close menu"></button>
         </div>
 
-        @* Signed-in customer – replace with the real name from the session later *@
+        @* Signed-in customer (name comes from the session) *@
         <div class="md-sidebar-user">
-            <span class="md-avatar">AB</span>
+            <span class="md-avatar">@userInitials</span>
             <div>
-                <div class="md-sidebar-user-name">Alexandra Beaumont</div>
-                <div class="md-sidebar-user-meta">Member since Mar 2025</div>
+                <div class="md-sidebar-user-name">@userName</div>
+                <div class="md-sidebar-user-meta">Member</div>
             </div>
         </div>
 

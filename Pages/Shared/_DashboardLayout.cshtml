@@ -1,3 +1,4 @@
+@using RestaurantManagementSystem.Helpers
 @{
     // Shared layout for the Staff and Admin modules.
     // Each page sets ViewData["Module"] = "Staff" or "Admin" (menu items) and ViewData["ActiveNav"] (highlighted item).
@@ -6,10 +7,10 @@
     string active = ViewData["ActiveNav"] as string ?? "";
     string NavClass(string name) => name == active ? "md-nav-link active" : "md-nav-link";
 
-    // Signed-in user – replace with the real name and role from the session later
-    string userInitials = isAdmin ? "RB" : "SC";
-    string userName = isAdmin ? "Richard Beaumont" : "Sophie Clarke";
-    string userRole = isAdmin ? "Manager · Administrator" : "Senior Waiter";
+    // Signed-in user, read from the session (saved at login)
+    string userName = Context.Session.GetUserName() ?? (isAdmin ? "Administrator" : "Staff");
+    string userInitials = NameFormatter.GetInitials(userName);
+    string userRole = isAdmin ? "Administrator" : "Staff";
 }
 <!DOCTYPE html>
 <html lang="en">
