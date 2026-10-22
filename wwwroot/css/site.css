@@ -3310,6 +3310,7 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
 .md-profile-fields:disabled .md-chip:not(.active) { opacity: .7; }
 .md-profile-fields:disabled .md-switch { opacity: .85; }
 /* Staff My profile: work details are managed by an administrator – stay greyed while editing too */
+.md-input.md-input-locked,
 .md-profile-fields .md-input.md-input-locked { background-color: #f1eee8; color: var(--md-muted); cursor: not-allowed; box-shadow: none; }
 
 /* Staff Reservation details pop-up: read-only bookings show no dropdown arrow or calendar icon */
@@ -3728,3 +3729,167 @@ button.md-floor-table:hover, button.md-floor-table:focus-visible { border-color:
 .md-pdf-head { margin-bottom: 1rem; padding-bottom: .8rem; border-bottom: 1px solid var(--md-line); }
 .md-pdf-head b { display: block; font-family: var(--md-font-heading); font-weight: 400; font-size: 1.4rem; }
 .md-pdf-head span { font-size: var(--md-text-meta); color: var(--md-muted); }
+
+/* =========================================================
+   Admin – Accounts (staff and customer tables)
+   ========================================================= */
+/* Search box in the page header (right of the title) */
+.md-header-search.form-control { width: 16rem; max-width: 100%; height: 2.6rem; padding: 0 .9rem; }
+
+.md-account-table th { padding-left: 1.1rem; padding-right: 1.1rem; }
+.md-account-table td { padding: .85rem 1.1rem; border-bottom: 1px solid var(--md-line); vertical-align: middle; white-space: nowrap; }
+.md-account-table tbody tr:last-child td { border-bottom: 0; }
+.md-account-table tr.is-muted td { color: var(--md-muted); }
+.md-account-table .md-btn-sm { min-width: 6.5rem; }
+
+/* Name cell: initials + name + email */
+.md-account-name { display: flex; align-items: center; gap: .75rem; }
+.md-account-name .md-avatar { width: 2.2rem; height: 2.2rem; font-size: .72rem; color: var(--md-gold-dark); }
+.md-account-name b { display: block; font-weight: 500; }
+.md-account-name small { display: block; font-size: var(--md-text-meta); color: var(--md-muted); }
+
+/* System role tag: Administrator dark · Staff outline */
+.md-role { display: inline-block; padding: .2rem .6rem; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; border: 1px solid var(--md-line); }
+.md-role.is-admin { background: var(--md-ink); border-color: var(--md-ink); color: var(--md-gold-bright); }
+.md-role.is-staff { background: var(--md-white); color: var(--md-ink); }
+
+/* Account status: Active green · Deactivated grey · Locked red */
+.md-pill.is-active      { background: #e3f2e8; color: #1e6b43; border-color: #c4e3cf; }
+.md-pill.is-deactivated { background: #f1f0ed; color: #7a756b; border-color: #e0ddd6; }
+.md-pill.is-locked      { background: #fbe9eb; color: #a8323a; border-color: #f1c6cb; }
+
+/* Table footer: "Showing 1–8 of 847" + page arrows */
+.md-table-foot { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .9rem 1.5rem; border-top: 1px solid var(--md-line); font-size: var(--md-text-meta); color: var(--md-muted); }
+.md-locked-until { display: block; margin-top: .25rem; font-size: var(--md-text-meta); color: #a8323a; }
+
+/* =========================================================
+   Admin – Monitor (filters, clickable rows, status history)
+   ========================================================= */
+.md-monitor-filters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1rem; }
+.md-monitor-filters .md-input { height: 2.6rem; }
+.md-monitor-search { grid-column: span 2; }
+@media (max-width: 1199.98px) { .md-monitor-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 575.98px)  { .md-monitor-filters { grid-template-columns: 1fr 1fr; } .md-monitor-search { grid-column: 1 / -1; } }
+
+.md-row-click { cursor: pointer; transition: background-color .15s ease; }
+.md-row-click:hover, .md-row-click:focus-visible { background: #faf8f3; outline: 0; }
+.md-table-note { margin: 0; padding: .9rem 1.5rem; border-top: 1px solid var(--md-line); }
+
+
+
+/* Payment statuses: Paid green · Refunded blue · Failed red */
+.md-pill.is-paid     { background: #e3f2e8; color: #1e6b43; border-color: #c4e3cf; }
+.md-pill.is-refunded { background: #e5eef9; color: #1d4e89; border-color: #c9daf0; }
+.md-pill.is-failed   { background: #fbe9eb; color: #a8323a; border-color: #f1c6cb; }
+.md-muted-text { font-size: var(--md-text-meta); color: var(--md-muted); }
+
+/* =========================================================
+   Admin – Reports (builder, report table)
+   ========================================================= */
+.md-radio-list { display: flex; flex-direction: column; gap: .55rem; }
+.md-radio { display: flex; align-items: center; gap: .6rem; cursor: pointer; font-size: var(--md-text-body); }
+.md-radio input { width: 1rem; height: 1rem; accent-color: var(--md-ink); cursor: pointer; }
+.md-report-builder .md-segment button { flex: 1; }
+
+.md-report-table tfoot td { font-weight: 600; border-top: 1px solid var(--md-ink); border-bottom: 0; background: #faf8f3; }
+.md-report-table .md-report-stars { color: var(--md-gold-dark); letter-spacing: .1em; }
+.md-report-pdf-head { margin: 0; padding: .8rem 1.1rem 0; font-size: var(--md-text-meta); color: var(--md-muted); }
+
+/* =========================================================
+   Admin – Announcements (campaign list, compose)
+   ========================================================= */
+.md-campaign-table .md-campaign-title { display: block; font-weight: 500; white-space: normal; }
+.md-campaign-table small { display: block; }
+.md-pin { color: var(--md-gold-dark); margin-right: .3rem; }
+
+
+.md-char-count { font-size: var(--md-text-meta); letter-spacing: 0; text-transform: none; }
+
+.md-announce-preview { padding: .9rem 1rem; background: #fdf6e7; border: 1px solid #efdcb0; line-height: 1.5; }
+.md-announce-preview b { display: block; font-weight: 500; }
+.md-campaign-table .md-btn-sm { min-width: 0; }
+.md-campaign-table .md-order-actions { flex-wrap: nowrap; }
+.md-campaign-table td:first-child { white-space: normal; min-width: 15rem; }
+
+/* =========================================================
+   Admin – Feedback
+   ========================================================= */
+/* Period links in the header, styled like the segment buttons */
+.md-header-segment { align-self: center; }
+.md-header-segment a { display: inline-block; padding: .4rem .8rem; font-size: var(--md-text-meta); color: var(--md-muted); text-decoration: none; }
+.md-header-segment a:hover { color: var(--md-ink); }
+.md-header-segment a.active { background: var(--md-white); color: var(--md-ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .06); }
+
+/* Rating distribution bars */
+.md-dist-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .9rem; }
+.md-dist-bars li { display: grid; grid-template-columns: 4.5rem 1fr 3rem; align-items: center; gap: .75rem; font-size: var(--md-text-body); }
+.md-dist-bars b { font-weight: 500; text-align: right; font-variant-numeric: lining-nums; }
+.md-dist-track { height: 6px; background: #eeeae1; }
+.md-dist-track i { display: block; height: 100%; background: var(--md-gold); }
+
+
+.md-feedback-table .md-feedback-comment div {
+    white-space: normal; min-width: 11rem; max-width: 15rem;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.md-feedback-table tr.is-low td:first-child { box-shadow: inset 3px 0 0 #d9534f; }
+
+/* Pop-up */
+.md-feedback-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .75rem; }
+.md-feedback-stars { font-size: 1.15rem; letter-spacing: .1em; color: var(--md-gold-dark); }
+.md-feedback-quote { margin: 0 0 1.25rem; padding: .9rem 1rem; background: #faf8f3; border-left: 3px solid var(--md-gold); font-style: italic; line-height: 1.6; }
+.md-feedback-contact { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0 0 1.25rem; }
+.md-feedback-contact dt { font-size: var(--md-text-label); letter-spacing: .16em; text-transform: uppercase; color: var(--md-muted); font-weight: 400; margin-bottom: .2rem; }
+.md-feedback-contact dd { margin: 0; overflow-wrap: anywhere; }
+/* Announcements list: first line of the message under the title */
+.md-campaign-table .md-announce-snippet { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; max-width: 46rem; }
+
+/* Admin Monitor: Order details pop-up – ordered items + totals */
+.md-order-lines { width: 100%; border-collapse: collapse; font-size: var(--md-text-body); font-variant-numeric: lining-nums; }
+.md-order-lines th { padding: 0 0 .5rem; font-size: var(--md-text-label); font-weight: 400; letter-spacing: .16em; text-transform: uppercase; color: var(--md-muted); border-bottom: 1px solid var(--md-line); }
+.md-order-lines tbody td { padding: .65rem 0; border-bottom: 1px solid var(--md-line); vertical-align: top; }
+.md-order-lines tbody td + td { padding-left: 1rem; white-space: nowrap; }
+.md-order-lines small { display: block; margin-top: .15rem; font-size: var(--md-text-meta); font-style: italic; color: var(--md-muted); }
+.md-order-lines tfoot td { padding: .35rem 0 0; color: var(--md-muted); }
+.md-order-lines tfoot tr:first-child td { padding-top: .75rem; }
+.md-order-lines tfoot tr.is-total td { padding-top: .6rem; font-weight: 600; color: var(--md-ink); }
+
+/* Admin Reports – Statistic report: mini bar chart inside a KPI card (revenue / new customers per period) */
+.md-kpi-bars { display: flex; align-items: flex-end; gap: 3px; height: 2rem; margin-bottom: .45rem; }
+.md-kpi-bars i { flex: 1; min-height: 3px; background: var(--md-indigo, #5165ad); opacity: .85; }
+.md-kpi-bars i:last-child { opacity: 1; }
+.md-kpi-bars.is-teal i { background: var(--md-teal, #4b9a8e); }
+/* Admin Reports: Generate / Download PDF buttons at the end of the choices bar */
+.md-report-actions { display: flex; flex-direction: column; gap: .5rem; }
+.md-report-actions .btn { width: 100%; }
+.md-report-builder .md-input { height: 2.6rem; }
+
+/* Admin Reports – Statistic report: KPI cards as long horizontal rows, stacked
+   figure | visual | breakdown (stacks on phones) */
+.md-kpi-rows { display: flex; flex-direction: column; gap: var(--md-grid-gap, 1rem); }
+.md-kpi-wide { display: grid; grid-template-columns: minmax(13rem, 1.1fr) minmax(0, 2fr) minmax(12rem, 1fr); align-items: center; gap: 2rem; padding: 1.25rem 1.5rem; }
+.md-kpi-main .md-stat-value { margin: .3rem 0 .2rem; }
+.md-kpi-main .md-kpi-delta { margin-bottom: 0; }
+.md-kpi-main .md-stars { display: inline-block; margin-top: .2rem; }
+
+/* Labelled columns (revenue / new customers per month or year) */
+.md-kpi-columns { display: flex; align-items: flex-end; gap: .5rem; height: 5.5rem; }
+.md-kpi-columns > div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+.md-kpi-columns i { display: block; width: 100%; max-width: 2.25rem; min-height: 3px; background: var(--md-indigo, #5165ad); opacity: .8; }
+.md-kpi-columns > div.is-top i { opacity: 1; background: var(--md-teal, #4b9a8e); }
+.md-kpi-columns.is-teal i { background: var(--md-teal, #4b9a8e); opacity: .75; }
+.md-kpi-columns span { margin-top: .35rem; font-size: .68rem; color: var(--md-muted); white-space: nowrap; }
+
+.md-kpi-stack-wide { height: 12px; margin-bottom: .85rem; }
+.md-kpi-dist { gap: .45rem; }
+
+/* Breakdown on the right */
+.md-kpi-facts { margin: 0; display: flex; flex-direction: column; gap: .55rem; padding-left: 1.5rem; border-left: 1px solid var(--md-line); }
+.md-kpi-facts div { display: flex; justify-content: space-between; gap: 1rem; font-size: var(--md-text-meta); }
+.md-kpi-facts dt { font-weight: 400; color: var(--md-muted); }
+.md-kpi-facts dd { margin: 0; font-weight: 500; text-align: right; font-variant-numeric: lining-nums; }
+
+@media (max-width: 991.98px) {
+    .md-kpi-wide { grid-template-columns: 1fr; gap: 1.1rem; }
+    .md-kpi-facts { padding-left: 0; padding-top: 1rem; border-left: 0; border-top: 1px solid var(--md-line); }
+}
