@@ -19,11 +19,12 @@ namespace RestaurantManagementSystem.Model
 
         [Required]
         public int areaID { get; set; }
-        public DiningArea? DiningArea { get; set; } 
+        public DiningArea? DiningArea { get; set; }
 
         [Required]
         public string tableStatus { get; set; } = "Available"; // Available, Occupied, Reserved, Maintenance
 
         public ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();
+        public ICollection<Order> Orders { get; set; } = new List<Order>();   // dine-in orders served to this table
     }
 }

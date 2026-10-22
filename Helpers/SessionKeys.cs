@@ -7,6 +7,7 @@
         public const string UserId = "UserId";
         public const string Role = "Role";
         public const string UserName = "UserName";
+        public const string Cart = "CustomerCart";
     }
 
     // The three roles in the system (Role-Based Access Control).

@@ -19,7 +19,7 @@ namespace RestaurantManagementSystem.Model
 
         [ForeignKey(nameof(Staff))]
         // allow null: assigned when staff confirms
-        public int? staffID { get; set; }                  
+        public int? staffID { get; set; }
 
         // ---- Navigation properties ---- 
         public Customer? Customer { get; set; }
@@ -34,11 +34,11 @@ namespace RestaurantManagementSystem.Model
 
         public string? specialRequest { get; set; }
 
-        public string reservationStatus { get; set; } = "Pending"; // Pending, Confirmed, Cancelled, Completed
+        public string reservationStatus { get; set; } = "Pending"; // Pending, Confirmed, Cancelled, Completed (the process ends when guests are seated; the table becomes Occupied on DiningTable)
 
         public DateTimeOffset reservationCreateAt { get; set; } = DateTimeOffset.Now;
 
         //allow users to order when making reservation
-        public ICollection<Order> Orders { get; set; } = new List<Order>(); 
+        public ICollection<Order> Orders { get; set; } = new List<Order>();
     }
 }
