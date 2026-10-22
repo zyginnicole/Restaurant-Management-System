@@ -1,12 +1,12 @@
 ﻿@page
 @model RestaurantManagementSystem.Pages.Staff.DashboardModel
-@using RestaurantManagementSystem.Helpers
 @{
     ViewData["Title"] = "Dashboard";
     ViewData["Module"] = "Staff";
     ViewData["ActiveNav"] = "Dashboard";
     ViewData["Eyebrow"] = "Wednesday, 16 September 2026 · Dinner service";
-    ViewData["Heading"] = "Good evening, " + (HttpContext.Session.GetUserName() ?? "").Split(' ')[0];
+    ViewData["Heading"] = "Good evening, Sophie";
+    Layout = "_DashboardLayout";
 }
 
 @* Example data from the design. Replace with today's Reservations and Orders later.
