@@ -1,0 +1,142 @@
+@model string
+@*
+    Staff – Reservation details pop-up + its confirm pop-ups (Decline, Cancel, No-show).
+    Used by /Staff/Reservations and /Staff/Dashboard:
+        <partial name="_ReservationDetailPopup" model="@("/Staff/Dashboard")" />      (model = page to return to)
+        <script src="~/js/staff-reservation-popup.js"></script>
+    A booking row opens it when it has the data-* values listed in staff-reservation-popup.js
+    and a link with data-open-detail. All forms post to the /Staff/Reservations handlers with returnUrl,
+    so after an action the staff member goes back to the page they were on.
+*@
+@{
+    string returnUrl = Model;
+
+    // Example data – backend: pass the DiningTables (free ones can be chosen) and the time slots
+    var tables = new (string No, string Area, int Seats, string State)[]
+    {
+        ("T-01", "Indoor", 4, "free"), ("T-02", "Outdoor", 4, "reserved"), ("T-03", "Indoor", 2, "seated"),
+        ("T-04", "Indoor", 2, "reserved"), ("T-05", "Indoor", 4, "free"), ("T-06", "Indoor", 2, "seated"),
+        ("T-07", "Indoor", 4, "free"), ("T-08", "Indoor", 4, "free"), ("T-09", "Indoor", 4, "free"),
+        ("T-10", "Indoor", 6, "free"), ("T-11", "Indoor", 4, "free"), ("T-12", "Indoor", 4, "seated"),
+        ("T-13", "Outdoor", 4, "free"), ("T-14", "Outdoor", 4, "free"), ("T-15", "Outdoor", 2, "free"),
+        ("T-16", "Outdoor", 4, "free"), ("T-17", "Outdoor", 4, "free"), ("T-18", "Outdoor", 6, "free"),
+        ("T-19", "Outdoor", 2, "free"), ("T-20", "VIP", 8, "reserved"), ("T-21", "VIP", 8, "free"),
+        ("T-22", "VIP", 6, "free"), ("T-23", "VIP", 6, "unavailable"), ("T-24", "VIP", 4, "unavailable")
+    };
+    var times = new[] { "12:00", "12:30", "13:00", "13:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30" };
+}
+
+@* ---------- Reservation details pop-up ----------
+   Filled by staff-reservation-popup.js from the clicked row. The footer buttons post the form to
+   OnPostSave / OnPostConfirm / OnPostSeat; Decline, No-show and Cancel open their confirm pop-up.
+   Seated, Completed, Cancelled, No-show and Declined bookings are read-only (no footer).
+   A Seated booking becomes Completed by itself when its order is paid (Billing → OnPostPay). *@
+<div class="modal fade md-popup" id="reservationDetailPopup" tabindex="-1" aria-labelledby="reservationDetailTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" asp-page="/Staff/Reservations" asp-page-handler="Save" id="detailForm">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow" data-detail="eyebrow">Reservation</span>
+                    <h2 class="modal-title md-popup-title" id="reservationDetailTitle" data-detail="title">—</h2>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="md-pill" data-detail="pill">—</span>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="reservationId" data-detail="id" />
+                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                <p class="md-hint mt-0 mb-3" data-detail="booked">—</p>
+                <fieldset class="md-profile-fields md-detail-fields" data-detail="fields">
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-4">
+                            <label class="md-label" for="detailDate">Date</label>
+                            <input class="form-control md-input" id="detailDate" name="reservationDate" type="date" value="2026-09-16" />
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="md-label" for="detailTime">Time</label>
+                            <select class="form-select md-input" id="detailTime" name="reservationTime">
+                                @foreach (var t in times)
+                                {
+                                    <option>@t</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="md-label" for="detailGuests">Guests</label>
+                            <select class="form-select md-input" id="detailGuests" name="partySize">
+                                @for (int n = 1; n <= 12; n++)
+                                {
+                                    <option>@n</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    @* Changing the table (Pending / Confirmed only). Only free tables (and the booking's own table) can be chosen. *@
+                    <div class="mb-3">
+                        <label class="md-label" for="detailTable">Table</label>
+                        <select class="form-select md-input" id="detailTable" name="tableId" data-md-select>
+                            @foreach (var t in tables)
+                            {
+                                <option value="@t.No" data-state="@t.State">@t.No · @t.Area · @t.Seats seats</option>
+                            }
+                        </select>
+                    </div>
+                    <p class="md-note-box md-note-box-info" data-detail="free">—</p>
+
+                    <div>
+                        <label class="md-label" for="detailRequest">Special request</label>
+                        <textarea class="form-control md-input" id="detailRequest" name="specialRequest" rows="2" maxlength="300"></textarea>
+                    </div>
+                </fieldset>
+                <p class="md-hint mt-3 mb-0 d-none" data-detail="readonly">—</p>
+            </div>
+
+            @* Buttons per status (the script shows the matching group) *@
+            <div class="modal-footer md-detail-footer" data-detail="footer">
+                <div class="md-edit-actions" data-for="Pending">
+                    <button type="button" class="btn md-btn-round md-btn-cancel" data-open-popup="declinePopup">Decline</button>
+                    <button type="submit" class="btn md-btn-round md-btn-confirm" asp-page="/Staff/Reservations" asp-page-handler="Confirm">Confirm booking</button>
+                </div>
+                <div class="md-edit-actions" data-for="Confirmed">
+                    <button type="button" class="btn md-btn-round md-btn-cancel" data-open-popup="cancelBookingPopup">Cancel booking</button>
+                    <button type="button" class="btn md-btn-round md-btn-outline" data-open-popup="noShowPopup">No-show</button>
+                    <button type="submit" class="btn md-btn-round md-btn-green" asp-page="/Staff/Reservations" asp-page-handler="Seat">Seat guests</button>
+                </div>
+                <button type="submit" class="btn md-btn-round btn-md-dark">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* ---------- Confirm pop-ups (shared _ConfirmPopup), filled from the clicked button (data-id / data-code / data-details) ---------- *@
+@{
+    var declinePopup = new ConfirmPopupView
+    {
+        Id = "declinePopup", Eyebrow = "Reservation", Title = "Decline {code}?", Message = "{details}",
+        Note = "The guest gets an in-app notification with the reason.",
+        Page = "/Staff/Reservations", Handler = "Decline", IdField = "reservationId", ReturnUrl = returnUrl,
+        Reasons = new[] { "Fully booked at this time", "Party too large for available tables", "Outside opening hours", "Other" },
+        BackText = "Keep request", ConfirmText = "Decline and notify", Danger = true
+    };
+    var cancelBookingPopup = new ConfirmPopupView
+    {
+        Id = "cancelBookingPopup", Eyebrow = "Reservation", Title = "Cancel {code}?", Message = "{details}",
+        Note = "The table is freed and the guest gets an in-app notification.",
+        Page = "/Staff/Reservations", Handler = "Cancel", IdField = "reservationId", ReturnUrl = returnUrl,
+        Reasons = new[] { "Requested by guest", "Restaurant closure", "Duplicate booking", "Other" },
+        BackText = "Keep booking", ConfirmText = "Cancel booking", Danger = true
+    };
+    var noShowPopup = new ConfirmPopupView
+    {
+        Id = "noShowPopup", Eyebrow = "Reservation", Title = "Mark {code} as no-show?", Message = "{details}",
+        Note = "The booking is marked No-show and the table is freed. It counts in the guest's no-show history.",
+        Page = "/Staff/Reservations", Handler = "NoShow", IdField = "reservationId", ReturnUrl = returnUrl,
+        BackText = "Go back", ConfirmText = "Mark no-show", Danger = true
+    };
+}
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="declinePopup" />
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="cancelBookingPopup" />
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="noShowPopup" />

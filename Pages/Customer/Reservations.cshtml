@@ -1,0 +1,483 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Customer.ReservationsModel
+@{
+    ViewData["Title"] = "Reservations";
+    ViewData["ActiveNav"] = "Reservations";
+    ViewData["Eyebrow"] = "Book a table";
+    ViewData["Heading"] = "Reservations";
+    ViewData["Subtitle"] = "Choose your party size first — we'll show the times that fit.";
+    Layout = "_CustomerLayout";
+
+    // Example time slots – later from the backend (Full = no free table for this party size / date / area)
+    var lunchSlots = new[] { "12:00", "12:15", "12:30", "13:00" };
+    var dinnerSlots = new[] { "18:30", "18:45", "19:00", "19:15", "19:30", "19:45", "20:00", "20:15", "20:30", "20:45", "21:00" };
+    var fullSlots = new[] { "19:30", "20:00", "20:15" };
+    var selectedSlot = "19:00";
+}
+
+@* Example data from the design. Replace with real data later.
+   Status colours: Pending red · Confirmed blue (same scheme as every module). *@
+
+<div class="row md-grid md-section">
+    @* ---------- New reservation form ---------- *@
+    <div class="col-lg-7">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">New reservation</span>
+            </div>
+            <div class="md-card-body">
+                @* Field names match the Reservation model where possible; the backend joins
+                   reservationDate + reservationTime into reservationDateTime and assigns the table. *@
+                <form method="post" id="reservationForm">
+                    <div class="row g-3 md-form-section">
+                        <div class="col-sm-6">
+                            <label class="md-label" for="partySize">1 · Party size</label>
+                            <select class="form-select md-input" id="partySize" name="partySize">
+                                @for (int n = 1; n <= 20; n++)
+                                {
+                                    <option value="@n" selected="@(n == 4)">@n @(n == 1 ? "guest" : "guests")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="md-label" for="reservationDate">2 · Date</label>
+                            <input class="form-control md-input" id="reservationDate" name="reservationDate" type="date" value="2026-09-27" min="2026-09-16" />
+                        </div>
+                    </div>
+
+                    @* Dining area: DiningTable.diningArea (Indoor, Outdoor, VIP) or no preference *@
+                    <div class="md-form-section">
+                        <span class="md-label" id="areaLabel">3 · Dining area</span>
+                        <div class="md-choice md-choice-bordered" role="radiogroup" aria-labelledby="areaLabel">
+                            <input type="radio" class="btn-check" name="diningArea" id="areaAny" value="Any" />
+                            <label for="areaAny">No preference</label>
+                            <input type="radio" class="btn-check" name="diningArea" id="areaIndoor" value="Indoor" />
+                            <label for="areaIndoor">Indoor</label>
+                            <input type="radio" class="btn-check" name="diningArea" id="areaOutdoor" value="Outdoor" checked />
+                            <label for="areaOutdoor">Outdoor</label>
+                            <input type="radio" class="btn-check" name="diningArea" id="areaVip" value="VIP" />
+                            <label for="areaVip">VIP</label>
+                        </div>
+                    </div>
+
+                    @* Time slots: Full ones are disabled (crossed out). Light grey box around the whole time section. *@
+                    <div class="md-time-box md-form-section">
+                        <div class="md-slot-head">
+                            <span class="md-label mb-0" id="timeLabel">4 · Time · <span data-date-label>Sunday 27 September</span></span>
+                            <ul class="md-slot-legend md-slot-legend-ink" aria-hidden="true">
+                                <li><i class="is-available"></i>Available</li>
+                                <li><i class="is-full"></i>Full</li>
+                                <li><i class="is-selected"></i>Selected</li>
+                            </ul>
+                        </div>
+
+                        <div role="radiogroup" aria-labelledby="timeLabel">
+                            <span class="md-slot-group">Lunch</span>
+                            <div class="md-slots md-slots-ink">
+                                @foreach (var slot in lunchSlots)
+                                {
+                                    var id = "slot" + slot.Replace(":", "");
+                                    <input type="radio" class="btn-check" name="reservationTime" id="@id" value="@slot" disabled="@fullSlots.Contains(slot)" checked="@(slot == selectedSlot)" />
+                                    <label for="@id">@slot</label>
+                                }
+                            </div>
+
+                            <span class="md-slot-group">Dinner</span>
+                            <div class="md-slots md-slots-ink">
+                                @foreach (var slot in dinnerSlots)
+                                {
+                                    var id = "slot" + slot.Replace(":", "");
+                                    <input type="radio" class="btn-check" name="reservationTime" id="@id" value="@slot" disabled="@fullSlots.Contains(slot)" checked="@(slot == selectedSlot)" />
+                                    <label for="@id">@slot</label>
+                                }
+                            </div>
+                        </div>
+
+                        <p class="md-field-error d-none" id="timeError" role="alert">Choose a time to continue.</p>
+
+                        @* Shown only when some slots are full – suggest the nearest free times *@
+                        <p class="md-note-box md-note-box-danger">20:00 and 20:15 are full for 4 guests Outdoor. Nearest available: 19:45 or 20:30.</p>
+                    </div>
+
+                    @* Special request: Reservation.specialRequest. Chips add common requests to the text. *@
+                    <div class="md-form-section">
+                        <label class="md-label" for="specialRequest">Special request (optional)</label>
+                        <textarea class="form-control md-input" id="specialRequest" name="specialRequest" rows="3"
+                                  placeholder="Allergies, occasion, seating">Celebrating a birthday · Window seat</textarea>
+                        <div class="md-chips md-chips-ink">
+                            <button type="button" class="md-chip active" data-chip="Window seat" aria-pressed="true">Window seat</button>
+                            <button type="button" class="md-chip" data-chip="Quiet area" aria-pressed="false">Quiet area</button>
+                            <button type="button" class="md-chip" data-chip="High chair" aria-pressed="false">High chair</button>
+                            <button type="button" class="md-chip" data-chip="Wheelchair access" aria-pressed="false">Wheelchair access</button>
+                        </div>
+                    </div>
+
+                    <p class="md-hint md-form-section">Free cancellation until 2 hours before your booking. Large parties (9 or more) are confirmed by our team.</p>
+
+                    @* Opens the review pop-up first; the form is submitted from there *@
+                    <button type="button" class="btn btn-md-green-soft w-100" id="confirmButton">
+                        Confirm reservation · <span data-summary-guests>4 guests</span> · <span data-summary-time>19:00</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+    </div>
+
+    @* ---------- Upcoming reservations ---------- *@
+    <div class="col-lg-5">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Your upcoming reservations</span>
+                <span class="md-card-meta">3 active</span>
+            </div>
+            @* One row per Pending / Confirmed / Seated reservation, soonest first.
+               Seated (Confirmed + guests arrived) has no Edit/Cancel – the visit is in progress.
+               Completed and Cancelled reservations are shown on the History page.
+               Clicking a row opens #reservationDetailPopup with the row's <template data-detail>; Edit and Cancel are inside that pop-up.
+               data-edit = edit page link, data-cancel-details / data-cancel-deadline = text for the cancel pop-up (leave empty for Seated). *@
+            <ul class="md-res-list">
+                <li class="md-res-item md-res-click is-seated" data-edit="" tabindex="0" role="button" aria-haspopup="dialog">
+                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                        <span class="md-date-tile-month">Sep</span>
+                        <span class="md-date-tile-day">16</span>
+                    </div>
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">R-0047</span>
+                            <span class="md-badge md-badge-seated">Seated</span>
+                        </div>
+                        <span class="md-res-item-info">Tonight · 19:00 · 3 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-05 Outdoor</span>
+                        <span class="md-res-item-note">You're at your table – enjoy your evening. Order from the Menu at any time.</span>
+                    </div>
+                    @* Pop-up details (copied into #reservationDetailPopup when the row is clicked) *@
+                    <template data-detail>
+                        @* Same layout as History / Overview: date tile + status, day, time · guests, table; then the detail grid *@
+                        <div class="md-next-res md-detail-res">
+                            <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
+                                <span class="md-date-tile-month">Sep</span>
+                                <span class="md-date-tile-day">16</span>
+                            </div>
+                            <div class="md-next-res-info">
+                                <span class="md-next-slot-code"><span class="md-badge md-badge-seated">Seated</span></span>
+                                <div class="md-res-date">Tonight</div>
+                                <div class="md-next-res-row">
+                                    <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>7:00 – 8:30 PM</span>
+                                    <span><i class="bi bi-person" aria-hidden="true"></i>3 <span class="visually-hidden">guests</span></span>
+                                </div>
+                                <div class="md-next-res-row">
+                                    <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-05 · Outdoor</span>
+                                </div>
+                            </div>
+                        </div>
+                        <dl class="md-detail-grid">
+                            <div><dt>Order</dt><dd>ORD-0087 · served, bill not paid yet</dd></div>
+                            <div><dt>Booked on</dt><dd>12 Sep 2026, 10:15</dd></div>
+                            <div class="is-wide"><dt>Special request</dt><dd>High chair for a child</dd></div>
+                            <div class="is-wide"><dt>Status</dt><dd>Seated at 19:04 – your visit is in progress</dd></div>
+                        </dl>
+                    </template>
+                </li>
+                <li class="md-res-item md-res-click is-confirmed" data-edit="/Customer/EditReservation?id=41" data-cancel-details="Sunday, 20 September 2026 · 19:30 · 2 guests · T-07 Indoor" data-cancel-deadline="17:30 on 20 September" tabindex="0" role="button" aria-haspopup="dialog">
+                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                        <span class="md-date-tile-month">Sep</span>
+                        <span class="md-date-tile-day">20</span>
+                    </div>
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">R-0041</span>
+                            <span class="md-badge md-badge-confirmed">Confirmed</span>
+                        </div>
+                        <span class="md-res-item-info">19:30 · 2 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-07 Indoor</span>
+                        <span class="md-res-item-note">Free cancellation until 17:30</span>
+                    </div>
+                    @* Pop-up details (copied into #reservationDetailPopup when the row is clicked) *@
+                    <template data-detail>
+                        @* Same layout as History / Overview: date tile + status, day, time · guests, table; then the detail grid *@
+                        <div class="md-next-res md-detail-res">
+                            <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
+                                <span class="md-date-tile-month">Sep</span>
+                                <span class="md-date-tile-day">20</span>
+                            </div>
+                            <div class="md-next-res-info">
+                                <span class="md-next-slot-code"><span class="md-badge md-badge-confirmed">Confirmed</span></span>
+                                <div class="md-res-date">Sunday evening</div>
+                                <div class="md-next-res-row">
+                                    <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>7:30 – 9:00 PM</span>
+                                    <span><i class="bi bi-person" aria-hidden="true"></i>2 <span class="visually-hidden">guests</span></span>
+                                </div>
+                                <div class="md-next-res-row">
+                                    <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-07 · Indoor</span>
+                                </div>
+                            </div>
+                        </div>
+                        <dl class="md-detail-grid">
+                            <div><dt>Free cancellation</dt><dd>Until 17:30 on 20 September</dd></div>
+                            <div><dt>Booked on</dt><dd>14 Sep 2026, 21:12</dd></div>
+                            <div class="is-wide"><dt>Special request</dt><dd>Quiet table away from the entrance, if available.</dd></div>
+                            <div class="is-wide"><dt>Status</dt><dd>Confirmed by our team on 14 Sep, 21:30</dd></div>
+                        </dl>
+                    </template>
+                </li>
+                <li class="md-res-item md-res-click is-pending" data-edit="/Customer/EditReservation?id=49" data-cancel-details="Sunday, 4 October 2026 · 20:00 · 8 guests · VIP" data-cancel-deadline="18:00 on 4 October" tabindex="0" role="button" aria-haspopup="dialog">
+                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                        <span class="md-date-tile-month">Oct</span>
+                        <span class="md-date-tile-day">04</span>
+                    </div>
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">R-0049</span>
+                            <span class="md-badge md-badge-pending">Pending</span>
+                        </div>
+                        <span class="md-res-item-info">20:00 · 8 guests · VIP</span>
+                        <span class="md-res-item-note">Waiting for our team to confirm, usually within 2 hours.</span>
+                    </div>
+                    @* Pop-up details (copied into #reservationDetailPopup when the row is clicked) *@
+                    <template data-detail>
+                        @* Same layout as History / Overview: date tile + status, day, time · guests, table; then the detail grid *@
+                        <div class="md-next-res md-detail-res">
+                            <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
+                                <span class="md-date-tile-month">Oct</span>
+                                <span class="md-date-tile-day">04</span>
+                            </div>
+                            <div class="md-next-res-info">
+                                <span class="md-next-slot-code"><span class="md-badge md-badge-pending">Pending</span></span>
+                                <div class="md-res-date">Sunday evening</div>
+                                <div class="md-next-res-row">
+                                    <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>8:00 – 9:30 PM</span>
+                                    <span><i class="bi bi-person" aria-hidden="true"></i>8 <span class="visually-hidden">guests</span></span>
+                                </div>
+                                <div class="md-next-res-row">
+                                    <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>VIP · table assigned when confirmed</span>
+                                </div>
+                            </div>
+                        </div>
+                        <dl class="md-detail-grid">
+                            <div><dt>Free cancellation</dt><dd>Until 18:00 on 4 October</dd></div>
+                            <div><dt>Booked on</dt><dd>16 Sep 2026, 09:40</dd></div>
+                            <div class="is-wide"><dt>Special request</dt><dd>Business dinner, private room if possible.</dd></div>
+                            <div class="is-wide"><dt>Status</dt><dd>Waiting for our team to confirm (large party)</dd></div>
+                        </dl>
+                    </template>
+                </li>
+            </ul>
+        </section>
+    </div>
+</div>
+
+@* ---------- Reservation details pop-up (opened by clicking an upcoming reservation) ----------
+   Filled by the script from the clicked row: code, status tag, <template data-detail> and data-edit link.
+   "Edit reservation" only shows for Pending / Confirmed (Seated has no data-edit). *@
+<div class="modal fade md-popup md-popup-narrow" id="reservationDetailPopup" tabindex="-1" aria-labelledby="reservationDetailTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Reservation</span>
+                    <h2 class="modal-title md-popup-title" id="reservationDetailTitle" data-detail-code>—</h2>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span data-detail-badge></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body" data-detail-body></div>
+            @* Cancel (left) and Edit only show for Pending / Confirmed; for Seated the whole footer is hidden (close with ×) *@
+            <div class="modal-footer md-detail-footer">
+                <button type="button" class="btn md-btn-cancel md-detail-cancel" data-detail-cancel>Cancel reservation</button>
+                <a class="btn btn-md-dark" href="#" data-detail-edit>Edit reservation</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ---------- Review pop-up: summary of the booking before it is sent ----------
+   Filled by the script from the form. "Confirm booking" submits #reservationForm (form="" attribute). *@
+<div class="modal fade md-popup md-popup-narrow" id="reviewReservationPopup" tabindex="-1" aria-labelledby="reviewReservationTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Check your booking</span>
+                    <h2 class="modal-title md-popup-title" id="reviewReservationTitle">Reservation summary</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @* Same layout as the other reservation pop-ups (filled from the form by the script) *@
+                <div class="md-next-res md-detail-res">
+                    <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
+                        <span class="md-date-tile-month" data-review="month">—</span>
+                        <span class="md-date-tile-day" data-review="day">—</span>
+                    </div>
+                    <div class="md-next-res-info">
+                        <span class="md-next-slot-code"><span class="md-badge md-badge-pending">Pending</span></span>
+                        <div class="md-res-date" data-review="daytext">—</div>
+                        <div class="md-next-res-row">
+                            <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i><span data-review="time">—</span></span>
+                            <span><i class="bi bi-person" aria-hidden="true"></i><span data-review="guests">—</span> <span class="visually-hidden">guests</span></span>
+                        </div>
+                        <div class="md-next-res-row">
+                            <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i><span data-review="area">—</span> · table assigned when confirmed</span>
+                        </div>
+                    </div>
+                </div>
+                <dl class="md-detail-grid">
+                    <div><dt>Name</dt><dd>Alexandra Beaumont</dd></div>
+                    <div><dt>Contact</dt><dd>0123456789</dd></div>
+                    <div class="is-wide"><dt>Special request</dt><dd data-review="request">—</dd></div>
+                </dl>
+                <p class="md-popup-note">Your booking is sent to our team and shows as Pending until it's confirmed. Free cancellation until 2 hours before your booking.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-md-outline" data-bs-dismiss="modal">Edit details</button>
+                <button type="submit" class="btn btn-md-green" form="reservationForm">Confirm booking</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ---------- Cancel reservation pop-up ----------
+   Shared _ConfirmPopup: posts reservationId (data-id) + cancelReason to OnPostCancel.
+   Opened from the details pop-up's Cancel button, which carries data-id / data-code / data-details / data-deadline. *@
+@{
+    var cancelReservationPopup = new ConfirmPopupView
+    {
+        Id = "cancelReservationPopup", Eyebrow = "Reservation", Title = "Cancel {code}?", Message = "{details}",
+        Note = "Free cancellation until {deadline}. After that, please call us on +60 4-261 0000.",
+        Handler = "Cancel", IdField = "reservationId",
+        Reasons = new[] { "Change of plans", "Booked the wrong date or time", "Party size changed", "Other" },
+        BackText = "Keep reservation", ConfirmText = "Cancel reservation", Danger = true
+    };
+}
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="cancelReservationPopup" />
+
+@section Scripts {
+    <script src="~/js/reservation-popup.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var form = document.getElementById('reservationForm');
+
+            // Button summary: "Confirm reservation · 4 guests · 19:00"
+            function updateSummary() {
+                var size = document.getElementById('partySize');
+                var time = form.querySelector('input[name="reservationTime"]:checked');
+                document.querySelector('[data-summary-guests]').textContent = size.options[size.selectedIndex].text;
+                document.querySelector('[data-summary-time]').textContent = time ? time.value : 'choose a time';
+            }
+
+            // "Sunday 27 September" next to the time label
+            function updateDateLabel() {
+                var value = document.getElementById('reservationDate').value;
+                if (!value) return;
+                var date = new Date(value + 'T00:00:00');
+                document.querySelector('[data-date-label]').textContent =
+                    date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
+            }
+
+            form.addEventListener('change', function (e) {
+                if (e.target.id === 'reservationDate') updateDateLabel();
+                updateSummary();
+            });
+
+            // Request chips: add or remove the text in the Special request box
+            var textarea = document.getElementById('specialRequest');
+            document.querySelectorAll('.md-chip').forEach(function (chip) {
+                chip.addEventListener('click', function () {
+                    var text = chip.dataset.chip;
+                    var parts = textarea.value.split(' · ').map(function (p) { return p.trim(); }).filter(Boolean);
+                    var on = !chip.classList.contains('active');
+                    parts = parts.filter(function (p) { return p !== text; });
+                    if (on) parts.push(text);
+                    textarea.value = parts.join(' · ');
+                    chip.classList.toggle('active', on);
+                    chip.setAttribute('aria-pressed', on);
+                });
+            });
+            // Confirm button: check a time is chosen, then show the review pop-up with the form's values
+            var reviewPopup = new bootstrap.Modal(document.getElementById('reviewReservationPopup'));
+            var timeError = document.getElementById('timeError');
+            document.getElementById('confirmButton').addEventListener('click', function () {
+                var time = form.querySelector('input[name="reservationTime"]:checked');
+                timeError.classList.toggle('d-none', !!time);
+                if (!time) { timeError.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+
+                var size = document.getElementById('partySize');
+                var dateValue = document.getElementById('reservationDate').value;
+                var area = form.querySelector('input[name="diningArea"]:checked');
+                var set = function (key, text) { document.querySelector('[data-review="' + key + '"]').textContent = text; };
+
+                // Same layout as the other reservation pop-ups: date tile, day, time range · guests, area
+                var date = dateValue ? new Date(dateValue + 'T00:00:00') : null;
+                var parts = time.value.split(':').map(Number);
+                var start = new Date(2000, 0, 1, parts[0], parts[1]);
+                var end = new Date(start.getTime() + 90 * 60000);          // dining time: 90 minutes
+                var clock = function (d) { return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); };
+                set('month', date ? date.toLocaleDateString('en-US', { month: 'short' }) : '—');
+                set('day', date ? String(date.getDate()).padStart(2, '0') : '—');
+                set('daytext', (date ? date.toLocaleDateString('en-GB', { weekday: 'long' }) : '') + (parts[0] < 16 ? ' lunch' : ' evening'));
+                set('time', clock(start).replace(/ (AM|PM)$/, '') + ' – ' + clock(end));
+                set('guests', size.value);
+                set('area', area ? form.querySelector('label[for="' + area.id + '"]').textContent : 'No preference');
+                set('request', textarea.value.trim() || 'None');
+                mdAlignDetailGrid(document.getElementById('reviewReservationPopup'), document.querySelector('#reviewReservationPopup .modal-body'));
+                reviewPopup.show();
+            });
+            form.addEventListener('change', function (e) {
+                if (e.target.name === 'reservationTime') timeError.classList.add('d-none');
+            });
+
+            // Upcoming reservations: click a row (not its Edit/Cancel buttons) to see its details
+            var detailEl = document.getElementById('reservationDetailPopup');
+            var detailPopup = new bootstrap.Modal(detailEl);
+            function openDetail(row) {
+                detailEl.querySelector('[data-detail-code]').textContent = row.querySelector('.md-res-code').textContent;
+                // The status tag is inside the date block, so the header tag stays empty
+                detailEl.querySelector('[data-detail-badge]').innerHTML = '';
+                var body = detailEl.querySelector('[data-detail-body]');
+                body.innerHTML = '';
+                body.appendChild(row.querySelector('template[data-detail]').content.cloneNode(true));
+                // 2nd column of the detail grid starts in line with the guests icon (wwwroot/js/reservation-popup.js)
+                mdAlignDetailGrid(detailEl, body);
+                var edit = detailEl.querySelector('[data-detail-edit]');
+                edit.classList.toggle('d-none', !row.dataset.edit);
+                edit.href = row.dataset.edit || '#';
+                // Cancel button carries this reservation's text for the cancel pop-up
+                var cancel = detailEl.querySelector('[data-detail-cancel]');
+                cancel.classList.toggle('d-none', !row.dataset.cancelDetails);
+                cancel.dataset.id = row.querySelector('.md-res-code').textContent;   // backend: the reservationID
+                cancel.dataset.code = row.querySelector('.md-res-code').textContent;
+                cancel.dataset.details = row.dataset.cancelDetails || '';
+                cancel.dataset.deadline = row.dataset.cancelDeadline || '';
+                detailEl.querySelector('.md-detail-footer').classList.toggle('d-none', !row.dataset.edit && !row.dataset.cancelDetails);
+                detailPopup.show();
+            }
+
+            // Cancel inside the details pop-up: close it, then open the cancel pop-up for the same reservation
+            var cancelPopup = new bootstrap.Modal(document.getElementById('cancelReservationPopup'));
+            detailEl.querySelector('[data-detail-cancel]').addEventListener('click', function () {
+                var button = this;
+                detailEl.addEventListener('hidden.bs.modal', function () { cancelPopup.show(button); }, { once: true });
+                detailPopup.hide();
+            });
+
+            // Opened from the Overview card (/Customer/Reservations?view=R-0041): show that reservation's pop-up
+            var viewCode = new URLSearchParams(window.location.search).get('view');
+            if (viewCode) {
+                document.querySelectorAll('.md-res-click').forEach(function (row) {
+                    if (row.querySelector('.md-res-code').textContent.trim() === viewCode) openDetail(row);
+                });
+            }
+
+            document.querySelectorAll('.md-res-click').forEach(function (row) {
+                row.addEventListener('click', function () { openDetail(row); });
+                row.addEventListener('keydown', function (e) {
+                    if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); openDetail(row); }
+                });
+            });
+
+            // The Cancel reservation pop-up is filled by confirm-popup.js (loaded by the layout)
+
+            updateSummary();
+        })();
+    </script>
+}

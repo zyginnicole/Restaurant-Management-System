@@ -1,0 +1,29 @@
+﻿@model RestaurantManagementSystem.Model.Menu
+
+<article class="md-menu-card @(Model.isAvailable ? "" : "is-unavailable")">
+    <div class="md-photo" style="background-image:url('@Model.menuImageUrl'); background-size:cover; background-position:center;">
+        @if (Model.isAvailable)
+        {
+            <span class="md-badge md-badge-available md-photo-badge">Available</span>
+        }
+        else
+        {
+            <span class="md-badge md-badge-neutral md-photo-badge">Sold out today</span>
+        }
+    </div>
+    <div class="md-menu-card-body">
+        <div class="md-menu-card-head">
+            <h3>@Model.menuName</h3>
+            <span class="md-price">RM @Model.menuPrice.ToString("0.00")</span>
+        </div>
+        <p>@Model.menuDescription</p>
+        @if (Model.isAvailable)
+        {
+            <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="@Model.menuPrice.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)">Add to order</button>
+        }
+        else
+        {
+            <button type="button" class="btn btn-md-outline w-100" disabled>Unavailable</button>
+        }
+    </div>
+</article>
