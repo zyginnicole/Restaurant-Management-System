@@ -6,6 +6,7 @@
     ViewData["ActiveNav"] = "Overview";
     ViewData["Eyebrow"] = "Good evening";
     ViewData["Heading"] = HttpContext.Session.GetUserName() ?? "Welcome";
+    Layout = "_CustomerLayout";
 
     // Next reservations card: the customer's Pending / Confirmed (incl. Seated) reservations in the next 7 days, soonest first.
     // Backend: replace this list with the query result. The card always has two slots:

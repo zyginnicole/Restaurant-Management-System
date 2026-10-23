@@ -7,6 +7,7 @@
     ViewData["ActiveNav"] = "Dashboard";
     ViewData["Eyebrow"] = "Wednesday, 16 September 2026 · Dinner service";
     ViewData["Heading"] = "Good evening, " + (HttpContext.Session.GetUserName() ?? "").Split(' ')[0];
+    Layout = "_DashboardLayout";
 }
 
 @* Example data from the design. Replace with today's Reservations and Orders later.
