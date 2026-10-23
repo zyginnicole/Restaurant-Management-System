@@ -155,5 +155,75 @@ namespace RestaurantManagementSystem.Services
             }
             return available;
         }
+
+        //4. Create a booking. Returns (new booking, null) when saved, or (null, error message).
+        //The free table is checked again right before saving, in case someone else just took it.
+        public async Task<(Reservation? booking, string? error)> CreateAsync(int custId, DateTime start, int partySize,
+            int? areaId, string? specialRequest, bool byStaff = false, int? staffId = null)
+        {
+            var error = await ValidateRequestAsync(start, partySize, byStaff);
+            if (error != null)
+                return (null, error);
+
+            //Best-fit free table (GetFreeTablesAsync already sorts smallest first)
+            var table = (await GetFreeTablesAsync(start, partySize, areaId)).FirstOrDefault();
+            if (table == null)
+                return (null, "Sorry, no table is free at that time. Please choose another time.");
+
+            var settings = await _settings.GetAsync();
+            var booking = new Reservation
+            {
+                custID = custId,
+                tableID = table.tableID,
+                staffID = staffId,
+                reservationDateTime = start,
+                partySize = partySize,
+                specialRequest = string.IsNullOrWhiteSpace(specialRequest) ? null : specialRequest.Trim(),
+                //Admin > Settings: auto-confirm on = Confirmed straight away, off = staff must approve
+                reservationStatus = settings.autoConfirm ? ReservationStatus.Confirmed : ReservationStatus.Pending
+            };
+
+            _db.Reservations.Add(booking);
+            await _db.SaveChangesAsync();
+            return (booking, null);
+        }
+
+        //5. Customer cancels their own booking. Returns an error message, or null when cancelled.
+        public async Task<string?> CancelByCustomerAsync(int reservationId, int custId)
+        {
+            //custId check: a customer can never cancel someone else's booking
+            var booking = await _db.Reservations
+                .FirstOrDefaultAsync(r => r.reservationID == reservationId && r.custID == custId);
+            if (booking == null)
+                return "Reservation not found.";
+
+            //Seated / Completed / Cancelled / No-show / Declined can't be cancelled
+            if (booking.reservationStatus != ReservationStatus.Pending && booking.reservationStatus != ReservationStatus.Confirmed)
+                return "This reservation can no longer be cancelled.";
+
+            var settings = await _settings.GetAsync();
+            if (DateTime.Now > CancelDeadline(booking, settings))
+                return $"Reservations can only be cancelled online up to {settings.cancelWindowHours} hours before. Please call us.";
+
+            booking.reservationStatus = ReservationStatus.Cancelled;
+            await _db.SaveChangesAsync();
+            return null;
+        }
+
+        //Last moment a customer can still cancel online (also shown on the page)
+        public static DateTime CancelDeadline(Reservation booking, SystemSetting settings)
+            => booking.reservationDateTime.AddHours(-settings.cancelWindowHours);
+
+        //6. The customer's active bookings from today on, soonest first (with table + area for display)
+        public async Task<List<Reservation>> GetUpcomingForCustomerAsync(int custId)
+        {
+            return await _db.Reservations.AsNoTracking()
+                .Include(r => r.DiningTable!).ThenInclude(t => t.DiningArea)
+                .Where(r => r.custID == custId
+                         && ReservationStatus.Active.Contains(r.reservationStatus)
+                         && r.reservationDateTime >= DateTime.Today)
+                .OrderBy(r => r.reservationDateTime)
+                .ToListAsync();
+        }
     }
 }

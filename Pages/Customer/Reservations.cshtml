@@ -1,5 +1,6 @@
 ﻿@page
 @model RestaurantManagementSystem.Pages.Customer.ReservationsModel
+@using RestaurantManagementSystem.Services
 @{
     ViewData["Title"] = "Reservations";
     ViewData["ActiveNav"] = "Reservations";
@@ -8,15 +9,54 @@
     ViewData["Subtitle"] = "Choose your party size first — we'll show the times that fit.";
     Layout = "_CustomerLayout";
 
-    // Example time slots – later from the backend (Full = no free table for this party size / date / area)
-    var lunchSlots = new[] { "12:00", "12:15", "12:30", "13:00" };
-    var dinnerSlots = new[] { "18:30", "18:45", "19:00", "19:15", "19:30", "19:45", "20:00", "20:15", "20:30", "20:45", "21:00" };
-    var fullSlots = new[] { "19:30", "20:00", "20:15" };
-    var selectedSlot = "19:00";
+    var settings = Model.Settings;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    // Time slots of the chosen date: lunch before 16:00, dinner after. Full = not in FreeSlots.
+    var lunchSlots = Model.AllSlots.Where(s => s.Hour < 16).ToList();
+    var dinnerSlots = Model.AllSlots.Where(s => s.Hour >= 16).ToList();
+    var fullCount = Model.AllSlots.Count(s => !Model.FreeSlots.Contains(s));
+    var guestsText = Model.PartySize + (Model.PartySize == 1 ? " guest" : " guests");
+    var areaText = Model.Area == "Any" ? "" : " " + Model.Area;
+    var chips = new[] { "Window seat", "Quiet area", "High chair", "Wheelchair access" };
+    var requestParts = (Model.SpecialRequest ?? "").Split(" · ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
-@* Example data from the design. Replace with real data later.
-   Status colours: Pending red · Confirmed blue (same scheme as every module). *@
+@functions {
+    // "R-0041"
+    static string Code(RestaurantManagementSystem.Model.Reservation r) => "R-" + r.reservationID.ToString("D4");
+    // CSS name for the status: is-pending / badge md-badge-pending …
+    static string StatusCss(string status) => status.ToLowerInvariant().Replace("-", "");
+    // "7:30 – 9:30 PM"
+    static string TimeRange(DateTime start, int minutes)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var end = start.AddMinutes(minutes);
+        return start.ToString("h:mm", inv) + (start.ToString("tt", inv) == end.ToString("tt", inv) ? "" : " " + start.ToString("tt", inv))
+            + " – " + end.ToString("h:mm tt", inv);
+    }
+    // "Tonight" / "Sunday evening"
+    static string DayText(DateTime start)
+    {
+        var part = start.Hour < 16 ? "lunch" : "evening";
+        if (start.Date == DateTime.Today) return start.Hour < 16 ? "Today, lunch" : "Tonight";
+        if (start.Date == DateTime.Today.AddDays(1)) return "Tomorrow " + part;
+        return start.ToString("dddd", System.Globalization.CultureInfo.InvariantCulture) + " " + part;
+    }
+}
+
+@* Message after cancelling (TempData set by OnPostCancel) *@
+@if (TempData["ReservationMessage"] is string message)
+{
+    if (TempData["ReservationMessageIsError"] is true)
+    {
+        <p class="md-note-box md-note-box-danger md-section" role="alert">@message</p>
+    }
+    else
+    {
+        <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+    }
+}
 
 <div class="row md-grid md-section">
     @* ---------- New reservation form ---------- *@
@@ -26,44 +66,47 @@
                 <span class="md-card-label">New reservation</span>
             </div>
             <div class="md-card-body">
-                @* Field names match the Reservation model where possible; the backend joins
-                   reservationDate + reservationTime into reservationDateTime and assigns the table. *@
+                @* Changing party size, date or area reloads the page (?partySize=&date=&area=) so the times are recalculated.
+                   OnPost joins reservationDate + reservationTime into reservationDateTime and assigns the best free table. *@
                 <form method="post" id="reservationForm">
                     <div class="row g-3 md-form-section">
                         <div class="col-sm-6">
                             <label class="md-label" for="partySize">1 · Party size</label>
-                            <select class="form-select md-input" id="partySize" name="partySize">
-                                @for (int n = 1; n <= 20; n++)
+                            <select class="form-select md-input" id="partySize" name="partySize" data-reload>
+                                @for (int n = settings.minPartySize; n <= settings.maxPartySize; n++)
                                 {
-                                    <option value="@n" selected="@(n == 4)">@n @(n == 1 ? "guest" : "guests")</option>
+                                    <option value="@n" selected="@(n == Model.PartySize)">@n @(n == 1 ? "guest" : "guests")</option>
                                 }
                             </select>
                         </div>
                         <div class="col-sm-6">
                             <label class="md-label" for="reservationDate">2 · Date</label>
-                            <input class="form-control md-input" id="reservationDate" name="reservationDate" type="date" value="2026-09-27" min="2026-09-16" />
+                            <input class="form-control md-input" id="reservationDate" name="reservationDate" type="date" data-reload
+                                   value="@Model.Date.ToString("yyyy-MM-dd", inv)"
+                                   min="@DateTime.Today.ToString("yyyy-MM-dd", inv)"
+                                   max="@DateTime.Today.AddDays(settings.bookingWindowDays).ToString("yyyy-MM-dd", inv)" />
                         </div>
                     </div>
 
-                    @* Dining area: DiningTable.diningArea (Indoor, Outdoor, VIP) or no preference *@
+                    @* Dining area: active DiningAreas (Indoor, Outdoor, VIP) or no preference *@
                     <div class="md-form-section">
                         <span class="md-label" id="areaLabel">3 · Dining area</span>
                         <div class="md-choice md-choice-bordered" role="radiogroup" aria-labelledby="areaLabel">
-                            <input type="radio" class="btn-check" name="diningArea" id="areaAny" value="Any" />
+                            <input type="radio" class="btn-check" name="diningArea" id="areaAny" value="Any" data-reload checked="@(Model.Area == "Any")" />
                             <label for="areaAny">No preference</label>
-                            <input type="radio" class="btn-check" name="diningArea" id="areaIndoor" value="Indoor" />
-                            <label for="areaIndoor">Indoor</label>
-                            <input type="radio" class="btn-check" name="diningArea" id="areaOutdoor" value="Outdoor" checked />
-                            <label for="areaOutdoor">Outdoor</label>
-                            <input type="radio" class="btn-check" name="diningArea" id="areaVip" value="VIP" />
-                            <label for="areaVip">VIP</label>
+                            @foreach (var areaName in Model.AreaNames)
+                            {
+                                var areaId = "area" + areaName.Replace(" ", "");
+                                <input type="radio" class="btn-check" name="diningArea" id="@areaId" value="@areaName" data-reload checked="@(Model.Area == areaName)" />
+                                <label for="@areaId">@areaName</label>
+                            }
                         </div>
                     </div>
 
                     @* Time slots: Full ones are disabled (crossed out). Light grey box around the whole time section. *@
                     <div class="md-time-box md-form-section">
                         <div class="md-slot-head">
-                            <span class="md-label mb-0" id="timeLabel">4 · Time · <span data-date-label>Sunday 27 September</span></span>
+                            <span class="md-label mb-0" id="timeLabel">4 · Time · <span data-date-label>@Model.Date.ToString("dddd d MMMM", inv)</span></span>
                             <ul class="md-slot-legend md-slot-legend-ink" aria-hidden="true">
                                 <li><i class="is-available"></i>Available</li>
                                 <li><i class="is-full"></i>Full</li>
@@ -71,52 +114,72 @@
                             </ul>
                         </div>
 
-                        <div role="radiogroup" aria-labelledby="timeLabel">
-                            <span class="md-slot-group">Lunch</span>
-                            <div class="md-slots md-slots-ink">
-                                @foreach (var slot in lunchSlots)
+                        @if (Model.AllSlots.Count == 0)
+                        {
+                            <p class="md-note-box md-note-box-danger">There are no bookable times on this date (closed, fully blocked or already past). Please choose another date.</p>
+                        }
+                        else
+                        {
+                            <div role="radiogroup" aria-labelledby="timeLabel">
+                                @foreach (var group in new[] { ("Lunch", lunchSlots), ("Dinner", dinnerSlots) })
                                 {
-                                    var id = "slot" + slot.Replace(":", "");
-                                    <input type="radio" class="btn-check" name="reservationTime" id="@id" value="@slot" disabled="@fullSlots.Contains(slot)" checked="@(slot == selectedSlot)" />
-                                    <label for="@id">@slot</label>
+                                    if (group.Item2.Count == 0) continue;
+                                    <span class="md-slot-group">@group.Item1</span>
+                                    <div class="md-slots md-slots-ink">
+                                        @foreach (var slot in group.Item2)
+                                        {
+                                            var value = slot.ToString("HH:mm", inv);
+                                            var id = "slot" + value.Replace(":", "");
+                                            var free = Model.FreeSlots.Contains(slot);
+                                            <input type="radio" class="btn-check" name="reservationTime" id="@id" value="@value" disabled="@(!free)" checked="@(free && value == Model.SelectedTime)" />
+                                            <label for="@id">@value</label>
+                                        }
+                                    </div>
                                 }
                             </div>
 
-                            <span class="md-slot-group">Dinner</span>
-                            <div class="md-slots md-slots-ink">
-                                @foreach (var slot in dinnerSlots)
-                                {
-                                    var id = "slot" + slot.Replace(":", "");
-                                    <input type="radio" class="btn-check" name="reservationTime" id="@id" value="@slot" disabled="@fullSlots.Contains(slot)" checked="@(slot == selectedSlot)" />
-                                    <label for="@id">@slot</label>
-                                }
-                            </div>
-                        </div>
+                            @* Shown only when some slots are full *@
+                            if (Model.FreeSlots.Count == 0)
+                            {
+                                <p class="md-note-box md-note-box-danger">No table is free for @guestsText@areaText on this date. Try another area or date.</p>
+                            }
+                            else if (fullCount > 0)
+                            {
+                                <p class="md-note-box md-note-box-danger">Crossed-out times are full for @guestsText@areaText.</p>
+                            }
+                        }
 
                         <p class="md-field-error d-none" id="timeError" role="alert">Choose a time to continue.</p>
-
-                        @* Shown only when some slots are full – suggest the nearest free times *@
-                        <p class="md-note-box md-note-box-danger">20:00 and 20:15 are full for 4 guests Outdoor. Nearest available: 19:45 or 20:30.</p>
                     </div>
 
                     @* Special request: Reservation.specialRequest. Chips add common requests to the text. *@
                     <div class="md-form-section">
                         <label class="md-label" for="specialRequest">Special request (optional)</label>
                         <textarea class="form-control md-input" id="specialRequest" name="specialRequest" rows="3"
-                                  placeholder="Allergies, occasion, seating">Celebrating a birthday · Window seat</textarea>
+                                  placeholder="Allergies, occasion, seating">@Model.SpecialRequest</textarea>
                         <div class="md-chips md-chips-ink">
-                            <button type="button" class="md-chip active" data-chip="Window seat" aria-pressed="true">Window seat</button>
-                            <button type="button" class="md-chip" data-chip="Quiet area" aria-pressed="false">Quiet area</button>
-                            <button type="button" class="md-chip" data-chip="High chair" aria-pressed="false">High chair</button>
-                            <button type="button" class="md-chip" data-chip="Wheelchair access" aria-pressed="false">Wheelchair access</button>
+                            @foreach (var chip in chips)
+                            {
+                                var on = requestParts.Contains(chip);
+                                <button type="button" class="md-chip @(on ? "active" : "")" data-chip="@chip" aria-pressed="@(on ? "true" : "false")">@chip</button>
+                            }
                         </div>
                     </div>
 
-                    <p class="md-hint md-form-section">Free cancellation until 2 hours before your booking. Large parties (9 or more) are confirmed by our team.</p>
+                    <p class="md-hint md-form-section">
+                        Free cancellation until @settings.cancelWindowHours hours before your booking.
+                        @(settings.autoConfirm ? "Your table is confirmed straight away." : "Our team confirms each booking.")
+                    </p>
+
+                    @* Booking failed (OnPost): e.g. the time was just taken *@
+                    @if (Model.ErrorMessage != null)
+                    {
+                        <p class="md-note-box md-note-box-danger md-form-section" role="alert">@Model.ErrorMessage</p>
+                    }
 
                     @* Opens the review pop-up first; the form is submitted from there *@
-                    <button type="button" class="btn btn-md-green-soft w-100" id="confirmButton">
-                        Confirm reservation · <span data-summary-guests>4 guests</span> · <span data-summary-time>19:00</span>
+                    <button type="button" class="btn btn-md-green-soft w-100" id="confirmButton" disabled="@(Model.FreeSlots.Count == 0)">
+                        Confirm reservation · <span data-summary-guests>@guestsText</span> · <span data-summary-time>choose a time</span>
                     </button>
                 </form>
             </div>
@@ -128,137 +191,93 @@
         <section class="md-card h-100">
             <div class="md-card-header">
                 <span class="md-card-label">Your upcoming reservations</span>
-                <span class="md-card-meta">3 active</span>
+                <span class="md-card-meta">@Model.Upcoming.Count active</span>
             </div>
             @* One row per Pending / Confirmed / Seated reservation, soonest first.
-               Seated (Confirmed + guests arrived) has no Edit/Cancel – the visit is in progress.
-               Completed and Cancelled reservations are shown on the History page.
+               Seated has no Edit/Cancel – the visit is in progress. Completed and Cancelled are on the History page.
                Clicking a row opens #reservationDetailPopup with the row's <template data-detail>; Edit and Cancel are inside that pop-up.
-               data-edit = edit page link, data-cancel-details / data-cancel-deadline = text for the cancel pop-up (leave empty for Seated). *@
+               data-id = reservationID (posted by the cancel pop-up), data-edit = edit page link,
+               data-cancel-details / data-cancel-deadline = text for the cancel pop-up (empty when it can't be cancelled online). *@
+            @if (Model.Upcoming.Count == 0)
+            {
+                <p class="md-empty">No upcoming reservations yet.</p>
+            }
             <ul class="md-res-list">
-                <li class="md-res-item md-res-click is-seated" data-edit="" tabindex="0" role="button" aria-haspopup="dialog">
-                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                        <span class="md-date-tile-month">Sep</span>
-                        <span class="md-date-tile-day">16</span>
-                    </div>
-                    <div class="md-res-item-main">
-                        <div class="md-res-item-top">
-                            <span class="md-res-code">R-0047</span>
-                            <span class="md-badge md-badge-seated">Seated</span>
+                @foreach (var r in Model.Upcoming)
+                {
+                    var status = r.reservationStatus;
+                    var css = StatusCss(status);
+                    var seated = status == ReservationStatus.Seated;
+                    var deadline = ReservationService.CancelDeadline(r, settings);
+                    var canCancel = !seated && DateTime.Now <= deadline;
+                    var table = r.DiningTable?.tableNumber + " " + r.DiningTable?.DiningArea?.areaName;
+                    var guests = r.partySize + (r.partySize == 1 ? " guest" : " guests");
+                    var start = r.reservationDateTime;
+                    <li class="md-res-item md-res-click is-@css" data-id="@r.reservationID"
+                        data-edit="@(seated ? "" : "/Customer/EditReservation?id=" + r.reservationID)"
+                        data-cancel-details="@(canCancel ? start.ToString("dddd, d MMMM yyyy · HH:mm", inv) + " · " + guests + " · " + table : "")"
+                        data-cancel-deadline="@(canCancel ? deadline.ToString("HH:mm 'on' d MMMM", inv) : "")"
+                        tabindex="0" role="button" aria-haspopup="dialog">
+                        <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                            <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
+                            <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
                         </div>
-                        <span class="md-res-item-info">Tonight · 19:00 · 3 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-05 Outdoor</span>
-                        <span class="md-res-item-note">You're at your table – enjoy your evening. Order from the Menu at any time.</span>
-                    </div>
-                    @* Pop-up details (copied into #reservationDetailPopup when the row is clicked) *@
-                    <template data-detail>
-                        @* Same layout as History / Overview: date tile + status, day, time · guests, table; then the detail grid *@
-                        <div class="md-next-res md-detail-res">
-                            <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
-                                <span class="md-date-tile-month">Sep</span>
-                                <span class="md-date-tile-day">16</span>
+                        <div class="md-res-item-main">
+                            <div class="md-res-item-top">
+                                <span class="md-res-code">@Code(r)</span>
+                                <span class="md-badge md-badge-@css">@status</span>
                             </div>
-                            <div class="md-next-res-info">
-                                <span class="md-next-slot-code"><span class="md-badge md-badge-seated">Seated</span></span>
-                                <div class="md-res-date">Tonight</div>
-                                <div class="md-next-res-row">
-                                    <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>7:00 – 8:30 PM</span>
-                                    <span><i class="bi bi-person" aria-hidden="true"></i>3 <span class="visually-hidden">guests</span></span>
-                                </div>
-                                <div class="md-next-res-row">
-                                    <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-05 · Outdoor</span>
-                                </div>
-                            </div>
+                            <span class="md-res-item-info">@(start.Date == DateTime.Today ? "Today · " : "")@start.ToString("HH:mm", inv) · @guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@table</span>
+                            <span class="md-res-item-note">
+                                @if (seated)
+                                {
+                                    @:You're at your table – enjoy your meal. Order from the Menu at any time.
+                                }
+                                else if (status == ReservationStatus.Pending)
+                                {
+                                    @:Waiting for our team to confirm.
+                                }
+                                else if (canCancel)
+                                {
+                                    @:Free cancellation until @deadline.ToString(deadline.Date == start.Date ? "HH:mm" : "HH:mm, d MMM", inv)
+                                }
+                                else
+                                {
+                                    @:To change or cancel now, please call us@(settings.phone != null ? " on " + settings.phone : "").
+                                }
+                            </span>
                         </div>
-                        <dl class="md-detail-grid">
-                            <div><dt>Order</dt><dd>ORD-0087 · served, bill not paid yet</dd></div>
-                            <div><dt>Booked on</dt><dd>12 Sep 2026, 10:15</dd></div>
-                            <div class="is-wide"><dt>Special request</dt><dd>High chair for a child</dd></div>
-                            <div class="is-wide"><dt>Status</dt><dd>Seated at 19:04 – your visit is in progress</dd></div>
-                        </dl>
-                    </template>
-                </li>
-                <li class="md-res-item md-res-click is-confirmed" data-edit="/Customer/EditReservation?id=41" data-cancel-details="Sunday, 20 September 2026 · 19:30 · 2 guests · T-07 Indoor" data-cancel-deadline="17:30 on 20 September" tabindex="0" role="button" aria-haspopup="dialog">
-                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                        <span class="md-date-tile-month">Sep</span>
-                        <span class="md-date-tile-day">20</span>
-                    </div>
-                    <div class="md-res-item-main">
-                        <div class="md-res-item-top">
-                            <span class="md-res-code">R-0041</span>
-                            <span class="md-badge md-badge-confirmed">Confirmed</span>
-                        </div>
-                        <span class="md-res-item-info">19:30 · 2 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-07 Indoor</span>
-                        <span class="md-res-item-note">Free cancellation until 17:30</span>
-                    </div>
-                    @* Pop-up details (copied into #reservationDetailPopup when the row is clicked) *@
-                    <template data-detail>
-                        @* Same layout as History / Overview: date tile + status, day, time · guests, table; then the detail grid *@
-                        <div class="md-next-res md-detail-res">
-                            <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
-                                <span class="md-date-tile-month">Sep</span>
-                                <span class="md-date-tile-day">20</span>
-                            </div>
-                            <div class="md-next-res-info">
-                                <span class="md-next-slot-code"><span class="md-badge md-badge-confirmed">Confirmed</span></span>
-                                <div class="md-res-date">Sunday evening</div>
-                                <div class="md-next-res-row">
-                                    <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>7:30 – 9:00 PM</span>
-                                    <span><i class="bi bi-person" aria-hidden="true"></i>2 <span class="visually-hidden">guests</span></span>
+                        @* Pop-up details (copied into #reservationDetailPopup when the row is clicked) *@
+                        <template data-detail>
+                            <div class="md-next-res md-detail-res">
+                                <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
+                                    <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
+                                    <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
                                 </div>
-                                <div class="md-next-res-row">
-                                    <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-07 · Indoor</span>
+                                <div class="md-next-res-info">
+                                    <span class="md-next-slot-code"><span class="md-badge md-badge-@css">@status</span></span>
+                                    <div class="md-res-date">@DayText(start)</div>
+                                    <div class="md-next-res-row">
+                                        <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>@TimeRange(start, settings.diningMinutes)</span>
+                                        <span><i class="bi bi-person" aria-hidden="true"></i>@r.partySize <span class="visually-hidden">guests</span></span>
+                                    </div>
+                                    <div class="md-next-res-row">
+                                        <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@r.DiningTable?.tableNumber · @r.DiningTable?.DiningArea?.areaName</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <dl class="md-detail-grid">
-                            <div><dt>Free cancellation</dt><dd>Until 17:30 on 20 September</dd></div>
-                            <div><dt>Booked on</dt><dd>14 Sep 2026, 21:12</dd></div>
-                            <div class="is-wide"><dt>Special request</dt><dd>Quiet table away from the entrance, if available.</dd></div>
-                            <div class="is-wide"><dt>Status</dt><dd>Confirmed by our team on 14 Sep, 21:30</dd></div>
-                        </dl>
-                    </template>
-                </li>
-                <li class="md-res-item md-res-click is-pending" data-edit="/Customer/EditReservation?id=49" data-cancel-details="Sunday, 4 October 2026 · 20:00 · 8 guests · VIP" data-cancel-deadline="18:00 on 4 October" tabindex="0" role="button" aria-haspopup="dialog">
-                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                        <span class="md-date-tile-month">Oct</span>
-                        <span class="md-date-tile-day">04</span>
-                    </div>
-                    <div class="md-res-item-main">
-                        <div class="md-res-item-top">
-                            <span class="md-res-code">R-0049</span>
-                            <span class="md-badge md-badge-pending">Pending</span>
-                        </div>
-                        <span class="md-res-item-info">20:00 · 8 guests · VIP</span>
-                        <span class="md-res-item-note">Waiting for our team to confirm, usually within 2 hours.</span>
-                    </div>
-                    @* Pop-up details (copied into #reservationDetailPopup when the row is clicked) *@
-                    <template data-detail>
-                        @* Same layout as History / Overview: date tile + status, day, time · guests, table; then the detail grid *@
-                        <div class="md-next-res md-detail-res">
-                            <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
-                                <span class="md-date-tile-month">Oct</span>
-                                <span class="md-date-tile-day">04</span>
-                            </div>
-                            <div class="md-next-res-info">
-                                <span class="md-next-slot-code"><span class="md-badge md-badge-pending">Pending</span></span>
-                                <div class="md-res-date">Sunday evening</div>
-                                <div class="md-next-res-row">
-                                    <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>8:00 – 9:30 PM</span>
-                                    <span><i class="bi bi-person" aria-hidden="true"></i>8 <span class="visually-hidden">guests</span></span>
-                                </div>
-                                <div class="md-next-res-row">
-                                    <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>VIP · table assigned when confirmed</span>
-                                </div>
-                            </div>
-                        </div>
-                        <dl class="md-detail-grid">
-                            <div><dt>Free cancellation</dt><dd>Until 18:00 on 4 October</dd></div>
-                            <div><dt>Booked on</dt><dd>16 Sep 2026, 09:40</dd></div>
-                            <div class="is-wide"><dt>Special request</dt><dd>Business dinner, private room if possible.</dd></div>
-                            <div class="is-wide"><dt>Status</dt><dd>Waiting for our team to confirm (large party)</dd></div>
-                        </dl>
-                    </template>
-                </li>
+                            <dl class="md-detail-grid">
+                                @if (!seated)
+                                {
+                                    <div><dt>Free cancellation</dt><dd>@(canCancel ? "Until " + deadline.ToString("HH:mm 'on' d MMMM", inv) : "Closed – please call us")</dd></div>
+                                }
+                                <div><dt>Booked on</dt><dd>@r.reservationCreateAt.ToString("d MMM yyyy, HH:mm", inv)</dd></div>
+                                <div class="is-wide"><dt>Special request</dt><dd>@(r.specialRequest ?? "None")</dd></div>
+                                <div class="is-wide"><dt>Status</dt><dd>@(seated ? "Seated – your visit is in progress" : status == ReservationStatus.Pending ? "Waiting for our team to confirm" : "Confirmed")</dd></div>
+                            </dl>
+                        </template>
+                    </li>
+                }
             </ul>
         </section>
     </div>
@@ -292,7 +311,11 @@
 
 @* ---------- Review pop-up: summary of the booking before it is sent ----------
    Filled by the script from the form. "Confirm booking" submits #reservationForm (form="" attribute). *@
-<div class="modal fade md-popup md-popup-narrow" id="reviewReservationPopup" tabindex="-1" aria-labelledby="reviewReservationTitle" aria-hidden="true">
+@{
+    var reviewStatus = settings.autoConfirm ? ReservationStatus.Confirmed : ReservationStatus.Pending;
+}
+<div class="modal fade md-popup md-popup-narrow" id="reviewReservationPopup" tabindex="-1" aria-labelledby="reviewReservationTitle" aria-hidden="true"
+     data-dining-minutes="@settings.diningMinutes">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -310,23 +333,26 @@
                         <span class="md-date-tile-day" data-review="day">—</span>
                     </div>
                     <div class="md-next-res-info">
-                        <span class="md-next-slot-code"><span class="md-badge md-badge-pending">Pending</span></span>
+                        <span class="md-next-slot-code"><span class="md-badge md-badge-@StatusCss(reviewStatus)">@reviewStatus</span></span>
                         <div class="md-res-date" data-review="daytext">—</div>
                         <div class="md-next-res-row">
                             <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i><span data-review="time">—</span></span>
                             <span><i class="bi bi-person" aria-hidden="true"></i><span data-review="guests">—</span> <span class="visually-hidden">guests</span></span>
                         </div>
                         <div class="md-next-res-row">
-                            <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i><span data-review="area">—</span> · table assigned when confirmed</span>
+                            <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i><span data-review="area">—</span> · best free table assigned for you</span>
                         </div>
                     </div>
                 </div>
                 <dl class="md-detail-grid">
-                    <div><dt>Name</dt><dd>Alexandra Beaumont</dd></div>
-                    <div><dt>Contact</dt><dd>0123456789</dd></div>
+                    <div><dt>Name</dt><dd>@Model.CustomerName</dd></div>
+                    <div><dt>Contact</dt><dd>@Model.CustomerPhone</dd></div>
                     <div class="is-wide"><dt>Special request</dt><dd data-review="request">—</dd></div>
                 </dl>
-                <p class="md-popup-note">Your booking is sent to our team and shows as Pending until it's confirmed. Free cancellation until 2 hours before your booking.</p>
+                <p class="md-popup-note">
+                    @(settings.autoConfirm ? "Your table is confirmed as soon as you book." : "Your booking is sent to our team and shows as Pending until it's confirmed.")
+                    Free cancellation until @settings.cancelWindowHours hours before your booking.
+                </p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-md-outline" data-bs-dismiss="modal">Edit details</button>
@@ -338,12 +364,13 @@
 
 @* ---------- Cancel reservation pop-up ----------
    Shared _ConfirmPopup: posts reservationId (data-id) + cancelReason to OnPostCancel.
-   Opened from the details pop-up's Cancel button, which carries data-id / data-code / data-details / data-deadline. *@
+   Opened from the details pop-up's Cancel button, which carries data-id / data-code / data-details / data-deadline.
+   cancelReason is not saved yet (no column on Reservation – asked the leader). *@
 @{
     var cancelReservationPopup = new ConfirmPopupView
     {
         Id = "cancelReservationPopup", Eyebrow = "Reservation", Title = "Cancel {code}?", Message = "{details}",
-        Note = "Free cancellation until {deadline}. After that, please call us on +60 4-261 0000.",
+        Note = "Free cancellation until {deadline}." + (settings.phone != null ? " After that, please call us on " + settings.phone + "." : ""),
         Handler = "Cancel", IdField = "reservationId",
         Reasons = new[] { "Change of plans", "Booked the wrong date or time", "Party size changed", "Other" },
         BackText = "Keep reservation", ConfirmText = "Cancel reservation", Danger = true
@@ -357,6 +384,18 @@
         (function () {
             var form = document.getElementById('reservationForm');
 
+            // Party size / date / area changed: reload with the new choices so the server recalculates the free times
+            form.addEventListener('change', function (e) {
+                if (!e.target.hasAttribute('data-reload') || !e.target.value) return;
+                var area = form.querySelector('input[name="diningArea"]:checked');
+                var query = new URLSearchParams({
+                    partySize: document.getElementById('partySize').value,
+                    date: document.getElementById('reservationDate').value,
+                    area: area ? area.value : 'Any'
+                });
+                window.location.search = query.toString();
+            });
+
             // Button summary: "Confirm reservation · 4 guests · 19:00"
             function updateSummary() {
                 var size = document.getElementById('partySize');
@@ -364,20 +403,7 @@
                 document.querySelector('[data-summary-guests]').textContent = size.options[size.selectedIndex].text;
                 document.querySelector('[data-summary-time]').textContent = time ? time.value : 'choose a time';
             }
-
-            // "Sunday 27 September" next to the time label
-            function updateDateLabel() {
-                var value = document.getElementById('reservationDate').value;
-                if (!value) return;
-                var date = new Date(value + 'T00:00:00');
-                document.querySelector('[data-date-label]').textContent =
-                    date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
-            }
-
-            form.addEventListener('change', function (e) {
-                if (e.target.id === 'reservationDate') updateDateLabel();
-                updateSummary();
-            });
+            form.addEventListener('change', updateSummary);
 
             // Request chips: add or remove the text in the Special request box
             var textarea = document.getElementById('specialRequest');
@@ -394,7 +420,9 @@
                 });
             });
             // Confirm button: check a time is chosen, then show the review pop-up with the form's values
-            var reviewPopup = new bootstrap.Modal(document.getElementById('reviewReservationPopup'));
+            var reviewEl = document.getElementById('reviewReservationPopup');
+            var reviewPopup = new bootstrap.Modal(reviewEl);
+            var diningMinutes = Number(reviewEl.dataset.diningMinutes) || 120;   // Admin > Settings > dining time
             var timeError = document.getElementById('timeError');
             document.getElementById('confirmButton').addEventListener('click', function () {
                 var time = form.querySelector('input[name="reservationTime"]:checked');
@@ -410,7 +438,7 @@
                 var date = dateValue ? new Date(dateValue + 'T00:00:00') : null;
                 var parts = time.value.split(':').map(Number);
                 var start = new Date(2000, 0, 1, parts[0], parts[1]);
-                var end = new Date(start.getTime() + 90 * 60000);          // dining time: 90 minutes
+                var end = new Date(start.getTime() + diningMinutes * 60000);
                 var clock = function (d) { return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); };
                 set('month', date ? date.toLocaleDateString('en-US', { month: 'short' }) : '—');
                 set('day', date ? String(date.getDate()).padStart(2, '0') : '—');
@@ -419,7 +447,7 @@
                 set('guests', size.value);
                 set('area', area ? form.querySelector('label[for="' + area.id + '"]').textContent : 'No preference');
                 set('request', textarea.value.trim() || 'None');
-                mdAlignDetailGrid(document.getElementById('reviewReservationPopup'), document.querySelector('#reviewReservationPopup .modal-body'));
+                mdAlignDetailGrid(reviewEl, reviewEl.querySelector('.modal-body'));
                 reviewPopup.show();
             });
             form.addEventListener('change', function (e) {
@@ -441,10 +469,10 @@
                 var edit = detailEl.querySelector('[data-detail-edit]');
                 edit.classList.toggle('d-none', !row.dataset.edit);
                 edit.href = row.dataset.edit || '#';
-                // Cancel button carries this reservation's text for the cancel pop-up
+                // Cancel button carries this reservation's id and text for the cancel pop-up
                 var cancel = detailEl.querySelector('[data-detail-cancel]');
                 cancel.classList.toggle('d-none', !row.dataset.cancelDetails);
-                cancel.dataset.id = row.querySelector('.md-res-code').textContent;   // backend: the reservationID
+                cancel.dataset.id = row.dataset.id;   // reservationID posted to OnPostCancel
                 cancel.dataset.code = row.querySelector('.md-res-code').textContent;
                 cancel.dataset.details = row.dataset.cancelDetails || '';
                 cancel.dataset.deadline = row.dataset.cancelDeadline || '';
