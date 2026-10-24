@@ -1,101 +1,78 @@
 @page
 @model RestaurantManagementSystem.Pages.Staff.WalkInModel
 @{
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var settings = Model.Settings;
+    var isToday = Model.Date == DateTime.Today;
+    var dateValue = Model.Date.ToString("yyyy-MM-dd", inv);
+
     ViewData["Title"] = "Book reservations";
     ViewData["Module"] = "Staff";
     ViewData["ActiveNav"] = "Reservations";
-    ViewData["Eyebrow"] = "Wednesday, 16 September 2026 · Dinner service";
+    ViewData["Eyebrow"] = Model.Date.ToString("dddd, d MMMM yyyy", inv) + (isToday ? " · Today" : "");
     ViewData["Heading"] = "Book reservations";
-    ViewData["Subtitle"] = "Book a table for a guest on any date and time";
+    ViewData["Subtitle"] = "Seat a walk-in now or book a table for a guest on any date";
     Layout = "_DashboardLayout";
-
-    // ---------- Example data – later from the database (see WalkInModel) ----------
-    var today = "2026-09-16";
-    var now = "20:40";
-
-    // DiningTables that can be booked (not Maintenance): tableNumber, diningArea, tableCapacity,
-    // and today's bookings on the table as "start-end" windows (booking time + 90 min + 15 min buffer)
-    var tables = new (string No, string Area, int Seats, string Busy)[]
-    {
-        ("T-01", "Indoor", 4, "22:00-23:45"), ("T-02", "Outdoor", 4, "20:45-22:30"),
-        ("T-03", "Indoor", 2, "20:15-22:00"), ("T-04", "Indoor", 2, "21:00-22:45"),
-        ("T-05", "Indoor", 4, ""),            ("T-06", "Indoor", 2, "19:30-21:15"),
-        ("T-07", "Indoor", 4, ""),            ("T-08", "Indoor", 4, "21:30-23:15"),
-        ("T-09", "Indoor", 4, ""),            ("T-10", "Indoor", 6, ""),
-        ("T-11", "Indoor", 4, ""),            ("T-12", "Indoor", 4, "19:00-20:45"),
-        ("T-13", "Outdoor", 4, ""),           ("T-14", "Outdoor", 4, ""),
-        ("T-15", "Outdoor", 2, ""),           ("T-16", "Outdoor", 4, "21:45-23:30"),
-        ("T-17", "Outdoor", 4, ""),           ("T-18", "Outdoor", 6, ""),
-        ("T-19", "Outdoor", 2, ""),           ("T-20", "VIP", 8, "20:00-21:45"),
-        ("T-21", "VIP", 8, ""),               ("T-22", "VIP", 6, "")
-    };
-
-    // ?table=T-05 (table clicked on the Reservations floor → Book Table) picks that table
-    string chosen = Request.Query["table"].ToString();
-    if (!tables.Any(t => t.No == chosen)) chosen = tables[0].No;
-    int partySize = 2;
-
-    // Booking times – all can be chosen; the first slot after now is picked to start with
-    var times = new[] { "12:00", "12:30", "13:00", "13:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30" };
-    var defaultTime = times.FirstOrDefault(t => string.CompareOrdinal(t, now) > 0) ?? times[0];
-
-    // Existing guests for "Find existing guest" (Customer: custID, custName, custPhone)
-    var guests = new (int Id, string Name, string Phone)[]
-    {
-        (12, "Sophia Haines", "+60 19-234 5678"), (15, "Eleanor Whitmore", "+60 12-012 3456"),
-        (21, "Marcus Delacroix", "+60 17-098 7654"), (27, "Victoria Blake", "+60 12-234 1111"),
-        (30, "Isabella Chen", "+60 13-345 6789"), (34, "Thomas Ashford", "+60 12-876 5432"),
-        (38, "Amelia Ross", "+60 14-567 8901"), (41, "Grace Lim", "+60 16-998 2210")
-    };
 }
 
 @section HeaderActions {
-    <a class="btn btn-md-outline md-header-btn" href="/Staff/Reservations"><i class="bi bi-arrow-left"></i>Back to reservations</a>
+    <a class="btn btn-md-outline md-header-btn" href="/Staff/Reservations?date=@dateValue"><i class="bi bi-arrow-left"></i>Back to reservations</a>
 }
 
 <div class="row md-grid md-section">
     <div class="col-lg-8 col-xl-7">
+        @* OnPost → ReservationService.CreateWalkInAsync (the server checks every rule again) *@
         <form method="post" id="walkInForm">
-            <input type="hidden" name="custId" id="custId" />
             <section class="md-card">
                 <div class="md-card-header">
-                    <span class="md-card-label">Guest details</span>
+                    <span class="md-card-label">Booking</span>
                 </div>
                 <div class="md-card-body">
-                    @* Date + time of the booking (any time can be chosen) *@
+                    @* Seat now (today only): the guests are at the door – the booking starts now and is Seated straight away *@
+                    @if (isToday)
+                    {
+                        <div class="md-switch-row mb-3">
+                            <div>
+                                <label class="md-switch-title" for="seatNow">Seat now</label>
+                                <span class="md-hint d-block mt-0">The guests are here. The booking starts now and the table is marked occupied.</span>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input md-switch" type="checkbox" role="switch" id="seatNow" name="seatNow" value="true" checked="@Model.SeatNow" />
+                            </div>
+                        </div>
+                    }
+
+                    @* Date reloads the page so the table list shows that day's bookings; time is off while Seat now is on *@
                     <div class="row g-3 mb-3">
                         <div class="col-sm-6">
                             <label class="md-label" for="reservationDate">Date</label>
-                            <input class="form-control md-input" id="reservationDate" name="reservationDate" type="date" min="@today" value="@today" required />
+                            <input class="form-control md-input" id="reservationDate" name="reservationDate" type="date" required
+                                   min="@DateTime.Today.ToString("yyyy-MM-dd", inv)" max="@DateTime.Today.AddDays(settings.bookingWindowDays).ToString("yyyy-MM-dd", inv)" value="@dateValue" />
                         </div>
                         <div class="col-sm-6">
                             <label class="md-label" for="reservationTime">Time</label>
-                            <select class="form-select md-input" id="reservationTime" name="reservationTime" data-md-select>
-                                @foreach (var t in times)
-                                {
-                                    <option value="@t" selected="@(t == defaultTime)">@t</option>
-                                }
-                            </select>
+                            <input class="form-control md-input" id="reservationTime" name="reservationTime" type="time" step="900" value="@Model.Time" required />
                         </div>
                     </div>
 
                     <div class="row g-3 mb-3">
-                        @* The table clicked on the floor is chosen *@
+                        @* The table clicked on the floor is chosen. data-busy = that day's bookings on the table *@
                         <div class="col-sm-7">
                             <label class="md-label" for="tableId">Table</label>
                             <select class="form-select md-input" id="tableId" name="tableId" data-md-select>
-                                @foreach (var t in tables)
+                                @foreach (var t in Model.Tables)
                                 {
-                                    <option value="@t.No" data-seats="@t.Seats" data-busy="@t.Busy" selected="@(t.No == chosen)">@t.No · @t.Area · @t.Seats seats</option>
+                                    <option value="@t.Table.tableID" data-no="@t.Table.tableNumber" data-seats="@t.Table.tableCapacity" data-busy="@t.Busy"
+                                            selected="@(t.Table.tableID == Model.TableId)">@t.Table.tableNumber · @t.Table.DiningArea?.areaName · @t.Table.tableCapacity seats</option>
                                 }
                             </select>
                         </div>
                         <div class="col-sm-5">
                             <label class="md-label" for="partySize">Guests</label>
                             <select class="form-select md-input" id="partySize" name="partySize">
-                                @for (int n = 1; n <= 12; n++)
+                                @for (int n = settings.minPartySize; n <= settings.maxPartySize; n++)
                                 {
-                                    <option selected="@(n == partySize)">@n</option>
+                                    <option selected="@(n == Model.PartySize)">@n</option>
                                 }
                             </select>
                         </div>
@@ -104,15 +81,22 @@
                             <p class="md-note-box md-note-box-danger mt-2 mb-0 d-none" id="tableTooSmall"></p>
                         </div>
                     </div>
+                </div>
+            </section>
 
-                    @* Choosing a guest from the list fills custId, name and phone *@
+            <section class="md-card md-section">
+                <div class="md-card-header">
+                    <span class="md-card-label">Guest details</span>
+                </div>
+                <div class="md-card-body">
+                    @* Choosing a guest fills name, email and phone *@
                     <div class="mb-3">
                         <label class="md-label" for="findGuest">Find existing guest</label>
-                        <input class="form-control md-input" id="findGuest" list="guestList" placeholder="Search by name or phone" autocomplete="off" />
+                        <input class="form-control md-input" id="findGuest" list="guestList" placeholder="Search by name, phone or email" autocomplete="off" />
                         <datalist id="guestList">
-                            @foreach (var g in guests)
+                            @foreach (var g in Model.Guests)
                             {
-                                <option value="@g.Name · @g.Phone" data-id="@g.Id"></option>
+                                <option value="@g.custName · @g.custPhone · @g.custEmail" data-id="@g.custID" data-name="@g.custName" data-phone="@g.custPhone" data-email="@g.custEmail"></option>
                             }
                         </datalist>
                     </div>
@@ -120,21 +104,33 @@
                     <div class="row g-3 mb-3">
                         <div class="col-sm-6">
                             <label class="md-label" for="guestName">Guest name</label>
-                            <input class="form-control md-input" id="guestName" name="guestName" maxlength="100" placeholder="Guest name" required />
+                            <input class="form-control md-input" id="guestName" name="guestName" maxlength="100" placeholder="Guest name" value="@Model.GuestName" required />
                         </div>
                         <div class="col-sm-6">
                             <label class="md-label" for="guestPhone">Phone</label>
-                            <input class="form-control md-input" id="guestPhone" name="guestPhone" type="tel" maxlength="20" placeholder="+60 1X-XXX XXXX" required />
+                            <input class="form-control md-input" id="guestPhone" name="guestPhone" type="tel" maxlength="20" placeholder="0123456789" value="@Model.GuestPhone" required />
+                        </div>
+                        <div class="col-12">
+                            <label class="md-label" for="guestEmail">Email</label>
+                            <input class="form-control md-input" id="guestEmail" name="guestEmail" type="email" maxlength="100" placeholder="guest@example.com" value="@Model.GuestEmail" required />
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="md-label" for="specialRequest">Requests or allergies</label>
-                        <textarea class="form-control md-input" id="specialRequest" name="specialRequest" rows="3" maxlength="300" placeholder="e.g. high chair, nut allergy"></textarea>
+                        <textarea class="form-control md-input" id="specialRequest" name="specialRequest" rows="3" maxlength="300" placeholder="e.g. high chair, nut allergy">@Model.SpecialRequest</textarea>
                     </div>
-                    <p class="md-hint mb-0">A booking made by staff is confirmed straight away. Name and phone are needed. The table is held for 90 minutes + 15-minute buffer, from Settings. When the guests arrive, use Seat on the Reservations page.</p>
+                    <p class="md-hint mb-0">
+                        A booking made by staff is confirmed straight away and holds the table for @settings.diningMinutes minutes.
+                        The email links it to the guest's account. A guest without an account registers with the same email to see this booking and order from the table.
+                    </p>
+
+                    @if (Model.ErrorMessage != null)
+                    {
+                        <p class="md-note-box md-note-box-danger mt-3 mb-0" role="alert">@Model.ErrorMessage</p>
+                    }
                 </div>
                 <div class="md-card-footer md-walkin-foot">
-                    <button type="submit" class="btn btn-md-dark" id="bookButton"><i class="bi bi-calendar-check me-2"></i>Book here</button>
+                    <button type="submit" class="btn btn-md-dark" id="bookButton"><i class="bi bi-calendar-check me-2"></i><span id="bookLabel">Book here</span></button>
                 </div>
             </section>
         </form>
@@ -146,63 +142,71 @@
     <script src="~/js/md-select.js" asp-append-version="true"></script>
     <script>
         (function () {
-            var today = '@today';
             var date = document.getElementById('reservationDate');
             var time = document.getElementById('reservationTime');
             var table = document.getElementById('tableId');
             var size = document.getElementById('partySize');
-            var name = document.getElementById('guestName');
-            var phone = document.getElementById('guestPhone');
+            var seatNow = document.getElementById('seatNow');   // only today
             var book = document.getElementById('bookButton');
-            var stay = 105;   // minutes a booking holds the table: 90 min + 15 min buffer (Settings)
+            var stay = @settings.diningMinutes;   // minutes a booking holds the table (Admin > Settings)
 
             function minutes(hhmm) { var p = hhmm.split(':'); return +p[0] * 60 + +p[1]; }
+            function nowHHmm() { var d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 
-            // Table info, clash / size warning, hint and required fields for the chosen date, time and table.
-            // Example data only knows today's bookings (data-busy); the backend checks the real ones.
-            function apply() {
+            // Date: reload so the table list shows that day's bookings (keeps the chosen table)
+            date.addEventListener('change', function () {
+                if (!date.value) return;
                 var option = table.options[table.selectedIndex];
+                window.location.search = '?date=' + date.value + (option ? '&table=' + encodeURIComponent(option.dataset.no) : '');
+            });
+
+            // Table info + clash / size warning for the chosen time and table (the server checks again on Book)
+            function apply() {
+                var seated = seatNow && seatNow.checked;
+                time.disabled = seated;
+                document.getElementById('bookLabel').textContent = seated ? 'Seat now' : 'Book here';
+
+                var option = table.options[table.selectedIndex];
+                if (!option) return;
                 var seats = +option.dataset.seats, guests = +size.value;
-                var start = minutes(time.value);
-                var busy = date.value === today && option.dataset.busy ? option.dataset.busy.split(' ') : [];
+                var start = minutes(seated ? nowHHmm() : (time.value || '00:00'));
+                var busy = option.dataset.busy ? option.dataset.busy.split(' ') : [];
                 var clash = busy.find(function (w) {
                     var p = w.split('-');
                     return start < minutes(p[1]) && minutes(p[0]) < start + stay;
                 });
 
-                document.getElementById('tableInfo').textContent = option.value + ' seats ' + seats + ' · ' +
+                document.getElementById('tableInfo').textContent = option.dataset.no + ' seats ' + seats + ' · ' +
                     (busy.length ? 'booked ' + busy.join(', ').replace(/-/g, '–') + ' on this day.' : 'no bookings on this day.');
 
-                var problem = guests > seats ? option.value + ' seats only ' + seats + '. Choose a bigger table for ' + guests + ' guests.'
-                    : clash ? option.value + ' is booked ' + clash.replace('-', '–') + '. Choose another time or table.' : '';
+                var problem = guests > seats ? option.dataset.no + ' seats only ' + seats + '. Choose a bigger table for ' + guests + ' guests.'
+                    : clash ? option.dataset.no + ' is booked ' + clash.replace('-', '–') + '. Choose another time or table.' : '';
                 var warning = document.getElementById('tableTooSmall');
                 warning.textContent = problem;
                 warning.classList.toggle('d-none', !problem);
                 book.disabled = !!problem;
             }
 
-            [date, time, table, size].forEach(function (el) { el.addEventListener('change', apply); });
+            [time, table, size].forEach(function (el) { el.addEventListener('change', apply); });
+            if (seatNow) seatNow.addEventListener('change', apply);
             apply();
 
-            // Find existing guest: "Sophia Haines · +60 19-234 5678" → custId, name, phone
+            // Find existing guest: fills name, email and phone
             var find = document.getElementById('findGuest');
+            function pickGuest(option) {
+                document.getElementById('guestName').value = option.dataset.name;
+                document.getElementById('guestPhone').value = option.dataset.phone;
+                document.getElementById('guestEmail').value = option.dataset.email;
+            }
             find.addEventListener('change', function () {
                 var value = this.value;
                 var option = Array.prototype.find.call(document.querySelectorAll('#guestList option'), function (o) { return o.value === value; });
-                if (!option) return;
-                var parts = value.split(' · ');
-                document.getElementById('custId').value = option.dataset.id;
-                name.value = parts[0];
-                phone.value = parts[1];
+                if (option) pickGuest(option);
             });
 
-            // ?guest=12 (Guests page "New booking"): fill in that guest
-            var guestId = new URLSearchParams(location.search).get('guest');
-            var preset = guestId && document.querySelector('#guestList option[data-id="' + guestId + '"]');
-            if (preset) {
-                find.value = preset.value;
-                find.dispatchEvent(new Event('change'));
-            }
+            // ?guest=12: fill in that guest
+            var preset = document.querySelector('#guestList option[data-id="@Model.PresetGuestId"]');
+            if (preset) { find.value = preset.value; pickGuest(preset); }
         })();
     </script>
 }

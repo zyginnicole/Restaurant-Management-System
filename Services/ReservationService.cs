@@ -254,6 +254,20 @@ namespace RestaurantManagementSystem.Services
                 .ToListAsync();
         }
 
+        //6b. The customer's finished bookings (Completed, Cancelled, No-show, Declined), newest first,
+        //with table + area, staff (who cancelled/declined) and the visit's orders + payment (History page)
+        public async Task<List<Reservation>> GetHistoryForCustomerAsync(int custId)
+        {
+            string[] ended = { ReservationStatus.Completed, ReservationStatus.Cancelled, ReservationStatus.NoShow, ReservationStatus.Declined };
+            return await _db.Reservations.AsNoTracking()
+                .Include(r => r.DiningTable!).ThenInclude(t => t.DiningArea)
+                .Include(r => r.Staff)
+                .Include(r => r.Orders).ThenInclude(o => o.Payment)
+                .Where(r => r.custID == custId && ended.Contains(r.reservationStatus))
+                .OrderByDescending(r => r.reservationDateTime)
+                .ToListAsync();
+        }
+
         //7. One of the customer's own bookings (with table, area and customer), or null if it isn't theirs.
         //Used by the Confirmed and Edit pages.
         public async Task<Reservation?> GetCustomerReservationAsync(int reservationId, int custId)
@@ -379,9 +393,7 @@ namespace RestaurantManagementSystem.Services
                 return $"{Code(booking)} is for {booking.reservationDateTime:d MMM}. Guests can only be seated on the day.";
 
             var table = booking.DiningTable!;
-            var seatedHere = await _db.Reservations.AnyAsync(r => r.tableID == booking.tableID
-                && r.reservationStatus == ReservationStatus.Seated && r.reservationID != booking.reservationID);
-            if (seatedHere || table.tableStatus == "Occupied")
+            if (await IsTableOccupiedAsync(table, booking.reservationID))
                 return $"{table.tableNumber} is still occupied. Move {Code(booking)} to a free table first.";
 
             booking.reservationStatus = ReservationStatus.Seated;
@@ -389,6 +401,15 @@ namespace RestaurantManagementSystem.Services
             table.tableStatus = "Occupied";
             await _db.SaveChangesAsync();
             return null;
+        }
+
+        //Someone is at this table right now: another Seated booking, or tableStatus Occupied (e.g. set by an order)
+        private async Task<bool> IsTableOccupiedAsync(DiningTable table, int? ignoreReservationId = null)
+        {
+            if (table.tableStatus == "Occupied") return true;
+            return await _db.Reservations.AnyAsync(r => r.tableID == table.tableID
+                && r.reservationStatus == ReservationStatus.Seated
+                && (ignoreReservationId == null || r.reservationID != ignoreReservationId));
         }
 
         //13. Confirmed → No-show. Only after the late-arrival hold (Admin > Settings lateHoldMinutes) has passed.
@@ -447,6 +468,78 @@ namespace RestaurantManagementSystem.Services
             booking.tableID = tableId;
             await _db.SaveChangesAsync();
             return null;
+        }
+
+        //16. Staff book a table for a guest (walk-in or phone booking): name, email, phone, table and time.
+        //The email links the booking to an account:
+        //  - a customer account with this email → the booking goes to that account (details unchanged);
+        //  - no account yet → a "guest profile" is created (name, email, phone, NO password). When the guest later
+        //    registers with this email, Register activates that same profile (AuthService), so the booking is already there.
+        //Staff rules (no notice / slot check); the chosen table must be free and big enough. Saved as Confirmed,
+        //or Seated straight away when seatNow (guests at the door: today only, table must be empty → Occupied).
+        public async Task<(Reservation? booking, string? error)> CreateWalkInAsync(string? name, string? email, string? phone,
+            DateTime start, int partySize, int tableId, string? specialRequest, int? staffId, bool seatNow)
+        {
+            // Guest details
+            name = name?.Trim();
+            var normalisedEmail = AuthService.NormaliseEmail(email);
+            var digits = new string((phone ?? "").Where(char.IsDigit).ToArray());
+            if (string.IsNullOrEmpty(name))
+                return (null, "Enter the guest's name.");
+            if (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(normalisedEmail) || normalisedEmail.Length == 0)
+                return (null, "Enter a valid email address for the guest.");
+            if (digits.Length < 10 || digits.Length > 11)
+                return (null, "Phone number must be 10 to 11 digits.");
+            if (await _db.StaffMembers.AnyAsync(s => s.staffEmail == normalisedEmail) || await _db.Admins.AnyAsync(a => a.adminEmail == normalisedEmail))
+                return (null, "That email belongs to a staff account. Use the guest's own email.");
+
+            // Booking rules (staff) + the chosen table
+            var error = await ValidateRequestAsync(start, partySize, byStaff: true);
+            if (error != null) return (null, error);
+
+            var table = await _db.DiningTables.FirstOrDefaultAsync(t => t.tableID == tableId);
+            if (table == null) return (null, "Choose a table.");
+            var free = await GetFreeTablesAsync(start, partySize);
+            if (!free.Any(t => t.tableID == tableId))
+                return (null, $"{table.tableNumber} is not free at {start:HH:mm} or is too small for {partySize} guests.");
+
+            if (seatNow)
+            {
+                if (start.Date != DateTime.Today)
+                    return (null, "Seat now is only for guests arriving today.");
+                if (await IsTableOccupiedAsync(table))
+                    return (null, $"{table.tableNumber} is occupied right now. Choose another table.");
+            }
+
+            // Account for the email: existing customer, or a new guest profile (saved together with the booking)
+            var customer = await _db.Customers.FirstOrDefaultAsync(c => c.custEmail == normalisedEmail);
+            if (customer == null)
+            {
+                customer = new Customer
+                {
+                    custName = name,
+                    custEmail = normalisedEmail,
+                    custPhone = digits,
+                    custPassword = ""   // guest profile: no password until the guest registers with this email
+                };
+                _db.Customers.Add(customer);
+            }
+
+            var booking = new Reservation
+            {
+                Customer = customer,
+                tableID = table.tableID,
+                staffID = staffId,
+                reservationDateTime = start,
+                partySize = partySize,
+                specialRequest = string.IsNullOrWhiteSpace(specialRequest) ? null : specialRequest.Trim(),
+                reservationStatus = seatNow ? ReservationStatus.Seated : ReservationStatus.Confirmed   // staff made it
+            };
+            if (seatNow) table.tableStatus = "Occupied";
+
+            _db.Reservations.Add(booking);
+            await _db.SaveChangesAsync();
+            return (booking, null);
         }
     }
 }
