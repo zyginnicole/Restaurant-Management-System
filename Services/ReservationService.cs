@@ -9,6 +9,9 @@ namespace RestaurantManagementSystem.Services
     {
         //Staff can still able to book a walk-in "now" a few minutes after the time they picked
         private const int StaffGraceMinutes = 15; //15 minutes
+
+        //Even with auto-confirm on, parties this big (or bookings with a special request) wait for staff approval
+        public const int LargePartySize = 9;
         private readonly ApplicationDbContext _db;
         private readonly SettingsService _settings;
 
@@ -40,6 +43,17 @@ namespace RestaurantManagementSystem.Services
 
             return null;
         }
+
+        //Status for a new or changed booking:
+        //auto-confirm off → Pending; on → Confirmed, unless staff should check it first
+        //(a special request, or a large party).
+        public static bool NeedsStaffReview(int partySize, string? specialRequest)
+            => partySize >= LargePartySize || !string.IsNullOrWhiteSpace(specialRequest);
+
+        private static string StatusFor(SystemSetting settings, int partySize, string? specialRequest)
+            => settings.autoConfirm && !NeedsStaffReview(partySize, specialRequest)
+                ? ReservationStatus.Confirmed
+                : ReservationStatus.Pending;
 
         //1. Is this request allowed at all? Returns an error message, or null when it is OK.
         // byStaff = true skips the customer-only rules (minimum notice, admin-blocked slots).
@@ -101,9 +115,20 @@ namespace RestaurantManagementSystem.Services
                 .ToListAsync();
         }
 
+        //Times shown to a customer on this date (before checking tables): open, not blocked by the admin,
+        //and at least minNoticeHours ahead. Too-soon times are left out, so "Full" on the page only means no free table.
+        public async Task<List<DateTime>> GetCustomerSlotsAsync(DateTime date)
+        {
+            var settings = await _settings.GetAsync();
+            var earliest = DateTime.Now.AddHours(settings.minNoticeHours);
+            var slots = await SlotHelper.GetBookableSlotsAsync(_db, date.Date);
+            return slots.Where(s => s >= earliest).ToList();
+        }
+
         //3. Times a customer can pick on this date for this party
         //(bookable slot AND at least one free table)
-        public async Task<List<DateTime>> GetAvailableSlotsAsync(DateTime date, int partySize, int? areaId = null)
+        //ignoreReservationId: when EDITING a booking, its own table/time still counts as free.
+        public async Task<List<DateTime>> GetAvailableSlotsAsync(DateTime date, int partySize, int? areaId = null, int? ignoreReservationId = null)
         {
             var settings = await _settings.GetAsync();
             var hold = TimeSpan.FromMinutes(settings.diningMinutes);
@@ -133,7 +158,8 @@ namespace RestaurantManagementSystem.Services
                 .Where(r => ReservationStatus.Active.Contains(r.reservationStatus)
                          && r.reservationDateTime > from
                          && r.reservationDateTime < to
-                         && tableIds.Contains(r.tableID))
+                         && tableIds.Contains(r.tableID)
+                         && (ignoreReservationId == null || r.reservationID != ignoreReservationId))
                 .Select(r => new { r.tableID, r.reservationDateTime })
                 .ToListAsync();
 
@@ -179,8 +205,8 @@ namespace RestaurantManagementSystem.Services
                 reservationDateTime = start,
                 partySize = partySize,
                 specialRequest = string.IsNullOrWhiteSpace(specialRequest) ? null : specialRequest.Trim(),
-                //Admin > Settings: auto-confirm on = Confirmed straight away, off = staff must approve
-                reservationStatus = settings.autoConfirm ? ReservationStatus.Confirmed : ReservationStatus.Pending
+                //Admin > Settings auto-confirm, except special requests / large parties (see StatusFor)
+                reservationStatus = StatusFor(settings, partySize, specialRequest)
             };
 
             _db.Reservations.Add(booking);
@@ -224,6 +250,201 @@ namespace RestaurantManagementSystem.Services
                          && r.reservationDateTime >= DateTime.Today)
                 .OrderBy(r => r.reservationDateTime)
                 .ToListAsync();
+        }
+
+        //7. One of the customer's own bookings (with table, area and customer), or null if it isn't theirs.
+        //Used by the Confirmed and Edit pages.
+        public async Task<Reservation?> GetCustomerReservationAsync(int reservationId, int custId)
+        {
+            return await _db.Reservations.AsNoTracking()
+                .Include(r => r.DiningTable!).ThenInclude(t => t.DiningArea)
+                .Include(r => r.Customer)
+                .FirstOrDefaultAsync(r => r.reservationID == reservationId && r.custID == custId);
+        }
+
+        //8. Customer changes their own booking. Returns an error message, or null when saved.
+        //Same deadline as cancelling. The area stays the same; the table is kept when it is still free.
+        public async Task<string?> UpdateByCustomerAsync(int reservationId, int custId, DateTime start, int partySize, string? specialRequest)
+        {
+            var booking = await _db.Reservations
+                .Include(r => r.DiningTable)
+                .FirstOrDefaultAsync(r => r.reservationID == reservationId && r.custID == custId);
+            if (booking == null)
+                return "Reservation not found.";
+
+            if (booking.reservationStatus != ReservationStatus.Pending && booking.reservationStatus != ReservationStatus.Confirmed)
+                return "This reservation can no longer be changed.";
+
+            var settings = await _settings.GetAsync();
+            if (DateTime.Now > CancelDeadline(booking, settings))
+                return $"Reservations can only be changed online up to {settings.cancelWindowHours} hours before. Please call us.";
+
+            var newRequest = string.IsNullOrWhiteSpace(specialRequest) ? null : specialRequest.Trim();
+            var timeOrSizeChanged = start != booking.reservationDateTime || partySize != booking.partySize;
+
+            //Only a new time or party size needs a table check (a new special request alone doesn't)
+            if (timeOrSizeChanged)
+            {
+                var error = await ValidateRequestAsync(start, partySize);
+                if (error != null)
+                    return error;
+
+                //Free tables in the same area, not counting this booking itself
+                var free = await GetFreeTablesAsync(start, partySize, booking.DiningTable?.areaID, ignoreReservationId: booking.reservationID);
+                var table = free.FirstOrDefault(t => t.tableID == booking.tableID) ?? free.FirstOrDefault();
+                if (table == null)
+                    return "Sorry, no table is free at that time. Please choose another time.";
+
+                booking.tableID = table.tableID;
+                booking.reservationDateTime = start;
+                booking.partySize = partySize;
+            }
+
+            //A new time/size, or a new/changed special request, gets its status decided again like a new booking
+            //(removing a request alone keeps the current status)
+            if (timeOrSizeChanged || (newRequest != null && newRequest != booking.specialRequest))
+                booking.reservationStatus = StatusFor(settings, partySize, newRequest);
+
+            booking.specialRequest = newRequest;
+            await _db.SaveChangesAsync();
+            return null;
+        }
+
+        // ======================= Staff =======================
+
+        //"R-0041"
+        public static string Code(Reservation r) => "R-" + r.reservationID.ToString("D4");
+
+        //9. Every booking of one day (all statuses) with customer, table + area and staff, latest first
+        public async Task<List<Reservation>> GetDayAsync(DateTime date)
+        {
+            var from = date.Date;
+            var to = from.AddDays(1);
+            return await _db.Reservations.AsNoTracking()
+                .Include(r => r.DiningTable!).ThenInclude(t => t.DiningArea)
+                .Include(r => r.Customer)
+                .Include(r => r.Staff)
+                .Where(r => r.reservationDateTime >= from && r.reservationDateTime < to)
+                .OrderByDescending(r => r.reservationDateTime)
+                .ToListAsync();
+        }
+
+        //Loads a booking for a staff action and checks its current status.
+        private async Task<(Reservation? booking, string? error)> FindForStaffAsync(int reservationId, params string[] allowed)
+        {
+            var booking = await _db.Reservations
+                .Include(r => r.DiningTable)
+                .FirstOrDefaultAsync(r => r.reservationID == reservationId);
+            if (booking == null)
+                return (null, "Reservation not found.");
+            if (!allowed.Contains(booking.reservationStatus))
+                return (null, $"{Code(booking)} is {booking.reservationStatus}, so this can't be done any more.");
+            return (booking, null);
+        }
+
+        //10. Pending → Confirmed (staffID = who approved it)
+        public async Task<string?> ConfirmAsync(int reservationId, int? staffId)
+        {
+            var (booking, error) = await FindForStaffAsync(reservationId, ReservationStatus.Pending);
+            if (booking == null) return error;
+
+            booking.reservationStatus = ReservationStatus.Confirmed;
+            booking.staffID = staffId ?? booking.staffID;
+            await _db.SaveChangesAsync();
+            return null;
+        }
+
+        //11. Pending → Declined (the table is free again)
+        public async Task<string?> DeclineAsync(int reservationId, int? staffId)
+        {
+            var (booking, error) = await FindForStaffAsync(reservationId, ReservationStatus.Pending);
+            if (booking == null) return error;
+
+            booking.reservationStatus = ReservationStatus.Declined;
+            booking.staffID = staffId ?? booking.staffID;
+            await _db.SaveChangesAsync();
+            return null;
+        }
+
+        //12. Confirmed → Seated, table Occupied. Only on the booking's day, and only when the table is empty.
+        //(Seated → Completed happens in Billing when the order is paid; the table goes back to Available there.)
+        public async Task<string?> SeatAsync(int reservationId, int? staffId)
+        {
+            var (booking, error) = await FindForStaffAsync(reservationId, ReservationStatus.Confirmed);
+            if (booking == null) return error;
+
+            if (booking.reservationDateTime.Date != DateTime.Today)
+                return $"{Code(booking)} is for {booking.reservationDateTime:d MMM}. Guests can only be seated on the day.";
+
+            var table = booking.DiningTable!;
+            var seatedHere = await _db.Reservations.AnyAsync(r => r.tableID == booking.tableID
+                && r.reservationStatus == ReservationStatus.Seated && r.reservationID != booking.reservationID);
+            if (seatedHere || table.tableStatus == "Occupied")
+                return $"{table.tableNumber} is still occupied. Move {Code(booking)} to a free table first.";
+
+            booking.reservationStatus = ReservationStatus.Seated;
+            booking.staffID = staffId ?? booking.staffID;
+            table.tableStatus = "Occupied";
+            await _db.SaveChangesAsync();
+            return null;
+        }
+
+        //13. Confirmed → No-show. Only after the late-arrival hold (Admin > Settings lateHoldMinutes) has passed.
+        public async Task<string?> NoShowAsync(int reservationId, int? staffId)
+        {
+            var (booking, error) = await FindForStaffAsync(reservationId, ReservationStatus.Confirmed);
+            if (booking == null) return error;
+
+            var settings = await _settings.GetAsync();
+            var from = booking.reservationDateTime.AddMinutes(settings.lateHoldMinutes);
+            if (DateTime.Now < from)
+                return $"{Code(booking)} can be marked as no-show from {from:HH:mm} ({settings.lateHoldMinutes} minutes after the booking time).";
+
+            booking.reservationStatus = ReservationStatus.NoShow;
+            booking.staffID = staffId ?? booking.staffID;
+            await _db.SaveChangesAsync();
+            return null;
+        }
+
+        //14. Staff cancel a Pending / Confirmed booking (no deadline for staff)
+        public async Task<string?> CancelByStaffAsync(int reservationId, int? staffId)
+        {
+            var (booking, error) = await FindForStaffAsync(reservationId, ReservationStatus.Pending, ReservationStatus.Confirmed);
+            if (booking == null) return error;
+
+            booking.reservationStatus = ReservationStatus.Cancelled;
+            booking.staffID = staffId ?? booking.staffID;
+            await _db.SaveChangesAsync();
+            return null;
+        }
+
+        //15. Staff change a Pending / Confirmed booking: date, time, guests, table.
+        //The special request is the guest's own words, so staff can't change it.
+        //Staff rules (no notice / slot check), and the chosen table must be free and big enough. Status stays the same.
+        public async Task<string?> UpdateByStaffAsync(int reservationId, DateTime start, int partySize, int tableId)
+        {
+            var (booking, error) = await FindForStaffAsync(reservationId, ReservationStatus.Pending, ReservationStatus.Confirmed);
+            if (booking == null) return error;
+
+            //Nothing changed: nothing to check or save
+            if (start == booking.reservationDateTime && partySize == booking.partySize && tableId == booking.tableID)
+                return null;
+
+            error = await ValidateRequestAsync(start, partySize, byStaff: true);
+            if (error != null) return error;
+
+            var free = await GetFreeTablesAsync(start, partySize, ignoreReservationId: booking.reservationID);
+            if (!free.Any(t => t.tableID == tableId))
+            {
+                var name = (await _db.DiningTables.FindAsync(tableId))?.tableNumber ?? "That table";
+                return $"{name} is not free at {start:HH:mm} or is too small for {partySize} guests.";
+            }
+
+            booking.reservationDateTime = start;
+            booking.partySize = partySize;
+            booking.tableID = tableId;
+            await _db.SaveChangesAsync();
+            return null;
         }
     }
 }

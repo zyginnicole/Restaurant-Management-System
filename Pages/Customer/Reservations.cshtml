@@ -116,7 +116,11 @@
 
                         @if (Model.AllSlots.Count == 0)
                         {
-                            <p class="md-note-box md-note-box-danger">There are no bookable times on this date (closed, fully blocked or already past). Please choose another date.</p>
+                            <p class="md-note-box md-note-box-danger">
+                                @(Model.Date == DateTime.Today
+                                    ? "No more times can be booked online today. Please choose another date."
+                                    : "We're closed or not taking bookings on this date. Please choose another date.")
+                            </p>
                         }
                         else
                         {
@@ -145,8 +149,14 @@
                             }
                             else if (fullCount > 0)
                             {
-                                <p class="md-note-box md-note-box-danger">Crossed-out times are full for @guestsText@areaText.</p>
+                                <p class="md-note-box md-note-box-danger">Crossed-out times have no free table for @guestsText@areaText. Please pick another time.</p>
                             }
+                        }
+
+                        @* Today only: explain why earlier times aren't listed (minimum notice, Admin > Settings) *@
+                        @if (Model.Date == DateTime.Today)
+                        {
+                            <p class="md-hint mt-3 mb-0">Online bookings need at least @settings.minNoticeHours hours' notice@(settings.phone != null ? ". For an earlier table today, please call us on " + settings.phone : "").</p>
                         }
 
                         <p class="md-field-error d-none" id="timeError" role="alert">Choose a time to continue.</p>
@@ -168,7 +178,9 @@
 
                     <p class="md-hint md-form-section">
                         Free cancellation until @settings.cancelWindowHours hours before your booking.
-                        @(settings.autoConfirm ? "Your table is confirmed straight away." : "Our team confirms each booking.")
+                        @(settings.autoConfirm
+                            ? $"Your table is confirmed straight away. Bookings with a special request or for {ReservationService.LargePartySize}+ guests are confirmed by our team."
+                            : "Our team confirms each booking.")
                     </p>
 
                     @* Booking failed (OnPost): e.g. the time was just taken *@
@@ -214,7 +226,7 @@
                     var guests = r.partySize + (r.partySize == 1 ? " guest" : " guests");
                     var start = r.reservationDateTime;
                     <li class="md-res-item md-res-click is-@css" data-id="@r.reservationID"
-                        data-edit="@(seated ? "" : "/Customer/EditReservation?id=" + r.reservationID)"
+                        data-edit="@(canCancel ? "/Customer/EditReservation?id=" + r.reservationID : "")"
                         data-cancel-details="@(canCancel ? start.ToString("dddd, d MMMM yyyy · HH:mm", inv) + " · " + guests + " · " + table : "")"
                         data-cancel-deadline="@(canCancel ? deadline.ToString("HH:mm 'on' d MMMM", inv) : "")"
                         tabindex="0" role="button" aria-haspopup="dialog">
@@ -275,6 +287,11 @@
                                 <div class="is-wide"><dt>Special request</dt><dd>@(r.specialRequest ?? "None")</dd></div>
                                 <div class="is-wide"><dt>Status</dt><dd>@(seated ? "Seated – your visit is in progress" : status == ReservationStatus.Pending ? "Waiting for our team to confirm" : "Confirmed")</dd></div>
                             </dl>
+                            @* Past the edit / cancel deadline (cancelWindowHours): no Edit or Cancel button (no footer), this note instead *@
+                            @if (!seated && !canCancel)
+                            {
+                                <p class="md-note-box md-note-box-danger mt-3 mb-0">This reservation can no longer be changed or cancelled online@(settings.phone != null ? ". Please call us on " + settings.phone : ". Please call us").</p>
+                            }
                         </template>
                     </li>
                 }
@@ -311,11 +328,10 @@
 
 @* ---------- Review pop-up: summary of the booking before it is sent ----------
    Filled by the script from the form. "Confirm booking" submits #reservationForm (form="" attribute). *@
-@{
-    var reviewStatus = settings.autoConfirm ? ReservationStatus.Confirmed : ReservationStatus.Pending;
-}
+@* data-auto-confirm / data-large-party: the script shows Confirmed or Pending with the same rule as
+   ReservationService.NeedsStaffReview (special request or large party → Pending) *@
 <div class="modal fade md-popup md-popup-narrow" id="reviewReservationPopup" tabindex="-1" aria-labelledby="reviewReservationTitle" aria-hidden="true"
-     data-dining-minutes="@settings.diningMinutes">
+     data-dining-minutes="@settings.diningMinutes" data-auto-confirm="@(settings.autoConfirm ? "true" : "false")" data-large-party="@ReservationService.LargePartySize">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -333,7 +349,6 @@
                         <span class="md-date-tile-day" data-review="day">—</span>
                     </div>
                     <div class="md-next-res-info">
-                        <span class="md-next-slot-code"><span class="md-badge md-badge-@StatusCss(reviewStatus)">@reviewStatus</span></span>
                         <div class="md-res-date" data-review="daytext">—</div>
                         <div class="md-next-res-row">
                             <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i><span data-review="time">—</span></span>
@@ -350,7 +365,8 @@
                     <div class="is-wide"><dt>Special request</dt><dd data-review="request">—</dd></div>
                 </dl>
                 <p class="md-popup-note">
-                    @(settings.autoConfirm ? "Your table is confirmed as soon as you book." : "Your booking is sent to our team and shows as Pending until it's confirmed.")
+                    <span data-review-when="confirmed">Your table is confirmed as soon as you book.</span>
+                    <span data-review-when="pending">Your booking is sent to our team and shows as Pending until it's confirmed.</span>
                     Free cancellation until @settings.cancelWindowHours hours before your booking.
                 </p>
             </div>
@@ -447,6 +463,13 @@
                 set('guests', size.value);
                 set('area', area ? form.querySelector('label[for="' + area.id + '"]').textContent : 'No preference');
                 set('request', textarea.value.trim() || 'None');
+
+                // Confirmed or Pending – same rule as the server (ReservationService.NeedsStaffReview)
+                var needsReview = Number(size.value) >= Number(reviewEl.dataset.largeParty) || textarea.value.trim() !== '';
+                var pending = reviewEl.dataset.autoConfirm !== 'true' || needsReview;
+                reviewEl.querySelectorAll('[data-review-when]').forEach(function (el) {
+                    el.classList.toggle('d-none', el.dataset.reviewWhen !== (pending ? 'pending' : 'confirmed'));
+                });
                 mdAlignDetailGrid(reviewEl, reviewEl.querySelector('.modal-body'));
                 reviewPopup.show();
             });

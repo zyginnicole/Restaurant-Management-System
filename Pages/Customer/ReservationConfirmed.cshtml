@@ -1,12 +1,14 @@
 ﻿@page
 @model RestaurantManagementSystem.Pages.Customer.ReservationConfirmedModel
+@using RestaurantManagementSystem.Services
 @{
-    // Example data – later from the Reservation (reservationStatus). New bookings start as "Pending"
-    // until staff confirm. UI preview only: /Customer/ReservationConfirmed?status=Confirmed shows the
-    // confirmed version – the backend replaces this with the real status (don't read it from the URL).
-    var status = Request.Query["status"] == "Confirmed" ? "Confirmed" : "Pending";
-    var isPending = status == "Pending";
-    var code = "R-0048";   // backend: "R-" + reservationID.ToString("0000")
+    var r = Model.Booking;
+    var settings = Model.Settings;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var isPending = r.reservationStatus == ReservationStatus.Pending;
+    var code = "R-" + r.reservationID.ToString("D4");
+    var start = r.reservationDateTime;
+    var deadline = ReservationService.CancelDeadline(r, settings);
 
     ViewData["Title"] = isPending ? "Booking received" : "Booking confirmed";
     ViewData["ActiveNav"] = "Reservations";
@@ -19,32 +21,35 @@
     <section class="md-card" id="confirmationCard">
         <div class="md-card-header">
             <span class="md-card-label">Reservation confirmation</span>
-            <span class="md-card-meta">Issued 16 Sep 2026, 20:41</span>
+            <span class="md-card-meta">Issued @r.reservationCreateAt.ToString("d MMM yyyy, HH:mm", inv)</span>
         </div>
         <div class="md-card-body md-confirm">
             @if (isPending)
             {
                 <span class="md-badge md-badge-pending">Pending</span>
                 <h2 class="md-confirm-title">Booking received</h2>
-                <p class="md-confirm-ref">Reference <b>@code</b> · we'll notify you as soon as our team confirms it.</p>
+                <p class="md-confirm-ref">Reference <b>@code</b> · we'll let you know as soon as our team confirms it.</p>
             }
             else
             {
                 <span class="md-badge md-badge-confirmed">Confirmed</span>
                 <h2 class="md-confirm-title">Your table is booked</h2>
-                <p class="md-confirm-ref">Reference <b>@code</b> · confirmation sent to alexandra@example.com</p>
+                <p class="md-confirm-ref">Reference <b>@code</b> · you'll find it under Reservations.</p>
             }
 
             <dl class="md-confirm-facts">
-                <div><dt>Date</dt><dd>Sunday, 27 September 2026</dd></div>
-                <div><dt>Time</dt><dd>19:00 – 20:30</dd></div>
-                <div><dt>Guests</dt><dd>4</dd></div>
-                <div><dt>Table</dt><dd><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-14 · Outdoor</dd></div>
-                <div><dt>Name</dt><dd>Alexandra Beaumont</dd></div>
-                <div><dt>Special request</dt><dd>Celebrating a birthday · Window seat</dd></div>
+                <div><dt>Date</dt><dd>@start.ToString("dddd, d MMMM yyyy", inv)</dd></div>
+                <div><dt>Time</dt><dd>@start.ToString("HH:mm", inv) – @start.AddMinutes(settings.diningMinutes).ToString("HH:mm", inv)</dd></div>
+                <div><dt>Guests</dt><dd>@r.partySize</dd></div>
+                <div><dt>Table</dt><dd><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@r.DiningTable?.tableNumber · @r.DiningTable?.DiningArea?.areaName</dd></div>
+                <div><dt>Name</dt><dd>@r.Customer?.custName</dd></div>
+                <div><dt>Special request</dt><dd>@(r.specialRequest ?? "None")</dd></div>
             </dl>
 
-            <p class="md-note-box mt-0">Free cancellation until 17:00 on 27 September. Please arrive within 15 minutes of your booking time.</p>
+            <p class="md-note-box mt-0">
+                Free cancellation until @deadline.ToString("HH:mm 'on' d MMMM", inv).
+                Please arrive within @settings.lateHoldMinutes minutes of your booking time.
+            </p>
 
             @* data-html2canvas-ignore: the buttons are left out of the PDF *@
             <div class="md-confirm-actions" data-html2canvas-ignore>
@@ -57,7 +62,7 @@
 
     @if (isPending)
     {
-        <p class="md-confirm-foot">Bookings are confirmed by our team, usually within 2 hours. You'll find this booking under Reservations.</p>
+        <p class="md-confirm-foot">Bookings are confirmed by our team. You'll find this booking under Reservations.</p>
     }
 </div>
 

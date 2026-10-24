@@ -1,121 +1,84 @@
 @page
 @model RestaurantManagementSystem.Pages.Staff.ReservationsModel
+@using RestaurantManagementSystem.Services
 @{
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var settings = Model.Settings;
+    var isToday = Model.Date == DateTime.Today;
+
     ViewData["Title"] = "Reservations";
     ViewData["Module"] = "Staff";
     ViewData["ActiveNav"] = "Reservations";
-    ViewData["Eyebrow"] = "Wednesday, 16 September 2026 · Dinner service";
+    ViewData["Eyebrow"] = Model.Date.ToString("dddd, d MMMM yyyy", inv) + (isToday ? " · Today" : "");
     ViewData["Heading"] = "Reservations";
-    ViewData["Subtitle"] = "Approve, seat and manage tonight's bookings";
+    ViewData["Subtitle"] = "Approve, seat and manage the day's bookings";
     Layout = "_DashboardLayout";
 
-    // ---------- Example data – later from the database (see ReservationsModel) ----------
-    var now = "20:40";
+    // This page with its date – every action comes back here (returnUrl)
+    var dateValue = Model.Date.ToString("yyyy-MM-dd", inv);
+    var currentUrl = "/Staff/Reservations?date=" + dateValue;
 
-    // Floor: DiningTable (tableNumber, diningArea, tableCapacity) + state for right now
-    // State: free (Available) · seated (Occupied) · reserved (Reserved – Info = time of the booking) · unavailable (Maintenance)
-    var tables = new (string No, string Area, int Seats, string State, string Info)[]
-    {
-        ("T-01", "Indoor", 4, "free", "Free"),          ("T-02", "Outdoor", 4, "reserved", "20:45"),
-        ("T-03", "Indoor", 2, "seated", "Seated"),      ("T-04", "Indoor", 2, "reserved", "21:00"),
-        ("T-05", "Indoor", 4, "free", "Free"),          ("T-06", "Indoor", 2, "seated", "Seated"),
-        ("T-07", "Indoor", 4, "free", "Free"),          ("T-08", "Indoor", 4, "free", "Free"),
-        ("T-09", "Indoor", 4, "free", "Free"),          ("T-10", "Indoor", 6, "free", "Free"),
-        ("T-11", "Indoor", 4, "free", "Free"),          ("T-12", "Indoor", 4, "seated", "Seated"),
-        ("T-13", "Outdoor", 4, "free", "Free"),         ("T-14", "Outdoor", 4, "free", "Free"),
-        ("T-15", "Outdoor", 2, "free", "Free"),         ("T-16", "Outdoor", 4, "free", "Free"),
-        ("T-17", "Outdoor", 4, "free", "Free"),         ("T-18", "Outdoor", 6, "free", "Free"),
-        ("T-19", "Outdoor", 2, "free", "Free"),         ("T-20", "VIP", 8, "reserved", "20:00"),
-        ("T-21", "VIP", 8, "free", "Free"),             ("T-22", "VIP", 6, "free", "Free"),
-        ("T-23", "VIP", 6, "unavailable", "Closed"),    ("T-24", "VIP", 4, "unavailable", "Out of service")
-    };
-    int CountTables(string state) => tables.Count(t => t.State == state);
-
-    // Bookings for the chosen day. Status: Pending, Confirmed, Seated (Confirmed + table Occupied), Completed, Cancelled
-    var bookings = new (string Time, string Name, string Code, string Table, string Area, int Guests, string Phone,
-                        string? Note, string? Allergy, string Status, string? SeatedAt, bool WalkIn)[]
-    {
-        ("18:00", "Thomas Ashford",    "R-0039", "T-09", "Indoor", 3, "+60 12-876 5432", null, "Shellfish", "Completed", null, false),
-        ("18:15", "Amelia Ross",       "R-0038", "T-07", "Indoor", 2, "+60 14-567 8901", "Did not arrive — marked as no-show at 18:45", null, "No-show", null, false),
-        ("18:30", "George Pemberton",  "R-0040", "T-21", "VIP",    8, "+60 16-456 7890", "Corporate event — cancelled by customer on 15 Sep", null, "Cancelled", null, false),
-        ("19:00", "Eleanor Whitmore",  "R-0041", "T-12", "Indoor", 4, "+60 12-012 3456", "Anniversary dinner — window seating preferred", null, "Seated", "19:04", false),
-        ("19:30", "Marcus Delacroix",  "R-0042", "T-06", "Indoor", 2, "+60 17-098 7654", "Champagne on arrival", null, "Seated", "19:33", false),
-        ("20:00", "Sophia Haines",     "R-0043", "T-20", "VIP",    6, "+60 19-234 5678", "One guest vegetarian, separate plating", null, "Pending", null, false),
-        ("20:15", "Daniel Tan",        "R-0047", "T-03", "Indoor", 2, "+60 11-223 4455", null, null, "Seated", "20:15", true),
-        ("20:45", "Victoria Blake",    "R-0044", "T-02", "Outdoor", 4, "+60 12-234 1111", "Tasting menu requested", null, "Confirmed", null, false),
-        ("21:00", "Isabella Chen",     "R-0045", "T-04", "Indoor", 2, "+60 13-345 6789", null, null, "Pending", null, false),
-        ("21:30", "Henry Wong",        "R-0046", "T-22", "VIP",   10, "+60 18-765 4321", "Declined: party too large for available tables", null, "Declined", null, false)
-    };
-    int CountStatus(string status) => bookings.Count(b => b.Status == status);
+    int CountTables(string state) => Model.Floor.Count(t => t.State == state);
+    int CountStatus(string status) => Model.Bookings.Count(b => b.reservationStatus == status);
     // Reservation.reservationStatus values (stored exactly like this)
-    string[] statuses = { "Pending", "Confirmed", "Seated", "Completed", "Cancelled", "No-show", "Declined" };
-    // CSS class for a status: "No-show" → "is-noshow", "Declined" → "is-declined"
-    string StatusClass(string status) => "is-" + status.Replace("-", "").ToLower();
+    string[] statuses = { ReservationStatus.Pending, ReservationStatus.Confirmed, ReservationStatus.Seated, ReservationStatus.Completed,
+                          ReservationStatus.Cancelled, ReservationStatus.NoShow, ReservationStatus.Declined };
+    string[] endedStatuses = { ReservationStatus.Completed, ReservationStatus.Cancelled, ReservationStatus.NoShow, ReservationStatus.Declined };
 
-    // Floor tile → the booking on that table now (Pending / Confirmed / Seated), opened in the details pop-up
-    string[] liveStatuses = { "Pending", "Confirmed", "Seated" };
-    (string Code, string Name, string Time, string Status)? BookingOn(string table) =>
-        bookings.Where(b => b.Table == table && liveStatuses.Contains(b.Status))
-                .Select(b => ((string Code, string Name, string Time, string Status)?)(b.Code, b.Name, b.Time, b.Status)).FirstOrDefault();
-
-    // How each booking was made / what happened (shown at the top of the details pop-up)
-    var booked = new Dictionary<string, string>
-    {
-        ["R-0038"] = "Booked online on 11 Sep 2026, 19:20 · marked as no-show at 18:45",
-        ["R-0039"] = "Booked online on 10 Sep 2026, 14:02",
-        ["R-0040"] = "Cancelled by the guest on 15 Sep 2026, 09:12",
-        ["R-0041"] = "Booked online on 2 Sep 2026, 20:15",
-        ["R-0042"] = "Booked by phone on 14 Sep 2026, 11:40",
-        ["R-0043"] = "Requested online on 15 Sep 2026, 22:41 · waiting for staff approval",
-        ["R-0044"] = "Booked online on 12 Sep 2026, 18:05 · confirmed by Sophie Clarke",
-        ["R-0045"] = "Requested online on 16 Sep 2026, 08:30 · waiting for staff approval",
-        ["R-0046"] = "Requested online on 15 Sep 2026, 13:05 · declined by Sophie Clarke: party too large for available tables",
-        ["R-0047"] = "Walk-in seated by Sophie Clarke at 20:15"
-    };
-    string[] endedStatuses = { "Completed", "Cancelled", "No-show", "Declined" };
-
+    // Row / pop-up texts shared with the Dashboard (Pages/Staff/StaffReservationText.cs)
+    string StatusClass(string status) => StaffReservationText.StatusClass(status);
+    string Booked(RestaurantManagementSystem.Model.Reservation r) => StaffReservationText.Booked(r);
+    string FreeText(RestaurantManagementSystem.Model.Reservation r) => StaffReservationText.NextOnTable(r, Model.Bookings, settings.diningMinutes);
 }
 
-@* Message after an action (TempData["StaffMessage"] set by the PageModel) *@
+@* Message after an action (TempData["StaffMessage"] set by the PageModel; red when it failed) *@
 @if (TempData["StaffMessage"] is string message)
 {
-    <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+    if (TempData["StaffMessageIsError"] is true)
+    {
+        <p class="md-note-box md-note-box-danger md-section" role="alert">@message</p>
+    }
+    else
+    {
+        <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+    }
 }
 
 @* =====================================================
-   Floor status – one tile per DiningTable. Colours match the reservation status tags:
-   Seated yellow · Reserved blue · Free white · Unavailable grey
-   Click opens the table pop-up below:
-     free table             → "Reserve a Table" with Book Table
-     seated / reserved table → "Table T-02" with View upcoming booking (details pop-up) and Book Table (a later time)
-   Book Table → /Staff/WalkIn?table=T-02 (Book reservations). Unavailable tables can't be clicked.
+   Floor status (always RIGHT NOW, whatever day is picked below) – one tile per DiningTable:
+   Maintenance → Unavailable · a Seated booking (or tableStatus Occupied) → Seated ·
+   next Pending / Confirmed booking today → Reserved (its time) · otherwise Free.
+   Click opens the table pop-up below; Book Table → /Staff/WalkIn?table=T-02. Unavailable tables can't be clicked.
    ===================================================== *@
 <section class="md-card md-section">
     <div class="md-card-header">
-        <span class="md-card-label">Floor status · now @now</span>
-        <span class="md-card-meta">Updates live</span>
+        <span class="md-card-label">Floor status · now @DateTime.Now.ToString("HH:mm", inv)</span>
+        <span class="md-card-meta">Refresh the page to update</span>
     </div>
     <div class="md-card-body">
         <ul class="md-floor" aria-label="Tables">
-            @foreach (var t in tables)
+            @foreach (var f in Model.Floor)
             {
-                var booking = BookingOn(t.No);
+                var t = f.Table;
+                var area = t.DiningArea?.areaName;
+                var b = f.Booking;
                 <li>
-                    @if (t.State != "unavailable")
+                    @if (f.State != "unavailable")
                     {
                         @* data-booking (code · name · time · status) only on a seated / reserved table *@
-                        <button type="button" class="md-floor-table is-@t.State" title="@t.No · @t.Area · @t.Seats seats"
-                                data-bs-toggle="modal" data-bs-target="#reserveTablePopup" data-table="@t.No" data-area="@t.Area" data-seats="@t.Seats"
-                                data-booking="@booking?.Code" data-name="@booking?.Name" data-time="@booking?.Time" data-status="@booking?.Status">
-                            <b>@t.No</b>
-                            <span>@t.Info</span>
+                        <button type="button" class="md-floor-table is-@f.State" title="@t.tableNumber · @area · @t.tableCapacity seats"
+                                data-bs-toggle="modal" data-bs-target="#reserveTablePopup" data-table="@t.tableNumber" data-area="@area" data-seats="@t.tableCapacity"
+                                data-booking="@(b != null ? ReservationService.Code(b) : null)" data-name="@b?.Customer?.custName"
+                                data-time="@b?.reservationDateTime.ToString("HH:mm", inv)" data-status="@b?.reservationStatus">
+                            <b>@t.tableNumber</b>
+                            <span>@f.Info</span>
                         </button>
                     }
                     else
                     {
-                        <div class="md-floor-table is-@t.State" title="@t.No · @t.Area · @t.Seats seats">
-                            <b>@t.No</b>
-                            <span>@t.Info</span>
+                        <div class="md-floor-table is-@f.State" title="@t.tableNumber · @area · @t.tableCapacity seats">
+                            <b>@t.tableNumber</b>
+                            <span>@f.Info</span>
                         </div>
                     }
                 </li>
@@ -131,34 +94,34 @@
 </section>
 
 @* =====================================================
-   Bookings – status tabs, filters and one row per Reservation
+   Bookings of the chosen day – filters and one row per Reservation
    ===================================================== *@
 <section class="md-card md-section md-panel md-res-bookings" id="bookings">
-    @* One row of filters: date (backend: ?date=2026-09-16), service, area, status, search.
-       The page filters the rows on screen. *@
+    @* Date reloads the page (?date=…); service, area, status and search filter the rows on screen *@
     <div class="md-res-filters">
         <div class="md-res-filter-row">
             <div class="md-res-date">
-                <a class="btn btn-md-outline md-btn-sm" href="?date=2026-09-15" aria-label="Previous day"><i class="bi bi-chevron-left"></i></a>
-                <input type="date" class="form-control md-input" value="2026-09-16" aria-label="Date" />
-                <a class="btn btn-md-outline md-btn-sm" href="?date=2026-09-17" aria-label="Next day"><i class="bi bi-chevron-right"></i></a>
+                <a class="btn btn-md-outline md-btn-sm" href="?date=@Model.Date.AddDays(-1).ToString("yyyy-MM-dd", inv)" aria-label="Previous day"><i class="bi bi-chevron-left"></i></a>
+                <input type="date" class="form-control md-input" id="resDate" value="@dateValue" aria-label="Date" />
+                <a class="btn btn-md-outline md-btn-sm" href="?date=@Model.Date.AddDays(1).ToString("yyyy-MM-dd", inv)" aria-label="Next day"><i class="bi bi-chevron-right"></i></a>
             </div>
             <div class="md-segment md-segment-sm" role="group" aria-label="Service" id="resService">
-                <button type="button" data-service="all">All day</button>
+                <button type="button" class="active" data-service="all">All day</button>
                 <button type="button" data-service="lunch">Lunch</button>
-                <button type="button" class="active" data-service="dinner">Dinner</button>
+                <button type="button" data-service="dinner">Dinner</button>
             </div>
             <select class="form-select md-input md-res-area" id="resArea" aria-label="Area">
                 <option value="all">All areas</option>
-                <option>Indoor</option>
-                <option>Outdoor</option>
-                <option>VIP</option>
+                @foreach (var a in Model.AreaNames)
+                {
+                    <option>@a</option>
+                }
             </select>
             @* Status + search stay together on one line (the search fills the rest of the row) *@
             <div class="md-res-filter-end">
                 @* Reservation.reservationStatus – number of bookings for the day in brackets *@
                 <select class="form-select md-input md-res-status" id="resStatus" aria-label="Status">
-                    <option value="all">All statuses (@bookings.Length)</option>
+                    <option value="all">All statuses (@Model.Bookings.Count)</option>
                     @foreach (var s in statuses)
                     {
                         <option value="@s">@s (@CountStatus(s))</option>
@@ -170,57 +133,68 @@
     </div>
 
     <ul class="md-guest-list" id="resList">
-        @* Newest first (latest time at the top) – backend: OrderByDescending(r => r.reservationDateTime) *@
-        @foreach (var b in bookings.OrderByDescending(b => b.Time))
+        @* Latest time at the top (ReservationService.GetDayAsync) *@
+        @foreach (var r in Model.Bookings)
         {
-            string key = StatusClass(b.Status);
-            string details = $"{b.Name} · {b.Time} · {b.Guests} guests · {b.Table} {b.Area}";
+            var key = StatusClass(r.reservationStatus);
+            var code = ReservationService.Code(r);
+            var name = r.Customer?.custName ?? "Guest";
+            var phone = r.Customer?.custPhone ?? "";
+            var time = r.reservationDateTime.ToString("HH:mm", inv);
+            var tableNo = r.DiningTable?.tableNumber;
+            var area = r.DiningTable?.DiningArea?.areaName;
+            var diet = r.Customer?.DietaryPref is { } d && d != "None" ? d : null;
+            var ended = endedStatuses.Contains(r.reservationStatus);
+            string details = $"{name} · {time} · {r.partySize} guests · {tableNo} {area}";
             @* Whole row opens the Reservation details pop-up (the name is a stretched-link to ?view=R-xxxx);
-               the action buttons stay clickable on top. data-* values fill the pop-up (see the script). *@
-            <li class="md-guest md-staff-res md-row-link @key" data-status="@b.Status" data-area="@b.Area" data-hour="@(b.Time[..2])"
-                data-search="@($"{b.Name} {b.Code} {new string(b.Phone.Where(char.IsDigit).ToArray())}".ToLower())"
-                data-code="@b.Code" data-name="@b.Name" data-guests="@b.Guests" data-time="@b.Time" data-table="@b.Table"
-                data-seated="@b.SeatedAt" data-walkin="@(b.WalkIn ? "true" : "false")" data-booked="@booked[b.Code]"
-                data-request="@(endedStatuses.Contains(b.Status) ? "" : b.Note)" data-details="@details">
-                <div class="md-guest-time">@b.Time</div>
+               the action buttons stay clickable on top. data-* values fill the pop-up (staff-reservation-popup.js). *@
+            <li class="md-guest md-staff-res md-row-link @key" data-status="@r.reservationStatus" data-area="@area" data-hour="@r.reservationDateTime.Hour"
+                data-search="@($"{name} {code} {new string(phone.Where(char.IsDigit).ToArray())}".ToLower())"
+                data-id="@r.reservationID" data-code="@code" data-name="@name" data-guests="@r.partySize"
+                data-date="@r.reservationDateTime.ToString("yyyy-MM-dd", inv)" data-time="@time"
+                data-table="@tableNo" data-table-id="@r.tableID" data-walkin="false" data-booked="@Booked(r)"
+                data-request="@(ended ? "" : r.specialRequest)" data-details="@details" data-free="@(ended ? "" : FreeText(r))">
+                <div class="md-guest-time">@time</div>
 
                 <div class="md-guest-main">
-                    <a class="stretched-link md-guest-name" href="?view=@b.Code" data-open-detail>@b.Name@(b.WalkIn ? " · walk-in" : "") <span class="md-guest-code">@b.Code</span></a>
-                    <span class="md-guest-meta"><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@b.Table · @b.Area · @b.Guests guests · @b.Phone</span>
-                    @if (b.Allergy != null)
+                    <a class="stretched-link md-guest-name" href="?date=@dateValue&view=@code" data-open-detail>@name <span class="md-guest-code">@code</span></a>
+                    <span class="md-guest-meta"><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@tableNo · @area · @r.partySize guests@(phone != "" ? " · " + phone : "")</span>
+                    @if (diet != null)
                     {
-                        <span class="md-allergy"><i class="bi bi-exclamation-triangle"></i>Allergy: @b.Allergy</span>
+                        <span class="md-allergy"><i class="bi bi-exclamation-triangle"></i>Diet: @diet</span>
                     }
-                    @if (b.Note != null)
+                    @if (r.specialRequest != null)
                     {
-                        <span class="md-res-note">“@b.Note”</span>
+                        <span class="md-res-note">“@r.specialRequest”</span>
                     }
                 </div>
 
                 <div class="md-staff-res-side">
-                    <span class="md-pill @key">@b.Status@(b.SeatedAt != null ? " " + b.SeatedAt : "")</span>
+                    <span class="md-pill @key">@r.reservationStatus</span>
                     <div class="md-order-actions">
-                        @switch (b.Status)
+                        @switch (r.reservationStatus)
                         {
-                            case "Pending":
+                            case ReservationStatus.Pending:
                                 <form method="post" asp-page-handler="Confirm">
-                                    <input type="hidden" name="reservationId" value="@b.Code" />
+                                    <input type="hidden" name="reservationId" value="@r.reservationID" />
+                                    <input type="hidden" name="returnUrl" value="@currentUrl" />
                                     <button type="submit" class="btn md-btn-round md-btn-sm md-btn-confirm">Confirm</button>
                                 </form>
                                 <button type="button" class="btn md-btn-round md-btn-sm md-btn-cancel" data-bs-toggle="modal" data-bs-target="#declinePopup"
-                                        data-id="@b.Code" data-code="@b.Code" data-details="@details">Decline</button>
+                                        data-id="@r.reservationID" data-code="@code" data-details="@details">Decline</button>
                                 break;
-                            case "Confirmed":
+                            case ReservationStatus.Confirmed:
                                 <form method="post" asp-page-handler="Seat">
-                                    <input type="hidden" name="reservationId" value="@b.Code" />
+                                    <input type="hidden" name="reservationId" value="@r.reservationID" />
+                                    <input type="hidden" name="returnUrl" value="@currentUrl" />
                                     <button type="submit" class="btn md-btn-round md-btn-sm md-btn-green">Seat</button>
                                 </form>
                                 <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-bs-toggle="modal" data-bs-target="#noShowPopup"
-                                        data-id="@b.Code" data-code="@b.Code" data-details="@details">No-show</button>
+                                        data-id="@r.reservationID" data-code="@code" data-details="@details">No-show</button>
                                 <button type="button" class="btn md-btn-round md-btn-sm md-btn-cancel" data-bs-toggle="modal" data-bs-target="#cancelBookingPopup"
-                                        data-id="@b.Code" data-code="@b.Code" data-details="@details">Cancel</button>
+                                        data-id="@r.reservationID" data-code="@code" data-details="@details">Cancel</button>
                                 break;
-                            case "Seated":
+                            case ReservationStatus.Seated:
                                 @* No buttons: a Seated booking can't be changed and completes by itself when its order is paid (Billing) *@
                                 break;
                         }
@@ -229,11 +203,13 @@
             </li>
         }
     </ul>
-    <p class="md-notice-empty d-none" id="resEmpty">No bookings match these filters.</p>
+    <p class="md-notice-empty @(Model.Bookings.Count == 0 ? "" : "d-none")" id="resEmpty">
+        @(Model.Bookings.Count == 0 ? "No bookings on this day." : "No bookings match these filters.")
+    </p>
 </section>
 
 @* Reservation details pop-up + Decline / Cancel / No-show confirm pop-ups (shared with the Staff Dashboard) *@
-<partial name="_ReservationDetailPopup" model="@("/Staff/Reservations")" />
+<partial name="_ReservationDetailPopup" model="@currentUrl" />
 
 @* ---------- Table pop-up (floor tile) ----------
    Filled from the clicked tile (data-table, data-area, data-seats, and data-booking / name / time / status when booked).
@@ -263,15 +239,18 @@
 
 @section Scripts {
     <script>
-        // Filters on screen: search text + service (lunch before 16:00) + area + status.
-        // Backend: the date arrows reload the page with ?date=…
+        // Filters on screen: search text + service (lunch before 16:00) + area + status. The date reloads the page.
         (function () {
             var rows = document.querySelectorAll('#resList > li');
             var services = document.querySelectorAll('#resService button');
             var area = document.getElementById('resArea');
             var statusSelect = document.getElementById('resStatus');
             var search = document.getElementById('resSearch');
-            var service = 'dinner';
+            var service = 'all';
+
+            document.getElementById('resDate').addEventListener('change', function () {
+                if (this.value) window.location.search = '?date=' + this.value;
+            });
 
             function apply() {
                 var status = statusSelect.value;
@@ -286,7 +265,7 @@
                     row.classList.toggle('d-none', !ok);
                     if (ok) shown++;
                 });
-                document.getElementById('resEmpty').classList.toggle('d-none', shown > 0);
+                if (rows.length) document.getElementById('resEmpty').classList.toggle('d-none', shown > 0);
             }
 
             function pick(buttons, button) {
@@ -298,14 +277,10 @@
             statusSelect.addEventListener('change', apply);
             search.addEventListener('input', apply);
 
-            // ?status=Pending (Staff Dashboard "2 need approval"): pick that status, for the whole day,
-            // and scroll down to the booking list
+            // ?status=Pending (Staff Dashboard "need approval"): pick that status and scroll down to the booking list
             var wanted = new URLSearchParams(location.search).get('status');
             var opened = !!wanted && Array.prototype.some.call(statusSelect.options, function (o) { return o.value === wanted; });
-            if (opened) {
-                statusSelect.value = wanted;
-                service = 'all'; pick(services, document.querySelector('#resService [data-service="all"]'));
-            }
+            if (opened) statusSelect.value = wanted;
             apply();
             if (opened) document.getElementById('bookings').scrollIntoView({ block: 'start', behavior: 'instant' });
         })();
@@ -329,17 +304,17 @@
                 document.getElementById('reserveTableLink').href = '/Staff/WalkIn?table=' + encodeURIComponent(d.table);
             });
 
-            // View upcoming booking: close this pop-up, then open the Reservation details pop-up of that booking
-            // (same as clicking its row – see staff-reservation-popup.js)
+            // View upcoming booking: open its details pop-up (today's list), or go to today with ?view= when another day is shown
             view.addEventListener('click', function () {
                 var row = document.querySelector('#resList [data-code="' + view.dataset.booking + '"] [data-open-detail]');
-                popupEl.addEventListener('hidden.bs.modal', function () { if (row) row.click(); }, { once: true });
+                if (!row) { window.location.href = '/Staff/Reservations?view=' + encodeURIComponent(view.dataset.booking); return; }
+                popupEl.addEventListener('hidden.bs.modal', function () { row.click(); }, { once: true });
                 bootstrap.Modal.getInstance(popupEl).hide();
             });
         })();
     </script>
-    @* Reservation details pop-up (opens from a row, a booked floor tile, or ?view=R-0043) *@
     @* Table dropdowns open their list below (data-md-select) *@
     <script src="~/js/md-select.js" asp-append-version="true"></script>
+    @* Reservation details pop-up (opens from a row, a booked floor tile, or ?view=R-0043) *@
     <script src="~/js/staff-reservation-popup.js" asp-append-version="true"></script>
 }

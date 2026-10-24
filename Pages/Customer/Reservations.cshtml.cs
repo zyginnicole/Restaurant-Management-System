@@ -33,7 +33,7 @@ namespace RestaurantManagementSystem.Pages.Customer
         // ---- Data for the page ----
         public SystemSetting Settings { get; set; } = new();
         public List<string> AreaNames { get; set; } = new();
-        public List<DateTime> AllSlots { get; set; } = new();   // every bookable time that day
+        public List<DateTime> AllSlots { get; set; } = new();   // every bookable time that day (too-soon times left out)
         public List<DateTime> FreeSlots { get; set; } = new();  // the ones with a free table for this party
         public List<Reservation> Upcoming { get; set; } = new();
         public string CustomerName { get; set; } = "";   // shown in the review pop-up
@@ -51,7 +51,7 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             // No date chosen yet: start on the first day that still has bookable times (e.g. late at night → tomorrow)
             if (date == null)
-                for (var i = 0; i < 7 && (await SlotHelper.GetBookableSlotsAsync(_db, Date)).Count == 0; i++)
+                for (var i = 0; i < 7 && (await _reservations.GetCustomerSlotsAsync(Date)).Count == 0; i++)
                     Date = Date.AddDays(1);
             await LoadAsync(custId.Value);
             return Page();
@@ -114,7 +114,7 @@ namespace RestaurantManagementSystem.Pages.Customer
             if (Area != "Any" && !AreaNames.Contains(Area)) Area = "Any";
 
             var areaId = await FindAreaIdAsync(Area);
-            AllSlots = await SlotHelper.GetBookableSlotsAsync(_db, Date);
+            AllSlots = await _reservations.GetCustomerSlotsAsync(Date);
             FreeSlots = await _reservations.GetAvailableSlotsAsync(Date, PartySize, areaId);
             Upcoming = await _reservations.GetUpcomingForCustomerAsync(custId);
 
