@@ -4,7 +4,9 @@ using RestaurantManagementSystem.Model;
 
 namespace RestaurantManagementSystem.Services
 {
-    //All table-reservation rules in one place: availability now, booking/cancelling next.
+    //All table-reservation rules in one place: availability, booking, editing, cancelling and the staff actions.
+    //Times use the server's clock (DateTime.Now), so the server must run in the restaurant's time zone (GMT+8).
+    //The Admin "Time zone" setting is not used yet (known limitation).
     public class ReservationService
     {
         //Staff can still able to book a walk-in "now" a few minutes after the time they picked

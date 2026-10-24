@@ -135,7 +135,9 @@
                                             var value = slot.ToString("HH:mm", inv);
                                             var id = "slot" + value.Replace(":", "");
                                             var free = Model.FreeSlots.Contains(slot);
-                                            <input type="radio" class="btn-check" name="reservationTime" id="@id" value="@value" disabled="@(!free)" checked="@(free && value == Model.SelectedTime)" />
+                                            @* data-locked: this time is already inside the cancellation window → warning in the review pop-up *@
+                                            var locked = DateTime.Now > slot.AddHours(-settings.cancelWindowHours);
+                                            <input type="radio" class="btn-check" name="reservationTime" id="@id" value="@value" disabled="@(!free)" checked="@(free && value == Model.SelectedTime)" data-locked="@(locked ? "true" : "false")" />
                                             <label for="@id">@value</label>
                                         }
                                     </div>
@@ -367,7 +369,12 @@
                 <p class="md-popup-note">
                     <span data-review-when="confirmed">Your table is confirmed as soon as you book.</span>
                     <span data-review-when="pending">Your booking is sent to our team and shows as Pending until it's confirmed.</span>
-                    Free cancellation until @settings.cancelWindowHours hours before your booking.
+                    <span data-review-lock="open">Free cancellation until @settings.cancelWindowHours hours before your booking.</span>
+                </p>
+                @* Shown instead when this time is already inside the cancellation window (slot has data-locked):
+                   the booking can't be changed or cancelled online once it is confirmed *@
+                <p class="md-note-box md-note-box-danger mb-0" data-review-lock="locked">
+                    This booking is less than @settings.cancelWindowHours hours away, so it can't be changed or cancelled online after you confirm.@(settings.phone != null ? " To change it later, please call us on " + settings.phone + "." : "")
                 </p>
             </div>
             <div class="modal-footer">
@@ -469,6 +476,11 @@
                 var pending = reviewEl.dataset.autoConfirm !== 'true' || needsReview;
                 reviewEl.querySelectorAll('[data-review-when]').forEach(function (el) {
                     el.classList.toggle('d-none', el.dataset.reviewWhen !== (pending ? 'pending' : 'confirmed'));
+                });
+                // Already inside the cancellation window (worked out by the server per time slot): warn before confirming
+                var locked = time.dataset.locked === 'true';
+                reviewEl.querySelectorAll('[data-review-lock]').forEach(function (el) {
+                    el.classList.toggle('d-none', el.dataset.reviewLock !== (locked ? 'locked' : 'open'));
                 });
                 mdAlignDetailGrid(reviewEl, reviewEl.querySelector('.modal-body'));
                 reviewPopup.show();
