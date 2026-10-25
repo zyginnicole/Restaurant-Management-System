@@ -27,6 +27,10 @@
     {
         <div class="md-receipt-row"><span class="md-receipt-label">Reservation</span><span>@Model.ReservationCode@(Model.TableCode != null ? " · Table " + Model.TableCode : "")</span></div>
     }
+    else if (Model.IsDineIn && Model.TableCode != null)
+    {
+        <div class="md-receipt-row"><span class="md-receipt-label">Table</span><span>@Model.TableCode</span></div>
+    }
     @if (!Model.IsDineIn && Model.PickupTime != null)
     {
         <div class="md-receipt-row"><span class="md-receipt-label">Pick-up</span><span>@Model.PickupTime</span></div>

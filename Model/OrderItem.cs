@@ -26,5 +26,9 @@ namespace RestaurantManagementSystem.Model
         // Price at time of ordering (so later menu price changes don't alter old orders)
         [Column(TypeName = "decimal(10,2)")]
         public decimal unitPrice { get; set; }
+
+        // Kitchen note for this dish, e.g. "Medium rare" (entered on Checkout)
+        [MaxLength(200)]
+        public string? orderRemark { get; set; }
     }
 }

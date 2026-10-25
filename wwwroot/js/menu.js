@@ -1,6 +1,7 @@
 // Customer Menu page: tabs (Recommendations / Promotions / All / categories), search,
 // promotion banner, cart counter and chatbot panel.
-// Front-end only – saving the cart and real chatbot replies are for the team to add later.
+// The cart is saved in the session on the server (Menu.cshtml.cs, handler SetQuantity), so Checkout can read it.
+// Real chatbot replies are for the team to add later.
 (function () {
     // ---------- Tabs + search ----------
     var items = document.querySelectorAll('.md-menu-item');
@@ -94,38 +95,95 @@
         applyFilter();
     });
 
-    // ---------- Cart counter (starts with the 2 example items in the design) ----------
-    var cartCount = 2;
-    var cartTotal = 204;
+    // ---------- Cart (saved on the server) ----------
+    var MAX_QTY = 20;                                              // same limit as Checkout
+
+    // Set by Menu.cshtml: ids = dish name -> menuID, quantities = menuID -> quantity already in the cart
+    var cartData = window.MD_CART || { ids: {}, quantities: {} };
+    var tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
 
     // Quantity per dish (keyed by dish name, so the same dish shown in Recommendations,
-    // Promotions and All keeps one quantity). Backend: key by itemID and save to the cart instead.
+    // Promotions and All keeps one quantity). Starts from the cart saved in the session.
     var quantities = {};
+    Object.keys(cartData.ids).forEach(function (name) {
+        var qty = cartData.quantities[cartData.ids[name]];
+        if (qty) quantities[name] = qty;
+    });
 
     function dishName(button) {
         return button.closest('.md-menu-card').querySelector('h3').textContent.trim();
     }
 
-    function updateCart(price, change) {
-        cartCount += change;
-        cartTotal += price * change;
-        document.getElementById('cartCount').textContent = cartCount;
-        document.getElementById('cartTotal').textContent = 'RM ' + cartTotal.toFixed(2);
+    // Header button: "Cart · 3 items · RM 204.00" (numbers come from the server)
+    function showCart(totalItems, total) {
+        document.getElementById('cartCount').textContent = totalItems;
+        document.getElementById('cartTotal').textContent = 'RM ' + Number(total).toFixed(2);
     }
 
-    // Show the stepper with the quantity on every card of this dish (hidden at 0)
+    // Show the stepper and keep button as "Added" when quantity >= 1
     function showQuantity(name) {
         var qty = quantities[name] || 0;
         document.querySelectorAll('.md-add-row').forEach(function (row) {
             if (row.dataset.dish !== name) return;
+            
+            // Toggle quantity stepper (- qty +)
             row.querySelector('.md-qty').classList.toggle('d-none', qty === 0);
             row.querySelector('[data-qty]').textContent = qty;
+
+            // Maintain "Added" state on the button whenever quantity >= 1
+            var button = row.querySelector('.md-add-btn');
+            if (button) {
+                if (qty > 0) {
+                    button.classList.remove('is-reset');
+                    button.classList.add('is-added');
+                    button.textContent = 'Added';
+                } else {
+                    button.classList.remove('is-added', 'is-reset');
+                    button.textContent = 'Add to order';
+                }
+            }
         });
+    }
+
+    // Change one dish to a new quantity: update the cards at once, save on the server,
+    // then use the server's answer for the quantity and the header totals.
+    function changeQuantity(name, qty) {
+        var menuId = cartData.ids[name];
+        if (!menuId) return;
+
+        var previous = quantities[name] || 0;
+        qty = Math.max(0, Math.min(MAX_QTY, qty));
+        if (qty === previous) return;
+        quantities[name] = qty;
+        showQuantity(name);
+
+        fetch(window.location.pathname + '?handler=SetQuantity', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'RequestVerificationToken': tokenInput ? tokenInput.value : ''
+            },
+            body: 'menuId=' + encodeURIComponent(menuId) + '&quantity=' + qty
+        })
+            .then(function (response) {
+                return response.json().catch(function () { return { ok: false }; });
+            })
+            .then(function (data) {
+                if (!data.ok) throw new Error(data.message || '');
+                quantities[name] = data.quantity;
+                showQuantity(name);
+                showCart(data.count, data.total);
+            })
+            .catch(function (error) {
+                quantities[name] = previous;
+                showQuantity(name);
+                window.alert(error.message || 'We could not update your cart. Please try again.');
+            });
     }
 
     document.querySelectorAll('.md-add-btn').forEach(function (button) {
         var name = dishName(button);
-        var price = parseFloat(button.dataset.price);
 
         // Wrap the button in a row with a − qty + stepper (hidden until the dish is added)
         var row = document.createElement('div');
@@ -142,35 +200,17 @@
 
         row.querySelectorAll('[data-step]').forEach(function (step) {
             step.addEventListener('click', function () {
-                var change = parseInt(step.dataset.step, 10);
-                if ((quantities[name] || 0) + change < 0) return;
-                quantities[name] = (quantities[name] || 0) + change;
-                updateCart(price, change);
-                showQuantity(name);
+                changeQuantity(name, (quantities[name] || 0) + parseInt(step.dataset.step, 10));
             });
         });
 
         button.addEventListener('click', function () {
-            quantities[name] = (quantities[name] || 0) + 1;
-            updateCart(price, 1);
-            showQuantity(name);
-
-            // "Added" on green for a moment, then back to the white "Add to order"
-            clearTimeout(button.addedTimer);
-            button.classList.remove('is-reset');
-            button.classList.add('is-added');
-            button.textContent = 'Added';
-            button.addedTimer = setTimeout(function () {
-                button.classList.remove('is-added');
-                button.classList.add('is-reset');      // stays white even while the mouse is still on it
-                button.textContent = 'Add to order';
-                button.blur();
-            }, 1200);
-        });
-        button.addEventListener('mouseleave', function () {
-            if (!button.classList.contains('is-added')) button.classList.remove('is-reset');
+            changeQuantity(name, (quantities[name] || 0) + 1);
         });
     });
+
+    // Cards of dishes that are already in the saved cart show their state straight away
+    Object.keys(quantities).forEach(showQuantity);
 
     // ---------- Chatbot panel ----------
     var toggle = document.getElementById('chatToggle');

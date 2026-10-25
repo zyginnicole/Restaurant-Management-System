@@ -375,10 +375,16 @@ namespace RestaurantManagementSystem.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("pickupDateTime")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("reservationID")
                         .HasColumnType("int");
 
                     b.Property<int?>("staffID")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("tableID")
                         .HasColumnType("int");
 
                     b.Property<decimal>("totalAmount")
@@ -391,6 +397,8 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("reservationID");
 
                     b.HasIndex("staffID");
+
+                    b.HasIndex("tableID");
 
                     b.ToTable("Orders");
                 });
@@ -408,6 +416,10 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.Property<int>("orderID")
                         .HasColumnType("int");
+
+                    b.Property<string>("orderRemark")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<int>("quantity")
                         .HasColumnType("int");
@@ -851,7 +863,14 @@ namespace RestaurantManagementSystem.Migrations
                         .HasForeignKey("staffID")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("RestaurantManagementSystem.Model.DiningTable", "DiningTable")
+                        .WithMany("Orders")
+                        .HasForeignKey("tableID")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Customer");
+
+                    b.Navigation("DiningTable");
 
                     b.Navigation("Reservation");
 
@@ -948,6 +967,8 @@ namespace RestaurantManagementSystem.Migrations
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.DiningTable", b =>
                 {
+                    b.Navigation("Orders");
+
                     b.Navigation("Reservations");
                 });
 

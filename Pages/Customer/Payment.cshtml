@@ -8,11 +8,22 @@
     Layout = "_CustomerLayout";
 }
 
-@* Example order ORD-0089 (takeaway). paymentMethod values match the Payment model:
-   Card, Online Banking, E-Wallet. (Cash is only taken by staff at the restaurant.) *@
+@* Order details come from PaymentModel. Takeaway = one order; dine-in = one bill for every order at the table.
+   paymentMethod values match the Payment model: Card, Online Banking, E-Wallet. (Cash is only taken by staff.) *@
+
+@* Message when the payment could not be completed / no method chosen *@
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="md-alert-danger mb-4" role="alert">
+        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        {
+            <div>@error.ErrorMessage</div>
+        }
+    </div>
+}
 
 <form method="post" id="paymentForm">
-    <input type="hidden" name="orderId" value="89" />
+    <input type="hidden" name="orderId" value="@Model.OrderId" />
     <div class="row md-grid md-section">
         <div class="col-lg-8">
             @* ---------- Payment method ---------- *@
@@ -52,7 +63,7 @@
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="md-label" for="cardName">Name on card</label>
-                                <input class="form-control md-input" id="cardName" autocomplete="cc-name" value="Alexandra Beaumont" />
+                                <input class="form-control md-input" id="cardName" autocomplete="cc-name" value="@Model.CustomerName" />
                             </div>
                             <div class="col-md-6">
                                 <label class="md-label" for="cardNumber">Card number</label>
@@ -101,15 +112,22 @@
                     <span class="md-card-label">Order summary</span>
                 </div>
                 <div class="md-card-body">
-                    <p class="md-res-item-note mb-2">ORD-0089 · Takeaway · pick-up 21:30</p>
+                    <p class="md-res-item-note mb-2">@Model.OrderCodes · @(Model.IsDineIn ? "Dine-in · table " + Model.TableNumber : "Takeaway" + (Model.PickupTime != null ? " · pick-up " + Model.PickupTime : ""))</p>
                     <dl class="md-sum">
-                        <div><dt>1× Wagyu Beef Tenderloin</dt><dd>RM 168.00</dd></div>
-                        <div><dt>1× Valrhona Chocolate Fondant</dt><dd>RM 36.00</dd></div>
-                        <div><dt>SST 6%</dt><dd>RM 12.24</dd></div>
-                        <div class="md-sum-total"><dt>Total</dt><dd>RM 216.24</dd></div>
+                        @foreach (var line in Model.Lines)
+                        {
+                            <div><dt>@line.Quantity&times; @line.Name</dt><dd>RM @line.LineTotal.ToString("N2")</dd></div>
+                        }
+                        <div><dt>Subtotal</dt><dd>RM @Model.Subtotal.ToString("N2")</dd></div>
+                        @if (Model.IsDineIn)
+                        {
+                            <div><dt>Service charge @Model.ServiceChargePct.ToString("0.##")%</dt><dd>RM @Model.ServiceCharge.ToString("N2")</dd></div>
+                        }
+                        <div><dt>SST @Model.SstPct.ToString("0.##")%</dt><dd>RM @Model.Sst.ToString("N2")</dd></div>
+                        <div class="md-sum-total"><dt>Total</dt><dd>RM @Model.Total.ToString("N2")</dd></div>
                     </dl>
-                    <button type="submit" class="btn btn-md-green w-100 mb-2">Pay RM 216.24</button>
-                    <a class="btn btn-md-outline w-100" href="/Customer/Checkout">Back to checkout</a>
+                    <button type="submit" class="btn btn-md-green w-100 mb-2">Pay RM @Model.Total.ToString("N2")</button>
+                    <a class="btn btn-md-outline w-100" href="@(Model.IsDineIn ? "/Customer/Orders" : "/Customer/Checkout")">@(Model.IsDineIn ? "Back to orders" : "Back to checkout")</a>
                 </div>
             </section>
         </div>

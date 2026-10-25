@@ -24,23 +24,20 @@
 </div>
 
 <div class="md-portal-card">
-    @* Error message from the PageModel: wrong details or deactivated account *@
-    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
-    {
-        <div class="md-alert-danger mb-4" role="alert">
-            @Model.ErrorMessage
-        </div>
-    }
+    @* Error message – show it from the PageModel when sign-in fails (remove d-none). *@
+    <div class="md-alert-danger mb-4 d-none" role="alert">
+        Incorrect email or password.
+    </div>
 
-    @* role = "Staff" → check the Staff table, role = "Admin" → check the Admin table.
-       The session role is always taken from the table that matched, never from this field. *@
+    @* role = "Staff" → check the Staff table (staffEmail / staffPassword)
+       role = "Admin" → check the Admin table (adminEmail / adminPassword) *@
     <form method="post">
-        <input type="hidden" id="role" name="role" value="@Model.Role" />
+        <input type="hidden" id="role" name="role" value="Staff" />
 
         <div class="mb-3">
             <label class="md-label" for="email">Email address</label>
             <input class="form-control md-input md-input-dark" id="email" name="email" type="email"
-                   value="@Model.Email" placeholder="name@maisondoree.my" autocomplete="username" required />
+                   placeholder="name@maisondoree.my" autocomplete="username" required />
         </div>
 
         <div class="mb-4">
@@ -75,11 +72,5 @@
                 document.title = tab.dataset.title + ' · ' + brand;
             });
         });
-
-        // After a failed sign-in, re-open the tab that was used (Staff or Administrator)
-        var startTab = document.querySelector('.md-portal-tab[data-role="' + document.getElementById('role').value + '"]');
-        if (startTab) {
-            startTab.click();
-        }
     </script>
 }

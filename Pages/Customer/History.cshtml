@@ -1,18 +1,44 @@
 ﻿@page
 @model RestaurantManagementSystem.Pages.Customer.HistoryModel
+@using RestaurantManagementSystem.Services
 @{
     ViewData["Title"] = "History";
     ViewData["ActiveNav"] = "History";
     ViewData["Eyebrow"] = "Past activity";
     ViewData["Heading"] = "History";
     Layout = "_CustomerLayout";
+
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    // Years for the filter: the years of the customer's past reservations, newest first
+    var years = Model.PastReservations.Select(r => r.reservationDateTime.Year).Distinct().OrderByDescending(y => y).ToList();
 }
 
-@* Example data from the design. Only finished activity is shown here:
+@functions {
+    // "7:00 – 9:00 PM"
+    static string TimeRange(DateTime start, int minutes)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var end = start.AddMinutes(minutes);
+        return start.ToString("h:mm", inv) + (start.ToString("tt", inv) == end.ToString("tt", inv) ? "" : " " + start.ToString("tt", inv))
+            + " – " + end.ToString("h:mm tt", inv);
+    }
+
+    // "Saturday evening"
+    static string DayText(DateTime start)
+        => start.ToString("dddd", System.Globalization.CultureInfo.InvariantCulture) + (start.Hour < 16 ? " lunch" : " evening");
+
+    // ★★★★☆ (the grey ones in .md-rated-off)
+    static Microsoft.AspNetCore.Html.IHtmlContent Stars(int rating)
+        => new Microsoft.AspNetCore.Html.HtmlString("<span class=\"md-rated\" aria-label=\"Rated " + rating + " out of 5\">" + new string('★', rating)
+            + (rating < 5 ? "<span class=\"md-rated-off\">" + new string('★', 5 - rating) + "</span>" : "") + "</span>");
+}
+
+@* Only finished activity is shown here:
    Reservation – Completed green · Cancelled, No-show, Declined grey (Reservation.reservationStatus, stored exactly so)
    Order       – Completed green · Cancelled grey
    Payment     – Paid green · Refunded grey · Failed red
-   Upcoming reservations and open orders stay on the Reservations and Orders pages. *@
+   Upcoming reservations and open orders stay on the Reservations and Orders pages.
+   The Reservations tab reads the database; the Orders and Payments tabs are still example data (orders / payments feature). *@
 
 <nav class="md-tabs md-page-tabs" aria-label="History sections" id="historyTabs">
     <button type="button" class="active" data-tab="reservations" aria-controls="tab-reservations">Reservations</button>
@@ -24,7 +50,7 @@
 <section class="md-card md-section" id="tab-reservations" data-tab-panel="reservations">
     <div class="md-card-header">
         <span class="md-card-label">Past reservations</span>
-        @* Filters: status, month, year (client-side for the static UI; the backend can also filter the query) *@
+        @* Filters: status, month, year (on screen) *@
         <div class="md-history-filters" data-filters>
             <select class="form-select md-input" data-filter="status" aria-label="Filter by status">
                 <option value="">All statuses</option>
@@ -35,214 +61,140 @@
             </select>
             <select class="form-select md-input" data-filter="month" aria-label="Filter by month">
                 <option value="">All months</option>
-                <option value="1">Jan</option>
-                <option value="2">Feb</option>
-                <option value="3">Mar</option>
-                <option value="4">Apr</option>
-                <option value="5">May</option>
-                <option value="6">Jun</option>
-                <option value="7">Jul</option>
-                <option value="8">Aug</option>
-                <option value="9">Sep</option>
-                <option value="10">Oct</option>
-                <option value="11">Nov</option>
-                <option value="12">Dec</option>
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m">@inv.DateTimeFormat.GetAbbreviatedMonthName(m)</option>
+                }
             </select>
             <select class="form-select md-input" data-filter="year" aria-label="Filter by year">
                 <option value="">All years</option>
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
+                @foreach (var y in years)
+                {
+                    <option value="@y">@y</option>
+                }
             </select>
             <span class="md-card-meta"><span data-count>0</span> visits</span>
         </div>
     </div>
     <ul class="md-res-list">
-        <li class="md-res-item md-history-item md-history-click is-completed" data-status="Completed" data-month="8" data-year="2026" data-kind="Reservation" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                <span class="md-date-tile-month">Aug</span>
-                <span class="md-date-tile-day">15</span>
-            </div>
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">R-0038</span>
-                    <span class="md-badge md-badge-completed">Completed</span>
-                </div>
-                <span class="md-res-item-info">15 Aug 2026 · 20:00 · 4 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-12 Indoor</span>
-                <span class="md-res-item-note">ORD-0079 · RM 573.67 paid</span>
-            </div>
-            @* Not rated yet → Rate button opens the pop-up below *@
-            <div class="md-history-side">
-                <button type="button" class="btn btn-md-dark md-btn-sm" data-bs-toggle="modal" data-bs-target="#ratePopup"
-                        data-code="R-0038" data-date="15 Aug 2026" data-order="79">Rate this visit</button>
-            </div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                @* Same layout as the Overview "Next reservation" slot: date tile + status, day, time, guests, table *@
-                <div class="md-next-res md-detail-res">
-                    <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
-                        <span class="md-date-tile-month">Aug</span>
-                        <span class="md-date-tile-day">15</span>
+        @foreach (var r in Model.PastReservations)
+        {
+            var status = r.reservationStatus;
+            var css = status.Replace("-", "").ToLowerInvariant();
+            var code = ReservationService.Code(r);
+            var start = r.reservationDateTime;
+            var guests = r.partySize + (r.partySize == 1 ? " guest" : " guests");
+            var table = r.DiningTable?.tableNumber + " " + r.DiningTable?.DiningArea?.areaName;
+
+            if (status == ReservationStatus.Completed)
+            {
+                // The visit's order (latest one that wasn't cancelled) + its payment and rating
+                var order = r.Orders.Where(o => o.orderStatus != "Cancelled").OrderByDescending(o => o.orderID).FirstOrDefault();
+                var orderText = order == null
+                    ? "No order linked"
+                    : "ORD-" + order.orderID.ToString("D4") + " · RM " + order.totalAmount.ToString("N2", inv)
+                      + (order.Payment?.paymentStatus == "Paid" ? " paid" : " · " + (order.Payment?.paymentStatus ?? "not paid").ToLowerInvariant());
+                var rating = order != null && Model.FeedbackByOrder.TryGetValue(order.orderID, out var f) ? f : null;
+
+                <li class="md-res-item md-history-item md-history-click is-completed" data-status="@status" data-month="@start.Month" data-year="@start.Year" data-kind="Reservation" tabindex="0" role="button" aria-haspopup="dialog">
+                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                        <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
+                        <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
                     </div>
-                    <div class="md-next-res-info">
-                        <span class="md-next-slot-code"><span class="md-badge md-badge-completed">Completed</span></span>
-                        <div class="md-res-date">Saturday evening</div>
-                        <div class="md-next-res-row">
-                            <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>8:00 – 9:30 PM</span>
-                            <span><i class="bi bi-person" aria-hidden="true"></i>4 <span class="visually-hidden">guests</span></span>
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">@code</span>
+                            <span class="md-badge md-badge-completed">Completed</span>
                         </div>
-                        <div class="md-next-res-row">
-                            <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-12 · Indoor</span>
-                        </div>
+                        <span class="md-res-item-info">@start.ToString("d MMM yyyy · HH:mm", inv) · @guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@table</span>
+                        <span class="md-res-item-note">@orderText</span>
                     </div>
-                </div>
-                @* Order | Your rating side by side, Special request underneath; label above value *@
-                <dl class="md-detail-grid">
-                    <div><dt>Order</dt><dd>ORD-0079 · RM 573.67 paid</dd></div>
-                    <div><dt>Your rating</dt><dd>Not rated yet</dd></div>
-                    <div class="is-wide"><dt>Special request</dt><dd>Anniversary dinner · Window seat</dd></div>
-                </dl>
-            </template>
-        </li>
-        <li class="md-res-item md-history-item md-history-click is-completed" data-status="Completed" data-month="7" data-year="2026" data-kind="Reservation" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                <span class="md-date-tile-month">Jul</span>
-                <span class="md-date-tile-day">03</span>
-            </div>
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">R-0028</span>
-                    <span class="md-badge md-badge-completed">Completed</span>
-                </div>
-                <span class="md-res-item-info">3 Jul 2026 · 19:00 · 2 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-03 Indoor</span>
-                <span class="md-res-item-note">ORD-0064 · RM 297.33 paid</span>
-            </div>
-            @* Already rated (Feedback.rating) → show the stars *@
-            <div class="md-history-side">
-                <span class="md-rated" aria-label="Rated 5 out of 5">★★★★★</span>
-                <span class="md-res-item-note">Rated 4 Jul</span>
-            </div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                @* Same layout as the Overview "Next reservation" slot: date tile + status, day, time, guests, table *@
-                <div class="md-next-res md-detail-res">
-                    <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
-                        <span class="md-date-tile-month">Jul</span>
-                        <span class="md-date-tile-day">03</span>
+                    @* Rated → stars · not rated (and has an order) → Rate button · no order → nothing to rate *@
+                    <div class="md-history-side">
+                        @if (rating != null)
+                        {
+                            @Stars(rating.rating)
+                            <span class="md-res-item-note">Rated @rating.feedbackDate.ToString("d MMM", inv)</span>
+                        }
+                        else if (order != null)
+                        {
+                            <button type="button" class="btn btn-md-dark md-btn-sm" data-bs-toggle="modal" data-bs-target="#ratePopup"
+                                    data-code="@code" data-date="@start.ToString("d MMM yyyy", inv)" data-order="@order.orderID">Rate this visit</button>
+                        }
+                        else
+                        {
+                            <span class="md-res-item-note">—</span>
+                        }
                     </div>
-                    <div class="md-next-res-info">
-                        <span class="md-next-slot-code"><span class="md-badge md-badge-completed">Completed</span></span>
-                        <div class="md-res-date">Friday evening</div>
-                        <div class="md-next-res-row">
-                            <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>7:00 – 8:30 PM</span>
-                            <span><i class="bi bi-person" aria-hidden="true"></i>2 <span class="visually-hidden">guests</span></span>
+                    @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
+                    <template data-detail>
+                        @* Same layout as the Overview "Next reservation" slot: date tile + status, day, time, guests, table *@
+                        <div class="md-next-res md-detail-res">
+                            <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
+                                <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
+                                <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
+                            </div>
+                            <div class="md-next-res-info">
+                                <span class="md-next-slot-code"><span class="md-badge md-badge-completed">Completed</span></span>
+                                <div class="md-res-date">@DayText(start)</div>
+                                <div class="md-next-res-row">
+                                    <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>@TimeRange(start, Model.DiningMinutes)</span>
+                                    <span><i class="bi bi-person" aria-hidden="true"></i>@r.partySize <span class="visually-hidden">guests</span></span>
+                                </div>
+                                <div class="md-next-res-row">
+                                    <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@r.DiningTable?.tableNumber · @r.DiningTable?.DiningArea?.areaName</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="md-next-res-row">
-                            <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-03 · Indoor</span>
-                        </div>
+                        @* Order | Your rating side by side, Special request underneath; label above value *@
+                        <dl class="md-detail-grid">
+                            <div><dt>Order</dt><dd>@orderText</dd></div>
+                            <div><dt>Your rating</dt><dd>
+                                @if (rating != null)
+                                {
+                                    @Stars(rating.rating)
+                                    @(rating.comment != null ? " “" + rating.comment + "”" : "")
+                                }
+                                else
+                                {
+                                    @:Not rated yet
+                                }
+                            </dd></div>
+                            <div class="is-wide"><dt>Special request</dt><dd>@(r.specialRequest ?? "None")</dd></div>
+                        </dl>
+                    </template>
+                </li>
+            }
+            else
+            {
+                // Cancelled / No-show / Declined: grey, not clickable. Staff set → done by the restaurant.
+                var note = status switch
+                {
+                    ReservationStatus.Cancelled => r.Staff != null ? "Cancelled by the restaurant" : "Cancelled by you",
+                    ReservationStatus.NoShow => "Marked as no-show · the table was released",
+                    _ => "Declined by the restaurant"
+                };
+                <li class="md-res-item md-history-item is-@css" data-status="@status" data-month="@start.Month" data-year="@start.Year">
+                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                        <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
+                        <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
                     </div>
-                </div>
-                @* Order | Your rating side by side, Special request underneath; label above value *@
-                <dl class="md-detail-grid">
-                    <div><dt>Order</dt><dd>ORD-0064 · RM 297.33 paid</dd></div>
-                    <div><dt>Your rating</dt><dd><span class="md-rated">★★★★★</span> “Wonderful service, lovely evening.”</dd></div>
-                    <div class="is-wide"><dt>Special request</dt><dd>None</dd></div>
-                </dl>
-            </template>
-        </li>
-        <li class="md-res-item md-history-item is-cancelled" data-status="Cancelled" data-month="6" data-year="2026">
-            <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                <span class="md-date-tile-month">Jun</span>
-                <span class="md-date-tile-day">12</span>
-            </div>
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">R-0024</span>
-                    <span class="md-badge md-badge-cancelled">Cancelled</span>
-                </div>
-                <span class="md-res-item-info">12 Jun 2026 · 19:30 · 2 guests</span>
-                <span class="md-res-item-note">Cancelled by you on 11 Jun · Change of plans</span>
-            </div>
-            <div class="md-history-side"><span class="md-res-item-note">—</span></div>
-        </li>
-        @* No-show: the guest didn't arrive; staff marked it after the grace period (grey, not clickable – like Cancelled) *@
-        <li class="md-res-item md-history-item is-noshow" data-status="No-show" data-month="5" data-year="2026">
-            <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                <span class="md-date-tile-month">May</span>
-                <span class="md-date-tile-day">22</span>
-            </div>
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">R-0020</span>
-                    <span class="md-badge md-badge-noshow">No-show</span>
-                </div>
-                <span class="md-res-item-info">22 May 2026 · 20:00 · 3 guests</span>
-                <span class="md-res-item-note">Marked as no-show at 20:15 · the table was released</span>
-            </div>
-            <div class="md-history-side"><span class="md-res-item-note">—</span></div>
-        </li>
-        @* Declined: the restaurant couldn't accept the request (reason from Reservation.cancelReason) *@
-        <li class="md-res-item md-history-item is-declined" data-status="Declined" data-month="4" data-year="2026">
-            <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                <span class="md-date-tile-month">Apr</span>
-                <span class="md-date-tile-day">18</span>
-            </div>
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">R-0016</span>
-                    <span class="md-badge md-badge-declined">Declined</span>
-                </div>
-                <span class="md-res-item-info">18 Apr 2026 · 20:30 · 10 guests</span>
-                <span class="md-res-item-note">Declined by the restaurant · Party too large for available tables</span>
-            </div>
-            <div class="md-history-side"><span class="md-res-item-note">—</span></div>
-        </li>
-        <li class="md-res-item md-history-item md-history-click is-completed" data-status="Completed" data-month="12" data-year="2025" data-kind="Reservation" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                <span class="md-date-tile-month">Dec</span>
-                <span class="md-date-tile-day">20</span>
-            </div>
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">R-0012</span>
-                    <span class="md-badge md-badge-completed">Completed</span>
-                </div>
-                <span class="md-res-item-info">20 Dec 2025 · 19:30 · 6 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-20 VIP</span>
-                <span class="md-res-item-note">ORD-0031 · RM 1,352.56 paid</span>
-            </div>
-            <div class="md-history-side">
-                <span class="md-rated" aria-label="Rated 4 out of 5">★★★★<span class="md-rated-off">★</span></span>
-                <span class="md-res-item-note">Rated 21 Dec</span>
-            </div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                @* Same layout as the Overview "Next reservation" slot: date tile + status, day, time, guests, table *@
-                <div class="md-next-res md-detail-res">
-                    <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
-                        <span class="md-date-tile-month">Dec</span>
-                        <span class="md-date-tile-day">20</span>
-                    </div>
-                    <div class="md-next-res-info">
-                        <span class="md-next-slot-code"><span class="md-badge md-badge-completed">Completed</span></span>
-                        <div class="md-res-date">Saturday evening</div>
-                        <div class="md-next-res-row">
-                            <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>7:30 – 9:00 PM</span>
-                            <span><i class="bi bi-person" aria-hidden="true"></i>6 <span class="visually-hidden">guests</span></span>
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">@code</span>
+                            <span class="md-badge md-badge-@css">@status</span>
                         </div>
-                        <div class="md-next-res-row">
-                            <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-20 · VIP</span>
-                        </div>
+                        <span class="md-res-item-info">@start.ToString("d MMM yyyy · HH:mm", inv) · @guests</span>
+                        <span class="md-res-item-note">@note</span>
                     </div>
-                </div>
-                @* Order | Your rating side by side, Special request underneath; label above value *@
-                <dl class="md-detail-grid">
-                    <div><dt>Order</dt><dd>ORD-0031 · RM 1,352.56 paid</dd></div>
-                    <div><dt>Your rating</dt><dd><span class="md-rated">★★★★<span class="md-rated-off">★</span></span> “Great food, slightly slow service.”</dd></div>
-                    <div class="is-wide"><dt>Special request</dt><dd>Christmas family dinner</dd></div>
-                </dl>
-            </template>
-        </li>
+                    <div class="md-history-side"><span class="md-res-item-note">—</span></div>
+                </li>
+            }
+        }
     </ul>
-    <p class="md-history-empty d-none" data-empty>No reservations match these filters.</p>
+    <p class="md-history-empty @(Model.PastReservations.Count == 0 ? "" : "d-none")" data-empty>
+        @(Model.PastReservations.Count == 0 ? "No past reservations yet." : "No reservations match these filters.")
+    </p>
 </section>
 
 @* ---------- Orders ---------- *@

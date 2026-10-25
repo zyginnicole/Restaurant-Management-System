@@ -1,45 +1,29 @@
 @page
 @model RestaurantManagementSystem.Pages.Customer.PaymentSuccessModel
 @{
-    // Example receipts – backend: build one ReceiptView from the paid Order (see Pages/Shared/Partials/ReceiptView.cs).
-    // Takeaway is the normal case here (paid online). ?type=dinein is a UI preview of the dine-in receipt
-    // (dine-in bills are paid at the table – staff can show the same _Receipt partial).
-    bool dineIn = Request.Query["type"] == "dinein";
+    // Receipt and tracker come from PaymentSuccessModel (the real orders + payment).
+    // Dine-in: one receipt for every order of the table that was paid together.
+    var receipt = Model.Receipt;
+    bool dineIn = Model.IsDineIn;
+    string firstName = (receipt.CustomerName ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
 
-    var receipt = dineIn
-        ? new ReceiptView
-        {
-            ReceiptNo = "RCP-0079", OrderCode = "ORD-0079", IsDineIn = true,
-            ReservationCode = "R-0038", TableCode = "T-12",
-            CustomerName = "Alexandra Beaumont",
-            Items = new()
-            {
-                new() { Quantity = 2, Name = "Oyster Selection", UnitPrice = 68m },
-                new() { Quantity = 1, Name = "Wagyu Beef Tenderloin", UnitPrice = 168m, Note = "Medium rare" },
-                new() { Quantity = 1, Name = "Duck à l'Orange", UnitPrice = 92m },
-                new() { Quantity = 3, Name = "Mille-Feuille", UnitPrice = 32m }
-            },
-            PaymentMethod = "Card", PaymentStatus = "Paid",
-            PaidAt = new DateTimeOffset(2026, 8, 15, 21, 38, 0, TimeSpan.FromHours(8))
-        }
-        : new ReceiptView
-        {
-            ReceiptNo = "RCP-0089", OrderCode = "ORD-0089", IsDineIn = false,
-            PickupTime = "21:30",
-            CustomerName = "Alexandra Beaumont",
-            Items = new()
-            {
-                new() { Quantity = 1, Name = "Wagyu Beef Tenderloin", UnitPrice = 168m },
-                new() { Quantity = 1, Name = "Valrhona Chocolate Fondant", UnitPrice = 36m }
-            },
-            PaymentMethod = "Card", PaymentStatus = "Paid",
-            PaidAt = new DateTimeOffset(2026, 9, 16, 20, 44, 0, TimeSpan.FromHours(8))
-        };
+    // Tracker: Order placed → Preparing → Served → Completed
+    string status = Model.OrderStatus;
+    bool stepPreparing = status == "Preparing" || status == "Served" || status == "Completed";
+    bool stepServed = status == "Served" || status == "Completed";
+    bool stepCompleted = status == "Completed";
+    string badgeClass = status switch
+    {
+        "Order placed" => "md-badge-placed",
+        "Preparing" => "md-badge-preparing",
+        "Served" => "md-badge-served",
+        _ => "md-badge-completed"
+    };
 
     ViewData["Title"] = "Payment successful";
     ViewData["ActiveNav"] = "Orders";
     ViewData["Eyebrow"] = "Payment successful";
-    ViewData["Heading"] = "Thank you, Alexandra";
+    ViewData["Heading"] = string.IsNullOrEmpty(firstName) ? "Thank you" : "Thank you, " + firstName;
     ViewData["Subtitle"] = $"Your payment of RM {receipt.Total:#,##0.00} was received.";
     Layout = "_CustomerLayout";
 }
@@ -69,37 +53,24 @@
             <a class="stretched-link" href="/Customer/Orders" aria-label="Track order @receipt.OrderCode on the Orders page"></a>
             <div class="md-card-header">
                 <span class="md-card-label">Track order — <strong class="md-card-code">@receipt.OrderCode</strong></span>
-                @if (dineIn)
-                {
-                    <span class="md-badge md-badge-completed">Completed</span>
-                }
-                else
-                {
-                    <span class="md-badge md-badge-preparing">Preparing</span>
-                }
+                <span class="md-badge @badgeClass">@status</span>
             </div>
             <div class="md-card-body">
+                <ol class="md-tracker">
+                    <li class="@(status == "Order placed" ? "current" : "done")"><span>Order placed</span><small class="md-tracker-time">@Model.PlacedTime</small></li>
+                    <li class="@(status == "Preparing" ? "current" : (stepPreparing ? "done" : ""))"><span>Preparing</span><small class="md-tracker-time">—</small></li>
+                    <li class="@(status == "Served" ? "current" : (stepServed ? "done" : ""))"><span>Served</span><small class="md-tracker-time">—</small></li>
+                    <li class="@(status == "Completed" ? "current" : (stepCompleted ? "done" : ""))"><span>Completed</span><small class="md-tracker-time">@(dineIn ? Model.PaidTime : "—")</small></li>
+                </ol>
                 @if (dineIn)
                 {
-                    @* Dine-in: the bill is paid after everything is served, so the order is complete *@
-                    <ol class="md-tracker">
-                        <li class="done"><span>Order placed</span><small class="md-tracker-time">20:12</small></li>
-                        <li class="done"><span>Preparing</span><small class="md-tracker-time">20:14</small></li>
-                        <li class="done"><span>Served</span><small class="md-tracker-time">21:05</small></li>
-                        <li class="current"><span>Completed</span><small class="md-tracker-time">21:38</small></li>
-                    </ol>
-                    <p class="mb-2">Your bill for table <b>T-12</b> is settled. We hope you enjoyed your evening.</p>
+                    @* Dine-in: the bill is paid after everything is served, so the orders are complete *@
+                    <p class="mb-2">Your bill for table <b>@receipt.TableCode</b> is settled. We hope you enjoyed your evening.</p>
                     <p class="md-hint mb-0">You can rate this visit from your History page.</p>
                 }
                 else
                 {
-                    <ol class="md-tracker">
-                        <li class="done"><span>Order placed</span><small class="md-tracker-time">20:44</small></li>
-                        <li class="current"><span>Preparing</span><small class="md-tracker-time">20:46</small></li>
-                        <li><span>Served</span><small class="md-tracker-time">—</small></li>
-                        <li><span>Completed</span><small class="md-tracker-time">—</small></li>
-                    </ol>
-                    <p class="mb-2">The kitchen is preparing your order. Estimated ready time <b>21:25</b>, for pick-up at 21:30.</p>
+                    <p class="mb-2">@(status == "Order placed" ? "Your order has been sent to the kitchen." : status == "Preparing" ? "The kitchen is preparing your order." : "Your order is ready.")@(receipt.PickupTime != null ? " Pick-up at " + receipt.PickupTime + "." : "")</p>
                     <p class="md-hint mb-0">You'll get a notification when it's ready. Open the Orders page to follow it.</p>
                 }
             </div>

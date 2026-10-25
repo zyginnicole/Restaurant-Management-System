@@ -49,7 +49,7 @@
 @section HeaderActions {
     <a class="btn btn-md-dark md-cart-btn" href="/Customer/Checkout">
         <i class="bi bi-bag"></i>
-        Cart · <span id="cartCount">2</span> items · <span id="cartTotal">RM 204.00</span>
+        Cart · <span id="cartCount">@Model.CartCount</span> items · <span id="cartTotal">RM @Model.CartSubtotal.ToString("N2")</span>
     </a>
 }
 
@@ -158,7 +158,7 @@
    has scrolled out of view (cart-fab.js); the count follows #cartCount. *@
 <a class="md-chat-fab md-cart-fab is-hidden" id="cartFab" href="/Customer/Checkout" aria-label="Open cart" title="Open cart" tabindex="-1" aria-hidden="true">
     <i class="bi bi-bag"></i>
-    <span class="md-cart-fab-count" id="cartFabCount">2</span>
+    <span class="md-cart-fab-count" id="cartFabCount">@Model.CartCount</span>
 </a>
 
 <section class="md-chat-panel d-none" id="chatPanel" aria-label="@ViewData["Brand"] assistant">
@@ -192,6 +192,9 @@
 </section>
 
 @section Scripts {
+    @* Antiforgery token + the saved cart (dish name -> id, id -> quantity) read by menu.js *@
+    @Html.AntiForgeryToken()
+    <script>window.MD_CART = @Json.Serialize(new { ids = Model.DishIds, quantities = Model.CartQuantities });</script>
     <script src="~/js/menu.js" asp-append-version="true"></script>
     <script>
         (function () {

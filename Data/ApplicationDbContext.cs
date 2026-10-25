@@ -128,6 +128,12 @@ namespace RestaurantManagementSystem.Data
                 .HasForeignKey(o => o.staffID)
                 .OnDelete(DeleteBehavior.SetNull);          // optional FK
 
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.DiningTable)
+                .WithMany(t => t.Orders)
+                .HasForeignKey(o => o.tableID)
+                .OnDelete(DeleteBehavior.Restrict);         // optional FK; keep order history if a table is removed
+
             // ---------- OrderItem (junction: Order <-> Menu) ----------
             modelBuilder.Entity<OrderItem>()
                 .HasOne(oi => oi.Order)

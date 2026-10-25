@@ -1,20 +1,30 @@
 ﻿@page
 @model RestaurantManagementSystem.Pages.Staff.DashboardModel
-@using RestaurantManagementSystem.Helpers
+@using RestaurantManagementSystem.Services
 @{
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var now = DateTime.Now;
+    var greeting = now.Hour < 12 ? "Good morning" : now.Hour < 17 ? "Good afternoon" : "Good evening";
+    var firstName = Model.StaffName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+
     ViewData["Title"] = "Dashboard";
     ViewData["Module"] = "Staff";
     ViewData["ActiveNav"] = "Dashboard";
-    ViewData["Eyebrow"] = "Wednesday, 16 September 2026 · Dinner service";
-    ViewData["Heading"] = "Good evening, " + (HttpContext.Session.GetUserName() ?? "").Split(' ')[0];
+    ViewData["Eyebrow"] = now.ToString("dddd, d MMMM yyyy", inv) + (now.Hour < 16 ? " · Lunch service" : " · Dinner service");
+    ViewData["Heading"] = greeting + (firstName != null ? ", " + firstName : "");
     Layout = "_DashboardLayout";
+
+    // Reservations: today's bookings (Pending, Confirmed, Seated, Completed – see DashboardModel.Shown)
+    var guests = Model.Guests;
+    int Count(string status) => guests.Count(r => r.reservationStatus == status);
+    var pending = Count(ReservationStatus.Pending);
+    var handled = guests.Count - pending;
+    string[] endedStatuses = { ReservationStatus.Completed, ReservationStatus.Cancelled, ReservationStatus.NoShow, ReservationStatus.Declined };
 }
 
-@* Example data from the design. Replace with today's Reservations and Orders later.
-   Statuses use the model values only:
-   Reservation – Pending, Confirmed, Seated, Completed, Cancelled, No-show, Declined
-                 (this overview shows Pending, Confirmed, Seated and Completed)
-   Order       – Order placed → Preparing → Served → Completed (or Cancelled before Served)
+@* Reservations (stat cards 1–2 + Upcoming guests) come from the database.
+   Orders (stat cards 3–4 + Active orders) are still example data – they belong to the orders / billing feature.
+   Order statuses: Order placed → Preparing → Served → Completed (or Cancelled before Served)
 
    This dashboard has no action buttons on its rows. Clicking a reservation opens the Reservation
    details pop-up here (Confirm / Seat / Decline … inside it); clicking an order opens the Orders page. *@
@@ -23,10 +33,17 @@
     <a class="btn btn-md-outline md-header-btn" href="/Staff/WalkIn"><i class="bi bi-plus-lg"></i>Seat walk-in</a>
 }
 
-@* Message after an action in the Reservation details pop-up (TempData["StaffMessage"]) *@
+@* Message after an action in the Reservation details pop-up (TempData["StaffMessage"]; red when it failed) *@
 @if (TempData["StaffMessage"] is string message)
 {
-    <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+    if (TempData["StaffMessageIsError"] is true)
+    {
+        <p class="md-note-box md-note-box-danger md-section" role="alert">@message</p>
+    }
+    else
+    {
+        <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+    }
 }
 
 @* ---------- Tonight at a glance: 4 simple stat cards ----------
@@ -38,12 +55,19 @@
     <div class="col-sm-6 col-xl-3">
         <div class="md-stat md-staff-stat">
             <span class="md-label">Reservations today</span>
-            <div class="md-stat-value">9</div>
-            <div class="md-statbar" role="img" aria-label="7 handled, 2 pending approval">
-                <i class="is-blue" style="flex: 7"></i>
-                <i class="is-red" style="flex: 2"></i>
+            <div class="md-stat-value">@guests.Count</div>
+            <div class="md-statbar" role="img" aria-label="@handled handled, @pending pending approval">
+                <i class="is-blue" style="flex: @handled"></i>
+                <i class="is-red" style="flex: @pending"></i>
             </div>
-            <a class="md-stat-action" href="/Staff/Reservations?status=Pending">2 need approval <i class="bi bi-arrow-right"></i></a>
+            @if (pending > 0)
+            {
+                <a class="md-stat-action" href="/Staff/Reservations?status=Pending">@pending need approval <i class="bi bi-arrow-right"></i></a>
+            }
+            else
+            {
+                <a class="md-stat-action" href="/Staff/Reservations">None need approval <i class="bi bi-arrow-right"></i></a>
+            }
         </div>
     </div>
 
@@ -51,15 +75,16 @@
     <div class="col-sm-6 col-xl-3">
         <div class="md-stat md-staff-stat">
             <span class="md-label">Tables occupied</span>
-            <div class="md-stat-value">3 <small>/ 24</small></div>
-            <div class="md-statbar" role="img" aria-label="3 of 24 tables occupied">
-                <i class="is-blue" style="flex: 3"></i>
-                <i style="flex: 21"></i>
+            <div class="md-stat-value">@Model.TablesOccupied <small>/ @Model.TablesTotal</small></div>
+            <div class="md-statbar" role="img" aria-label="@Model.TablesOccupied of @Model.TablesTotal tables occupied">
+                <i class="is-blue" style="flex: @Model.TablesOccupied"></i>
+                <i style="flex: @(Model.TablesTotal - Model.TablesOccupied)"></i>
             </div>
             <a class="md-stat-action" href="/Staff/WalkIn">Book reservations <i class="bi bi-arrow-right"></i></a>
         </div>
     </div>
 
+    @* ---- Example data from here (orders feature) ---- *@
     @* Open orders: orange = Preparing, yellow = Order placed (same colours as the order tags) (waiting to be accepted) *@
     <div class="col-sm-6 col-xl-3">
         <div class="md-stat md-staff-stat">
@@ -90,7 +115,7 @@
     @* ---------- Today's reservations: upcoming guests ----------
        Pills show the reservation status (reservationStatus "Seated" = the guests have arrived).
        Colours: Pending red · Confirmed blue · Seated yellow · Completed green.
-       Cancelled reservations are NOT shown here (filter them out in the query: reservationStatus != "Cancelled").
+       Cancelled, Declined and No-show reservations are NOT shown here (DashboardModel.Shown) – see the Reservations page.
        Clicking a row opens the Reservation details pop-up here on the Dashboard (Pages/Staff/_ReservationDetailPopup,
        staff-reservation-popup.js); actions post to /Staff/Reservations and come back here. ?view=R-0043 opens it too.
        The header (eyebrow + title + arrow) is also clickable and opens the Reservations page. *@
@@ -106,64 +131,41 @@
 
             @* Filter tabs: show only rows whose class matches (is-pending, is-confirmed …) *@
             <nav class="md-tabs md-filter-tabs" aria-label="Reservation status" data-filter-list="guestList">
-                <button type="button" class="active" data-filter="all">All <small>5</small></button>
-                <button type="button" data-filter="is-pending">Pending <small>2</small></button>
-                <button type="button" data-filter="is-confirmed">Confirmed <small>1</small></button>
-                <button type="button" data-filter="is-seated">Seated <small>1</small></button>
-                <button type="button" data-filter="is-completed">Completed <small>1</small></button>
+                <button type="button" class="active" data-filter="all">All <small>@guests.Count</small></button>
+                @foreach (var s in RestaurantManagementSystem.Pages.Staff.DashboardModel.Shown)
+                {
+                    <button type="button" data-filter="@StaffReservationText.StatusClass(s)">@s <small>@Count(s)</small></button>
+                }
             </nav>
 
+            @if (guests.Count == 0)
+            {
+                <p class="md-empty">No reservations today.</p>
+            }
+            @* Earliest first. data-* values fill the Reservation details pop-up (staff-reservation-popup.js) *@
             <ul class="md-guest-list" id="guestList">
-                <li class="md-guest md-row-link is-pending" data-code="R-0043" data-name="Sophia Haines" data-guests="6" data-time="20:00" data-table="T-20"
-                    data-status="Pending" data-seated="" data-walkin="false" data-booked="Requested online on 15 Sep 2026, 22:41 · waiting for staff approval"
-                    data-request="One guest vegetarian, separate plating" data-details="Sophia Haines · 20:00 · 6 guests · T-20 VIP">
-                    <div class="md-guest-time">20:00<span>Tonight</span></div>
-                    <div class="md-guest-main">
-                        <a class="stretched-link md-guest-name" href="?view=R-0043" data-open-detail>Sophia Haines <span class="md-guest-code">R-0043</span></a>
-                        <span class="md-guest-meta"><i class="bi bi-people"></i>6 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-20 · Birthday dinner</span>
-                    </div>
-                    <span class="md-pill is-pending">Pending</span>
-                </li>
-                <li class="md-guest md-row-link is-confirmed" data-code="R-0044" data-name="Victoria Blake" data-guests="4" data-time="20:45" data-table="T-02"
-                    data-status="Confirmed" data-seated="" data-walkin="false" data-booked="Booked online on 12 Sep 2026, 18:05 · confirmed by Sophie Clarke"
-                    data-request="Tasting menu requested" data-details="Victoria Blake · 20:45 · 4 guests · T-02 Outdoor">
-                    <div class="md-guest-time">20:45<span>Tonight</span></div>
-                    <div class="md-guest-main">
-                        <a class="stretched-link md-guest-name" href="?view=R-0044" data-open-detail>Victoria Blake <span class="md-guest-code">R-0044</span></a>
-                        <span class="md-guest-meta"><i class="bi bi-people"></i>4 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-02 · Outdoor</span>
-                    </div>
-                    <span class="md-pill is-confirmed">Confirmed</span>
-                </li>
-                <li class="md-guest md-row-link is-pending" data-code="R-0045" data-name="Isabella Chen" data-guests="2" data-time="21:00" data-table="T-04"
-                    data-status="Pending" data-seated="" data-walkin="false" data-booked="Requested online on 16 Sep 2026, 08:30 · waiting for staff approval"
-                    data-request="Window seating" data-details="Isabella Chen · 21:00 · 2 guests · T-04 Indoor">
-                    <div class="md-guest-time">21:00<span>Tonight</span></div>
-                    <div class="md-guest-main">
-                        <a class="stretched-link md-guest-name" href="?view=R-0045" data-open-detail>Isabella Chen <span class="md-guest-code">R-0045</span></a>
-                        <span class="md-guest-meta"><i class="bi bi-people"></i>2 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-04 · Window seating</span>
-                    </div>
-                    <span class="md-pill is-pending">Pending</span>
-                </li>
-                <li class="md-guest md-row-link is-seated" data-code="R-0042" data-name="Marcus Delacroix" data-guests="2" data-time="19:30" data-table="T-06"
-                    data-status="Seated" data-seated="19:33" data-walkin="false" data-booked="Booked by phone on 14 Sep 2026, 11:40"
-                    data-request="Champagne on arrival" data-details="Marcus Delacroix · 19:30 · 2 guests · T-06 Indoor">
-                    <div class="md-guest-time">19:30<span>Tonight</span></div>
-                    <div class="md-guest-main">
-                        <a class="stretched-link md-guest-name" href="?view=R-0042" data-open-detail>Marcus Delacroix <span class="md-guest-code">R-0042</span></a>
-                        <span class="md-guest-meta"><i class="bi bi-people"></i>2 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-06 · Seated at 19:33</span>
-                    </div>
-                    <span class="md-pill is-seated">Seated</span>
-                </li>
-                <li class="md-guest md-row-link is-completed" data-code="R-0039" data-name="Thomas Ashford" data-guests="3" data-time="18:00" data-table="T-09"
-                    data-status="Completed" data-seated="" data-walkin="false" data-booked="Booked online on 10 Sep 2026, 14:02"
-                    data-request="" data-details="Thomas Ashford · 18:00 · 3 guests · T-09 Indoor">
-                    <div class="md-guest-time">18:00<span>Tonight</span></div>
-                    <div class="md-guest-main">
-                        <a class="stretched-link md-guest-name" href="?view=R-0039" data-open-detail>Thomas Ashford <span class="md-guest-code">R-0039</span></a>
-                        <span class="md-guest-meta"><i class="bi bi-people"></i>3 guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-09 · Indoor</span>
-                    </div>
-                    <span class="md-pill is-completed">Completed</span>
-                </li>
+                @foreach (var r in guests)
+                {
+                    var key = StaffReservationText.StatusClass(r.reservationStatus);
+                    var code = ReservationService.Code(r);
+                    var name = r.Customer?.custName ?? "Guest";
+                    var time = r.reservationDateTime.ToString("HH:mm", inv);
+                    var tableNo = r.DiningTable?.tableNumber;
+                    var area = r.DiningTable?.DiningArea?.areaName;
+                    var ended = endedStatuses.Contains(r.reservationStatus);
+                    <li class="md-guest md-row-link @key" data-id="@r.reservationID" data-code="@code" data-name="@name" data-guests="@r.partySize"
+                        data-date="@r.reservationDateTime.ToString("yyyy-MM-dd", inv)" data-time="@time" data-table="@tableNo" data-table-id="@r.tableID" data-today="true"
+                        data-status="@r.reservationStatus" data-walkin="false" data-booked="@StaffReservationText.Booked(r)"
+                        data-request="@(ended ? "" : r.specialRequest)" data-details="@name · @time · @r.partySize guests · @tableNo @area"
+                        data-free="@(ended ? "" : StaffReservationText.NextOnTable(r, Model.Today, Model.Settings.diningMinutes))">
+                        <div class="md-guest-time">@time<span>@(r.reservationDateTime.Hour < 16 ? "Lunch" : "Tonight")</span></div>
+                        <div class="md-guest-main">
+                            <a class="stretched-link md-guest-name" href="?view=@code" data-open-detail>@name <span class="md-guest-code">@code</span></a>
+                            <span class="md-guest-meta"><i class="bi bi-people"></i>@r.partySize guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@tableNo · @(r.specialRequest ?? area)</span>
+                        </div>
+                        <span class="md-pill @key">@r.reservationStatus</span>
+                    </li>
+                }
             </ul>
         </section>
     </div>
@@ -247,22 +249,35 @@
 
 @section Scripts {
     <script>
-        // Filter tabs: show only the rows whose class matches the chosen status
+        // Filter tabs: show only the rows whose class matches the chosen status.
+        // The chosen tab survives the automatic refresh (sessionStorage).
         document.querySelectorAll('.md-filter-tabs').forEach(function (tabs) {
             var list = document.getElementById(tabs.dataset.filterList);
+            var storeKey = 'staffDashTab:' + tabs.dataset.filterList;
+            function choose(button) {
+                tabs.querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b === button); });
+                list.querySelectorAll(':scope > li').forEach(function (row) {
+                    var show = button.dataset.filter === 'all' || row.classList.contains(button.dataset.filter);
+                    row.classList.toggle('d-none', !show);
+                });
+            }
             tabs.querySelectorAll('button').forEach(function (button) {
                 button.addEventListener('click', function () {
-                    tabs.querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b === button); });
-                    list.querySelectorAll(':scope > li').forEach(function (row) {
-                        var show = button.dataset.filter === 'all' || row.classList.contains(button.dataset.filter);
-                        row.classList.toggle('d-none', !show);
-                    });
+                    choose(button);
+                    try { sessionStorage.setItem(storeKey, button.dataset.filter); } catch (e) { }
                 });
             });
+            try {
+                var saved = sessionStorage.getItem(storeKey);
+                var savedButton = saved && tabs.querySelector('button[data-filter="' + saved + '"]');
+                if (savedButton) choose(savedButton);
+            } catch (e) { }
         });
     </script>
     @* Table dropdowns open their list below (data-md-select) *@
     <script src="~/js/md-select.js" asp-append-version="true"></script>
     @* Reservation details pop-up (opens from an Upcoming guests row, or ?view=R-0043) *@
     <script src="~/js/staff-reservation-popup.js" asp-append-version="true"></script>
+    @* Reloads every minute while no pop-up is open and nothing is being typed *@
+    <script src="~/js/staff-auto-refresh.js" asp-append-version="true"></script>
 }
