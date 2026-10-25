@@ -1,0 +1,580 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Customer.HistoryModel
+@using RestaurantManagementSystem.Services
+@{
+    ViewData["Title"] = "History";
+    ViewData["ActiveNav"] = "History";
+    ViewData["Eyebrow"] = "Past activity";
+    ViewData["Heading"] = "History";
+    Layout = "_CustomerLayout";
+
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    // Years for the filter: the years of the customer's past reservations, newest first
+    var years = Model.PastReservations.Select(r => r.reservationDateTime.Year).Distinct().OrderByDescending(y => y).ToList();
+}
+
+@functions {
+    // "7:00 – 9:00 PM"
+    static string TimeRange(DateTime start, int minutes)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var end = start.AddMinutes(minutes);
+        return start.ToString("h:mm", inv) + (start.ToString("tt", inv) == end.ToString("tt", inv) ? "" : " " + start.ToString("tt", inv))
+            + " – " + end.ToString("h:mm tt", inv);
+    }
+
+    // "Saturday evening"
+    static string DayText(DateTime start)
+        => start.ToString("dddd", System.Globalization.CultureInfo.InvariantCulture) + (start.Hour < 16 ? " lunch" : " evening");
+
+    // ★★★★☆ (the grey ones in .md-rated-off)
+    static Microsoft.AspNetCore.Html.IHtmlContent Stars(int rating)
+        => new Microsoft.AspNetCore.Html.HtmlString("<span class=\"md-rated\" aria-label=\"Rated " + rating + " out of 5\">" + new string('★', rating)
+            + (rating < 5 ? "<span class=\"md-rated-off\">" + new string('★', 5 - rating) + "</span>" : "") + "</span>");
+}
+
+@* Only finished activity is shown here:
+   Reservation – Completed green · Cancelled, No-show, Declined grey (Reservation.reservationStatus, stored exactly so)
+   Order       – Completed green · Cancelled grey
+   Payment     – Paid green · Refunded grey · Failed red
+   Upcoming reservations and open orders stay on the Reservations and Orders pages.
+   All three tabs read the database (Reservations: ReservationService; Orders and Payments: HistoryModel). *@
+
+<nav class="md-tabs md-page-tabs" aria-label="History sections" id="historyTabs">
+    <button type="button" class="active" data-tab="reservations" aria-controls="tab-reservations">Reservations</button>
+    <button type="button" data-tab="orders" aria-controls="tab-orders">Orders</button>
+    <button type="button" data-tab="payments" aria-controls="tab-payments">Payments</button>
+</nav>
+
+@* ---------- Reservations ---------- *@
+<section class="md-card md-section" id="tab-reservations" data-tab-panel="reservations">
+    <div class="md-card-header">
+        <span class="md-card-label">Past reservations</span>
+        @* Filters: status, month, year (on screen) *@
+        <div class="md-history-filters" data-filters>
+            <select class="form-select md-input" data-filter="status" aria-label="Filter by status">
+                <option value="">All statuses</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="No-show">No-show</option>
+                <option value="Declined">Declined</option>
+            </select>
+            <select class="form-select md-input" data-filter="month" aria-label="Filter by month">
+                <option value="">All months</option>
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m">@inv.DateTimeFormat.GetAbbreviatedMonthName(m)</option>
+                }
+            </select>
+            <select class="form-select md-input" data-filter="year" aria-label="Filter by year">
+                <option value="">All years</option>
+                @foreach (var y in years)
+                {
+                    <option value="@y">@y</option>
+                }
+            </select>
+            <span class="md-card-meta"><span data-count>0</span> visits</span>
+        </div>
+    </div>
+    <ul class="md-res-list">
+        @foreach (var r in Model.PastReservations)
+        {
+            var status = r.reservationStatus;
+            var css = status.Replace("-", "").ToLowerInvariant();
+            var code = ReservationService.Code(r);
+            var start = r.reservationDateTime;
+            var guests = r.partySize + (r.partySize == 1 ? " guest" : " guests");
+            var table = r.DiningTable?.tableNumber + " " + r.DiningTable?.DiningArea?.areaName;
+
+            if (status == ReservationStatus.Completed)
+            {
+                // The visit's order (latest one that wasn't cancelled) + its payment and rating
+                var order = r.Orders.Where(o => o.orderStatus != "Cancelled").OrderByDescending(o => o.orderID).FirstOrDefault();
+                var orderText = order == null
+                    ? "No order linked"
+                    : "ORD-" + order.orderID.ToString("D4") + " · RM " + order.totalAmount.ToString("N2", inv)
+                      + (order.Payment?.paymentStatus == "Paid" ? " paid" : " · " + (order.Payment?.paymentStatus ?? "not paid").ToLowerInvariant());
+                var rating = order != null && Model.FeedbackByOrder.TryGetValue(order.orderID, out var f) ? f : null;
+
+                <li class="md-res-item md-history-item md-history-click is-completed" data-status="@status" data-month="@start.Month" data-year="@start.Year" data-kind="Reservation" tabindex="0" role="button" aria-haspopup="dialog">
+                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                        <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
+                        <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
+                    </div>
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">@code</span>
+                            <span class="md-badge md-badge-completed">Completed</span>
+                        </div>
+                        <span class="md-res-item-info">@start.ToString("d MMM yyyy · HH:mm", inv) · @guests · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@table</span>
+                        <span class="md-res-item-note">@orderText</span>
+                    </div>
+                    @* Rated → stars · not rated (and has an order) → Rate button · no order → nothing to rate *@
+                    <div class="md-history-side">
+                        @if (rating != null)
+                        {
+                            @Stars(rating.rating)
+                            <span class="md-res-item-note">Rated @rating.feedbackDate.ToString("d MMM", inv)</span>
+                        }
+                        else if (order != null)
+                        {
+                            <button type="button" class="btn btn-md-dark md-btn-sm" data-bs-toggle="modal" data-bs-target="#ratePopup"
+                                    data-code="@code" data-date="@start.ToString("d MMM yyyy", inv)" data-order="@order.orderID">
+                                Rate this visit
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="md-res-item-note">—</span>
+                        }
+                    </div>
+                    @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
+                    <template data-detail>
+                        @* Same layout as the Overview "Next reservation" slot: date tile + status, day, time, guests, table *@
+                        <div class="md-next-res md-detail-res">
+                            <div class="md-date-tile md-date-tile-lg" aria-hidden="true">
+                                <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
+                                <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
+                            </div>
+                            <div class="md-next-res-info">
+                                <span class="md-next-slot-code"><span class="md-badge md-badge-completed">Completed</span></span>
+                                <div class="md-res-date">@DayText(start)</div>
+                                <div class="md-next-res-row">
+                                    <span class="md-res-time"><i class="bi bi-clock" aria-hidden="true"></i>@TimeRange(start, Model.DiningMinutes)</span>
+                                    <span><i class="bi bi-person" aria-hidden="true"></i>@r.partySize <span class="visually-hidden">guests</span></span>
+                                </div>
+                                <div class="md-next-res-row">
+                                    <span><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@r.DiningTable?.tableNumber · @r.DiningTable?.DiningArea?.areaName</span>
+                                </div>
+                            </div>
+                        </div>
+                        @* Order | Your rating side by side, Special request underneath; label above value *@
+                        <dl class="md-detail-grid">
+                            <div><dt>Order</dt><dd>@orderText</dd></div>
+                            <div>
+                                <dt>Your rating</dt><dd>
+                                @if (rating != null)
+                                {
+                                    @Stars(rating.rating)
+                                    @(rating.comment != null ? " “" + rating.comment + "”" : "")
+                                }
+                                else
+                                {
+                                    @:Not rated yet
+                                }
+                            </dd>
+                        </div>
+                        <div class="is-wide"><dt>Special request</dt><dd>@(r.specialRequest ?? "None")</dd></div>
+                    </dl>
+                </template>
+            </li>
+        }
+            else
+        {
+            // Cancelled / No-show / Declined: grey, not clickable. Staff set → done by the restaurant.
+            var note = status switch
+            {
+                ReservationStatus.Cancelled => r.Staff != null ? "Cancelled by the restaurant" : "Cancelled by you",
+                ReservationStatus.NoShow => "Marked as no-show · the table was released",
+                _ => "Declined by the restaurant"
+            };
+            <li class="md-res-item md-history-item is-@css" data-status="@status" data-month="@start.Month" data-year="@start.Year">
+                <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                    <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
+                    <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
+                </div>
+                <div class="md-res-item-main">
+                    <div class="md-res-item-top">
+                        <span class="md-res-code">@code</span>
+                        <span class="md-badge md-badge-@css">@status</span>
+                    </div>
+                    <span class="md-res-item-info">@start.ToString("d MMM yyyy · HH:mm", inv) · @guests</span>
+                    <span class="md-res-item-note">@note</span>
+                </div>
+                <div class="md-history-side"><span class="md-res-item-note">—</span></div>
+            </li>
+        }
+    }
+</ul>
+<p class="md-history-empty @(Model.PastReservations.Count == 0 ? "" : "d-none")" data-empty>
+    @(Model.PastReservations.Count == 0 ? "No past reservations yet." : "No reservations match these filters.")
+</p>
+</section>
+
+@* ---------- Orders ---------- *@
+<section class="md-card md-section d-none" id="tab-orders" data-tab-panel="orders">
+    <div class="md-card-header">
+        <span class="md-card-label">Past orders</span>
+        @* Filters: status, month, year (client-side for the static UI; the backend can also filter the query) *@
+        <div class="md-history-filters" data-filters>
+            <select class="form-select md-input" data-filter="status" aria-label="Filter by status">
+                <option value="">All statuses</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+            </select>
+            <select class="form-select md-input" data-filter="month" aria-label="Filter by month">
+                <option value="">All months</option>
+                <option value="1">Jan</option>
+                <option value="2">Feb</option>
+                <option value="3">Mar</option>
+                <option value="4">Apr</option>
+                <option value="5">May</option>
+                <option value="6">Jun</option>
+                <option value="7">Jul</option>
+                <option value="8">Aug</option>
+                <option value="9">Sep</option>
+                <option value="10">Oct</option>
+                <option value="11">Nov</option>
+                <option value="12">Dec</option>
+            </select>
+            <select class="form-select md-input" data-filter="year" aria-label="Filter by year">
+                <option value="">All years</option>
+                @foreach (var year in Model.OrderYears)
+                {
+                    <option value="@year">@year</option>
+                }
+            </select>
+            <span class="md-card-meta"><span data-count>0</span> orders</span>
+        </div>
+    </div>
+    <ul class="md-res-list">
+        @foreach (var o in Model.Orders)
+        {
+            string unit = o.ItemCount == 1 ? "item" : "items";
+            if (o.Status == "Completed")
+            {
+                <li class="md-res-item md-history-item md-history-click is-completed" data-status="Completed" data-month="@o.Placed.Month" data-year="@o.Placed.Year" data-kind="Order" tabindex="0" role="button" aria-haspopup="dialog">
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">@o.Code</span>
+                            <span class="md-badge md-badge-completed">Completed</span>
+                        </div>
+                        <span class="md-res-item-info">
+                            @if (o.IsDineIn)
+                            {
+                                @:Dine-in@(o.ReservationCode != null ? " · " + o.ReservationCode : "") · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@o.Table · @o.ItemCount @unit
+                            }
+                            else
+                            {
+                                @:Takeaway · @o.ItemCount @unit
+                            }
+                        </span>
+                        <span class="md-res-item-note">@o.Placed.ToString("d MMM yyyy, HH:mm")</span>
+                    </div>
+                    <div class="md-history-side"><span class="md-history-amount">RM @o.Total.ToString("N2")</span></div>
+                    @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
+                    <template data-detail>
+                        <dl class="md-detail-list mb-3">
+                            <dt>Order type</dt>
+                            <dd>@o.TypeText</dd>
+                            <dt>Placed</dt>
+                            <dd>@o.Placed.ToString("d MMM yyyy, HH:mm")</dd>
+                            @if (o.PaidAt != null)
+                            {
+                                <dt>Paid</dt>
+                                <dd>@o.PaidAt.Value.ToString("d MMM yyyy, HH:mm")</dd>
+                            }
+                        </dl>
+                        <ul class="md-order-items">
+                            @foreach (var line in o.Lines)
+                            {
+                                <li>
+                                    <span>
+                                        @line.Quantity&times; @line.Name
+                                        @if (!string.IsNullOrEmpty(line.Note))
+                                        {
+                                            <small class="md-item-note">@line.Note</small>
+                                        }
+                                        @if (!string.IsNullOrEmpty(line.PromoCode) && line.Discount > 0)
+                                        {
+                                            <small class="md-item-note">Promo @line.PromoCode &minus;RM @line.Discount.ToString("N2")</small>
+                                        }
+                                    </span>
+                                    <span>RM @line.LineTotal.ToString("N2")</span>
+                                </li>
+                            }
+                        </ul>
+                        <dl class="md-sum mb-0">
+                            <div><dt>Subtotal</dt><dd>RM @o.Subtotal.ToString("N2")</dd></div>
+                            @if (o.IsDineIn)
+                            {
+                                <div><dt>Service charge @Model.ServiceChargePct.ToString("0.##")%</dt><dd>RM @o.ServiceCharge.ToString("N2")</dd></div>
+                            }
+                            <div><dt>SST @Model.SstPct.ToString("0.##")%</dt><dd>RM @o.Sst.ToString("N2")</dd></div>
+                            <div class="md-sum-total"><dt>Total paid</dt><dd>RM @o.Total.ToString("N2")</dd></div>
+                        </dl>
+                    </template>
+                </li>
+            }
+            else
+            {
+                @* Cancelled: grey, not clickable *@
+                <li class="md-res-item md-history-item is-cancelled" data-status="Cancelled" data-month="@o.Placed.Month" data-year="@o.Placed.Year">
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">@o.Code</span>
+                            <span class="md-badge md-badge-cancelled">Cancelled</span>
+                        </div>
+                        <span class="md-res-item-info">@(o.IsDineIn ? "Dine-in" : "Takeaway") · @o.ItemCount @unit</span>
+                        <span class="md-res-item-note">@o.Placed.ToString("d MMM yyyy, HH:mm") · cancelled@(o.Refunded ? " · refunded" : "")</span>
+                    </div>
+                    <div class="md-history-side"><span class="md-history-amount is-struck">RM @o.Total.ToString("N2")</span></div>
+                </li>
+            }
+        }
+    </ul>
+    <p class="md-history-empty d-none" data-empty>No orders match these filters.</p>
+</section>
+
+@* ---------- Payments ---------- *@
+<section class="md-card md-section d-none" id="tab-payments" data-tab-panel="payments">
+    <div class="md-card-header">
+        <span class="md-card-label">Payments</span>
+        @* Filters: status, month, year (client-side for the static UI; the backend can also filter the query) *@
+        <div class="md-history-filters" data-filters>
+            <select class="form-select md-input" data-filter="status" aria-label="Filter by status">
+                <option value="">All statuses</option>
+                <option value="Paid">Paid</option>
+                <option value="Refunded">Refunded</option>
+                <option value="Failed">Failed</option>
+            </select>
+            <select class="form-select md-input" data-filter="month" aria-label="Filter by month">
+                <option value="">All months</option>
+                <option value="1">Jan</option>
+                <option value="2">Feb</option>
+                <option value="3">Mar</option>
+                <option value="4">Apr</option>
+                <option value="5">May</option>
+                <option value="6">Jun</option>
+                <option value="7">Jul</option>
+                <option value="8">Aug</option>
+                <option value="9">Sep</option>
+                <option value="10">Oct</option>
+                <option value="11">Nov</option>
+                <option value="12">Dec</option>
+            </select>
+            <select class="form-select md-input" data-filter="year" aria-label="Filter by year">
+                <option value="">All years</option>
+                @foreach (var year in Model.PaymentYears)
+                {
+                    <option value="@year">@year</option>
+                }
+            </select>
+            <span class="md-card-meta"><span data-count>0</span> payments</span>
+        </div>
+    </div>
+    <ul class="md-res-list">
+        @foreach (var p in Model.Payments)
+        {
+            string css = p.Status == "Paid" ? "is-paid" : p.Status == "Refunded" ? "is-refunded" : "is-failed";
+            string badge = p.Status == "Paid" ? "md-badge-paid" : p.Status == "Refunded" ? "md-badge-refunded" : "md-badge-failed";
+            <li class="md-res-item md-history-item md-history-click @css" data-status="@p.Status" data-month="@p.Date.Month" data-year="@p.Date.Year" data-kind="Payment" tabindex="0" role="button" aria-haspopup="dialog">
+                <div class="md-res-item-main">
+                    <div class="md-res-item-top">
+                        <span class="md-res-code">@p.Code</span>
+                        <span class="md-badge @badge">@p.Status</span>
+                    </div>
+                    <span class="md-res-item-info">@p.OrderCodes · @p.Method</span>
+                    <span class="md-res-item-note">@p.Date.ToString("d MMM yyyy, HH:mm")@(p.Status == "Refunded" ? " · refunded" : "")</span>
+                </div>
+                <div class="md-history-side"><span class="md-history-amount@(p.Status == "Failed" ? " is-struck" : "")">RM @p.Amount.ToString("N2")</span></div>
+                @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
+                <template data-detail>
+                    <dl class="md-detail-list">
+                        @if (p.Status != "Failed")
+                        {
+                            <dt>Receipt no.</dt>
+                            <dd>@p.Code</dd>
+                        }
+                        <dt>@(p.OrderCodes.Contains(',') ? "Orders" : "Order")</dt>
+                        <dd>@p.OrderCodes · @p.TypeText</dd>
+                        <dt>Method</dt>
+                        <dd>@p.Method</dd>
+                        <dt>@(p.Status == "Refunded" ? "Paid" : "Date")</dt>
+                        <dd>@p.Date.ToString("d MMM yyyy, HH:mm")</dd>
+                        @if (p.Status == "Refunded")
+                        {
+                            <dt>Refunded</dt>
+                            <dd>Back to your payment method</dd>
+                        }
+                        @if (p.Status == "Failed")
+                        {
+                            <dt>Reason</dt>
+                            <dd>The payment could not be completed – nothing was charged</dd>
+                        }
+                        <dt>Amount</dt>
+                        <dd>RM @p.Amount.ToString("N2")</dd>
+                    </dl>
+                </template>
+            </li>
+        }
+    </ul>
+    <p class="md-history-empty d-none" data-empty>No payments match these filters.</p>
+</section>
+
+@* ---------- Details pop-up ----------
+   Clicking any row except Cancelled opens this; the script copies the row's code, status tag
+   and <template data-detail> content in here. *@
+<div class="modal fade md-popup" id="historyDetailPopup" tabindex="-1" aria-labelledby="historyDetailTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow" data-detail-kind>Details</span>
+                    <h2 class="modal-title md-popup-title" id="historyDetailTitle" data-detail-code>—</h2>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span data-detail-badge></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body" data-detail-body></div>
+        </div>
+    </div>
+</div>
+
+@* ---------- Rate this visit pop-up ----------
+   Posts orderId, rating (1–5) and comment to OnPostRate. Feedback is linked to the visit's order. *@
+<div class="modal fade md-popup" id="ratePopup" tabindex="-1" aria-labelledby="ratePopupTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" asp-page-handler="Rate" id="rateForm">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow"><span data-rate-code>R-0000</span> · <span data-rate-date>—</span></span>
+                    <h2 class="modal-title md-popup-title" id="ratePopupTitle">How was your visit?</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="orderId" data-rate-order />
+
+                <span class="md-label" id="ratingLabel">Overall rating</span>
+                @* Stars are radio buttons (rating 1–5); hovering previews, clicking chooses *@
+                <div class="md-star-input" role="radiogroup" aria-labelledby="ratingLabel">
+                    @for (int n = 1; n <= 5; n++)
+                    {
+                        <input type="radio" class="btn-check" name="rating" id="star@(n)" value="@n" checked="@(n == 4)" />
+                        <label for="star@(n)" aria-label="@n of 5">★</label>
+                    }
+                    <span class="md-star-text" data-star-text>4 of 5</span>
+                </div>
+
+                <span class="md-label mt-3">What stood out? (optional)</span>
+                <div class="md-chips mt-0 mb-3">
+                    <button type="button" class="md-chip" data-chip="Food" aria-pressed="false">Food</button>
+                    <button type="button" class="md-chip" data-chip="Service" aria-pressed="false">Service</button>
+                    <button type="button" class="md-chip" data-chip="Ambience" aria-pressed="false">Ambience</button>
+                    <button type="button" class="md-chip" data-chip="Value" aria-pressed="false">Value</button>
+                </div>
+
+                <label class="md-label" for="comment">Your feedback (optional)</label>
+                <textarea class="form-control md-input" id="comment" name="comment" rows="3" placeholder="Tell us about the food, service or anything we could do better"></textarea>
+                <p class="md-hint mt-2 mb-0">Only completed visits can be rated, once per visit.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-md-outline" data-bs-dismiss="modal">Not now</button>
+                <button type="submit" class="btn btn-md-green">Submit feedback</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/reservation-popup.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            // Tabs: Reservations / Orders / Payments
+            var tabs = document.querySelectorAll('#historyTabs button');
+            tabs.forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    tabs.forEach(function (t) { t.classList.toggle('active', t === tab); });
+                    document.querySelectorAll('[data-tab-panel]').forEach(function (panel) {
+                        panel.classList.toggle('d-none', panel.dataset.tabPanel !== tab.dataset.tab);
+                    });
+                });
+            });
+
+            // Filters on each card: show rows whose data-status / data-month / data-year match
+            document.querySelectorAll('[data-tab-panel]').forEach(function (card) {
+                var selects = card.querySelectorAll('[data-filter]');
+                function apply() {
+                    var shown = 0;
+                    card.querySelectorAll('.md-history-item').forEach(function (row) {
+                        var match = Array.prototype.every.call(selects, function (sel) {
+                            return !sel.value || row.dataset[sel.dataset.filter] === sel.value;
+                        });
+                        row.classList.toggle('d-none', !match);
+                        if (match) shown++;
+                    });
+                    card.querySelector('[data-count]').textContent = shown;
+                    card.querySelector('[data-empty]').classList.toggle('d-none', shown > 0);
+                }
+                selects.forEach(function (sel) { sel.addEventListener('change', apply); });
+                apply();
+            });
+
+            // Row details pop-up (all rows except Cancelled). Clicks on the Rate button are ignored here.
+            var detailPopupEl = document.getElementById('historyDetailPopup');
+            var detailPopup = new bootstrap.Modal(detailPopupEl);
+            function openDetail(row) {
+                detailPopupEl.querySelector('[data-detail-kind]').textContent = row.dataset.kind;
+                detailPopupEl.querySelector('[data-detail-code]').textContent = row.querySelector('.md-res-code').textContent;
+                // Reservations show the status tag inside the date block, so the header tag is left empty for them
+                var template = row.querySelector('template[data-detail]');
+                detailPopupEl.querySelector('[data-detail-badge]').innerHTML =
+                    template.content.querySelector('.md-detail-res') ? '' : row.querySelector('.md-badge').outerHTML;
+                var body = detailPopupEl.querySelector('[data-detail-body]');
+                body.innerHTML = '';
+                var content = row.querySelector('template[data-detail]').content.cloneNode(true);
+                // Reservations: narrower pop-up; content lines up on the left with the header (RESERVATION / code)
+                var isReservation = !!content.querySelector('.md-detail-res');
+                detailPopupEl.classList.toggle('md-popup-narrow', isReservation);
+                body.appendChild(content);
+                // "Your rating" starts in line with the guests icon (wwwroot/js/reservation-popup.js)
+                if (isReservation) mdAlignDetailGrid(detailPopupEl, body);
+                detailPopup.show();
+            }
+            document.querySelectorAll('.md-history-click').forEach(function (row) {
+                row.addEventListener('click', function (e) {
+                    if (e.target.closest('button, a')) return;
+                    openDetail(row);
+                });
+                row.addEventListener('keydown', function (e) {
+                    if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); openDetail(row); }
+                });
+            });
+
+            // Rate pop-up: fill in the visit that was clicked
+            var popup = document.getElementById('ratePopup');
+            popup.addEventListener('show.bs.modal', function (event) {
+                var button = event.relatedTarget;
+                popup.querySelector('[data-rate-code]').textContent = button.dataset.code;
+                popup.querySelector('[data-rate-date]').textContent = button.dataset.date;
+                popup.querySelector('[data-rate-order]').value = button.dataset.order;
+            });
+
+            // "4 of 5" next to the stars
+            popup.querySelectorAll('input[name="rating"]').forEach(function (star) {
+                star.addEventListener('change', function () {
+                    popup.querySelector('[data-star-text]').textContent = star.value + ' of 5';
+                });
+            });
+
+            // "What stood out?" chips: on/off; added to the start of the comment when sending
+            popup.querySelectorAll('.md-chip').forEach(function (chip) {
+                chip.addEventListener('click', function () {
+                    var on = !chip.classList.contains('active');
+                    chip.classList.toggle('active', on);
+                    chip.setAttribute('aria-pressed', on);
+                });
+            });
+            document.getElementById('rateForm').addEventListener('submit', function () {
+                var picked = Array.prototype.map.call(popup.querySelectorAll('.md-chip.active'), function (c) { return c.dataset.chip; });
+                if (picked.length) {
+                    var box = document.getElementById('comment');
+                    box.value = 'Stood out: ' + picked.join(', ') + (box.value.trim() ? '. ' + box.value.trim() : '');
+                }
+            });
+        })();
+    </script>
+}

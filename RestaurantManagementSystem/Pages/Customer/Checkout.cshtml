@@ -1,0 +1,269 @@
+@page
+@using System.Globalization
+@model RestaurantManagementSystem.Pages.Customer.CheckoutModel
+@{
+    ViewData["Title"] = "Checkout";
+    ViewData["ActiveNav"] = "Orders";
+    ViewData["Eyebrow"] = "Your selection";
+    ViewData["Heading"] = "Checkout";
+    Layout = "_CustomerLayout";
+
+    var inv = CultureInfo.InvariantCulture;
+    bool dineInSelected = Model.OrderType == "DineIn";
+    string selectedPickup = Model.PickupDateTime?.ToString("yyyy-MM-dd'T'HH:mm") ?? "";
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="md-alert-danger mb-4" role="alert">
+        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        {
+            <div>@error.ErrorMessage</div>
+        }
+    </div>
+}
+@foreach (var notice in Model.RemovedNotices)
+{
+    <div class="md-note-box md-note-box-danger mb-3" role="status">@notice</div>
+}
+
+<form method="post" id="checkoutForm" data-service-pct="@Model.ServiceChargePct.ToString("0.##", inv)" data-sst-pct="@Model.SstPct.ToString("0.##", inv)">
+    <div class="row md-grid md-section">
+        <div class="col-lg-8">
+            @* ---------- Order items ---------- *@
+            <section class="md-card md-section">
+                <div class="md-card-header">
+                    <span class="md-card-label">Order items</span>
+                    <a class="btn btn-md-outline md-btn-sm" href="/Customer/Menu">Add more</a>
+                </div>
+                <ul class="md-cart" id="cartList">
+                    @for (int i = 0; i < Model.CartLines.Count; i++)
+                    {
+                        var line = Model.CartLines[i];
+                        <li class="md-cart-item" data-price="@line.UnitPrice.ToString("0.00", inv)" data-promo-type="@line.PromoType" data-promo-value="@line.PromoValue.ToString("0.##", inv)">
+                            @if (!string.IsNullOrEmpty(line.ImageUrl))
+                            {
+                                <img class="md-cart-photo" src="@line.ImageUrl" alt="@line.Name" />
+                            }
+                            else
+                            {
+                                <span class="md-cart-photo" aria-hidden="true">Photo</span>
+                            }
+                            <div class="md-cart-main">
+                                <span class="md-cart-name">@line.Name</span>
+                                <span class="md-cart-each">RM @line.UnitPrice.ToString("N2") each</span>
+                                <input type="hidden" name="items[@i].menuId" value="@line.MenuId" />
+                                <input class="form-control md-input md-cart-note" name="items[@i].itemRemark" maxlength="200" placeholder="Note for the kitchen" value="@line.Note" aria-label="Note for @line.Name" />
+                                @* Promotion applied to this dish (code + label from the Promotion table) *@
+                                @if (line.PromoCode != null)
+                                {
+                                    <small class="md-hint d-block mt-1"><i class="bi bi-tag me-1" aria-hidden="true"></i>@line.PromoCode applied: @line.PromoLabel</small>
+                                }
+                            </div>
+                            <div class="md-qty" aria-label="Quantity">
+                                <button type="button" data-step="-1" aria-label="One less">−</button>
+                                <input type="number" name="items[@i].quantity" value="@line.Quantity" min="0" max="20" aria-label="Quantity of @line.Name" />
+                                <button type="button" data-step="1" aria-label="One more">+</button>
+                            </div>
+                            <span class="md-cart-line">
+                                @* original amount struck through, the promotion price underneath *@
+                                <s data-line-was style="display:@(line.Discount > 0 ? "block" : "none"); font-size:.8em; opacity:.6;">RM @((line.UnitPrice * line.Quantity).ToString("N2"))</s>
+                                <span data-line>RM @((line.UnitPrice * line.Quantity - line.Discount).ToString("N2"))</span>
+                            </span>
+                        </li>
+                    }
+                </ul>
+                <p class="md-cart-empty @(Model.CartLines.Count > 0 ? "d-none" : "")" id="cartEmpty">Your cart is empty. <a href="/Customer/Menu">Browse the menu</a></p>
+            </section>
+
+            @* ---------- Order type ---------- *@
+            <section class="md-card">
+                <div class="md-card-header">
+                    <span class="md-card-label">Order type</span>
+                </div>
+                <div class="md-card-body">
+                    <div class="md-choice mb-2" role="radiogroup" aria-label="Order type">
+                        <input type="radio" class="btn-check" name="orderType" id="typeTakeaway" value="Takeaway" checked="@(!dineInSelected)" />
+                        <label for="typeTakeaway">Takeaway</label>
+
+                        <input type="radio" class="btn-check" name="orderType" id="typeDineIn" value="DineIn" checked="@dineInSelected" disabled="@(!Model.HasReservation)" />
+                        <label for="typeDineIn" style="@(!Model.HasReservation ? "cursor: not-allowed; opacity: 0.5;" : "")">Dine-in at my table</label>
+                    </div>
+
+                    @if (!Model.HasReservation)
+                    {
+                        <p class="md-hint mb-3">Dine-in is only available for guests with a reservation today.</p>
+                    }
+
+                    @* Takeaway panel *@
+                    <div class="row g-3 @(dineInSelected ? "d-none" : "")" data-type-panel="Takeaway">
+                        <div class="col-sm-6">
+                            <label class="md-label" for="pickupDateTime">Pick-up time</label>
+                            <select class="form-select md-input" id="pickupDateTime" name="pickupDateTime" disabled="@(Model.PickupOptions.Count == 0)">
+                                @if (Model.PickupOptions.Count == 0)
+                                {
+                                    <option value="">No pick-up times available</option>
+                                }
+                                @for (int p = 0; p < Model.PickupOptions.Count; p++)
+                                {
+                                    var option = Model.PickupOptions[p];
+                                    <option value="@option.Value" selected="@(selectedPickup == "" ? p == 0 : option.Value == selectedPickup)">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="md-label" for="contactPhone">Contact phone</label>
+                            <input class="form-control md-input" id="contactPhone" name="contactPhone" type="tel" maxlength="11" inputmode="numeric" value="@(Model.ContactPhone ?? Model.CustomerPhone)" />
+                        </div>
+                        <p class="md-hint mb-0">Takeaway orders are paid online now and ready at the counter at your pick-up time.</p>
+                    </div>
+
+                    @* Dine-in panel *@
+                    <div class="row g-3 @(dineInSelected ? "" : "d-none")" data-type-panel="DineIn">
+                        <div class="col-12">
+                            <label class="md-label" for="tableId">Your table</label>
+                            <select class="form-select md-input" id="tableId" name="tableId">
+                                <option value="" disabled selected="@(Model.TableId == null)">Select your table</option>
+                                @foreach (var t in Model.AvailableTables)
+                                {
+                                    <option value="@t.tableID" selected="@(Model.TableId == t.tableID)">
+                                        @t.tableNumber · @t.DiningArea?.areaName · seats @t.tableCapacity
+                                        @(Model.HasReservation && Model.TableId == t.tableID ? " (Reserved for you)" : "")
+                                    </option>
+                                }
+                            </select>
+                        </div>
+                        <p class="md-hint mb-0">Dine-in orders are sent to the kitchen and paid on the bill at your table.</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        @* ---------- Summary ---------- *@
+        <div class="col-lg-4">
+            <section class="md-card md-sticky-card">
+                <div class="md-card-header">
+                    <span class="md-card-label">Summary</span>
+                </div>
+                <div class="md-card-body">
+                    <dl class="md-sum">
+                        <div><dt>Subtotal</dt><dd data-sum="subtotal">RM 0.00</dd></div>
+                        <div><dt>Service charge @Model.ServiceChargePct.ToString("0.##", inv)%</dt><dd data-sum="service">Dine-in only</dd></div>
+                        <div><dt>SST @Model.SstPct.ToString("0.##", inv)%</dt><dd data-sum="sst">RM 0.00</dd></div>
+                        <div class="md-sum-total"><dt>Total</dt><dd data-sum="total">RM 0.00</dd></div>
+                    </dl>
+                    <button type="submit" class="btn btn-md-green w-100" id="checkoutButton">@(dineInSelected ? "Place order" : "Continue to payment")</button>
+                </div>
+            </section>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        (function () {
+            var form = document.getElementById('checkoutForm');
+            var servicePct = parseFloat(form.dataset.servicePct) || 0;
+            var sstPct = parseFloat(form.dataset.sstPct) || 0;
+            var rm = function (n) { return 'RM ' + n.toFixed(2); };
+            var token = form.querySelector('input[name="__RequestVerificationToken"]');
+
+            // Promotion discount of one line: same formula as the server (PromotionPricing.LineDiscount)
+            function lineDiscount(item, qty, gross) {
+                var type = item.dataset.promoType;
+                var value = parseFloat(item.dataset.promoValue) || 0;
+                if (!type || value <= 0) return 0;
+                var d = type === 'Percentage' ? Math.round(gross * value) / 100
+                      : type === 'FixedAmount' ? value * qty : 0;
+                return Math.min(d, gross);
+            }
+
+            function recalc() {
+                var subtotal = 0, count = 0;
+                document.querySelectorAll('.md-cart-item').forEach(function (item) {
+                    var qty = parseInt(item.querySelector('.md-qty input').value, 10) || 0;
+                    var gross = qty * parseFloat(item.dataset.price);
+                    var discount = lineDiscount(item, qty, gross);
+                    var line = gross - discount;
+                    var was = item.querySelector('[data-line-was]');
+                    if (was) {
+                        was.textContent = rm(gross);
+                        was.style.display = discount > 0 ? 'block' : 'none';
+                    }
+                    item.querySelector('[data-line]').textContent = rm(line);
+                    item.classList.toggle('is-removed', qty === 0);
+                    subtotal += line; count += qty;
+                });
+                var checked = form.querySelector('input[name="orderType"]:checked');
+                var dineIn = !!checked && checked.value === 'DineIn';
+                var service = dineIn ? Math.round(subtotal * servicePct) / 100 : 0;
+                var sst = Math.round((subtotal + service) * sstPct) / 100;
+                document.querySelector('[data-sum="subtotal"]').textContent = rm(subtotal);
+                document.querySelector('[data-sum="service"]').textContent = dineIn ? rm(service) : 'Dine-in only';
+                document.querySelector('[data-sum="sst"]').textContent = rm(sst);
+                document.querySelector('[data-sum="total"]').textContent = rm(subtotal + service + sst);
+                document.getElementById('cartEmpty').classList.toggle('d-none', count > 0);
+                document.getElementById('checkoutButton').disabled = count === 0;
+            }
+
+            // Keep the saved cart in step with the quantity boxes and kitchen notes, so "Add more" and the Menu counter match.
+            // Uses the Menu page's SetQuantity handler (the server clamps the value and re-reads prices).
+            var timers = {};
+            function saveQuantity(item) {
+                var menuId = item.querySelector('input[name$=".menuId"]').value;
+                var qty = parseInt(item.querySelector('.md-qty input').value, 10) || 0;
+                var noteInput = item.querySelector('.md-cart-note');
+                var note = noteInput ? noteInput.value : '';
+                clearTimeout(timers[menuId]);
+                timers[menuId] = setTimeout(function () {
+                    fetch('/Customer/Menu?handler=SetQuantity', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'RequestVerificationToken': token ? token.value : ''
+                        },
+                        body: 'menuId=' + encodeURIComponent(menuId) + '&quantity=' + qty + '&note=' + encodeURIComponent(note)
+                    });
+                }, 300);
+            }
+
+            // − / + buttons
+            document.querySelectorAll('.md-qty').forEach(function (box) {
+                var input = box.querySelector('input');
+                var item = box.closest('.md-cart-item');
+                box.querySelectorAll('button').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var next = (parseInt(input.value, 10) || 0) + parseInt(btn.dataset.step, 10);
+                        input.value = Math.min(20, Math.max(0, next));
+                        recalc();
+                        saveQuantity(item);
+                    });
+                });
+                input.addEventListener('input', function () { recalc(); saveQuantity(item); });
+            });
+
+            // Save kitchen notes dynamically as the customer types
+            document.querySelectorAll('.md-cart-note').forEach(function (noteInput) {
+                var item = noteInput.closest('.md-cart-item');
+                noteInput.addEventListener('input', function () {
+                    saveQuantity(item);
+                });
+            });
+
+            // Takeaway / Dine-in: switch the fields and the button
+            form.querySelectorAll('input[name="orderType"]').forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                    document.querySelectorAll('[data-type-panel]').forEach(function (panel) {
+                        panel.classList.toggle('d-none', panel.dataset.typePanel !== radio.value);
+                    });
+                    document.getElementById('checkoutButton').textContent =
+                        radio.value === 'DineIn' ? 'Place order' : 'Continue to payment';
+                    recalc();
+                });
+            });
+
+            recalc();
+        })();
+    </script>
+}
