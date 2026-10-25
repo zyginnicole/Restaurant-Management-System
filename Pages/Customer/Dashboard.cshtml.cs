@@ -2,22 +2,32 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Helpers;
+using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
-    // Customer overview (dashboard). Only the "Order in progress" card reads real data so far;
-    // the other cards are still the static design.
+    // Customer overview (dashboard). The "Next reservation" and "Order in progress" cards read real data;
+    // the recommendations hero is still the static design.
     public class DashboardModel : PageModel
     {
         // Same open statuses as the Orders page (Completed and Cancelled orders are history)
         private static readonly string[] OpenStatuses = { "Order placed", "Preparing", "Served" };
 
-        private readonly ApplicationDbContext _context;
+        // Next reservation card: active bookings (Pending / Confirmed / Seated) from today up to this many days ahead
+        private const int NextReservationDays = 7;
 
-        public DashboardModel(ApplicationDbContext context)
+        private readonly ApplicationDbContext _context;
+        private readonly ReservationService _reservations;
+
+        public DashboardModel(ApplicationDbContext context, ReservationService reservations)
         {
             _context = context;
+            _reservations = reservations;
         }
+
+        // Next reservations card, soonest first (empty → the card shows "Book a table")
+        public List<Reservation> NextReservations { get; set; } = new();
 
         // The customer's most recent open order, or null (the card then shows an empty state)
         public OrderInProgressView? OrderInProgress { get; set; }
@@ -43,6 +53,12 @@ namespace RestaurantManagementSystem.Pages.Customer
                 ? HttpContext.Session.GetUserId()
                 : null;
             if (custId == null) return;
+
+            // Next reservations: same list as the Reservations page, limited to the next 7 days
+            var until = DateTime.Today.AddDays(NextReservationDays + 1);
+            NextReservations = (await _reservations.GetUpcomingForCustomerAsync(custId.Value))
+                .Where(r => r.reservationDateTime < until)
+                .ToList();
 
             var openStatuses = OpenStatuses;
 
