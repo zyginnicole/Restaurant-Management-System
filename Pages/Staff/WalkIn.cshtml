@@ -1,0 +1,208 @@
+@page
+@model RestaurantManagementSystem.Pages.Staff.WalkInModel
+@{
+    ViewData["Title"] = "Book reservations";
+    ViewData["Module"] = "Staff";
+    ViewData["ActiveNav"] = "Reservations";
+    ViewData["Eyebrow"] = "Wednesday, 16 September 2026 · Dinner service";
+    ViewData["Heading"] = "Book reservations";
+    ViewData["Subtitle"] = "Book a table for a guest on any date and time";
+    Layout = "_DashboardLayout";
+
+    // ---------- Example data – later from the database (see WalkInModel) ----------
+    var today = "2026-09-16";
+    var now = "20:40";
+
+    // DiningTables that can be booked (not Maintenance): tableNumber, diningArea, tableCapacity,
+    // and today's bookings on the table as "start-end" windows (booking time + 90 min + 15 min buffer)
+    var tables = new (string No, string Area, int Seats, string Busy)[]
+    {
+        ("T-01", "Indoor", 4, "22:00-23:45"), ("T-02", "Outdoor", 4, "20:45-22:30"),
+        ("T-03", "Indoor", 2, "20:15-22:00"), ("T-04", "Indoor", 2, "21:00-22:45"),
+        ("T-05", "Indoor", 4, ""),            ("T-06", "Indoor", 2, "19:30-21:15"),
+        ("T-07", "Indoor", 4, ""),            ("T-08", "Indoor", 4, "21:30-23:15"),
+        ("T-09", "Indoor", 4, ""),            ("T-10", "Indoor", 6, ""),
+        ("T-11", "Indoor", 4, ""),            ("T-12", "Indoor", 4, "19:00-20:45"),
+        ("T-13", "Outdoor", 4, ""),           ("T-14", "Outdoor", 4, ""),
+        ("T-15", "Outdoor", 2, ""),           ("T-16", "Outdoor", 4, "21:45-23:30"),
+        ("T-17", "Outdoor", 4, ""),           ("T-18", "Outdoor", 6, ""),
+        ("T-19", "Outdoor", 2, ""),           ("T-20", "VIP", 8, "20:00-21:45"),
+        ("T-21", "VIP", 8, ""),               ("T-22", "VIP", 6, "")
+    };
+
+    // ?table=T-05 (table clicked on the Reservations floor → Book Table) picks that table
+    string chosen = Request.Query["table"].ToString();
+    if (!tables.Any(t => t.No == chosen)) chosen = tables[0].No;
+    int partySize = 2;
+
+    // Booking times – all can be chosen; the first slot after now is picked to start with
+    var times = new[] { "12:00", "12:30", "13:00", "13:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30" };
+    var defaultTime = times.FirstOrDefault(t => string.CompareOrdinal(t, now) > 0) ?? times[0];
+
+    // Existing guests for "Find existing guest" (Customer: custID, custName, custPhone)
+    var guests = new (int Id, string Name, string Phone)[]
+    {
+        (12, "Sophia Haines", "+60 19-234 5678"), (15, "Eleanor Whitmore", "+60 12-012 3456"),
+        (21, "Marcus Delacroix", "+60 17-098 7654"), (27, "Victoria Blake", "+60 12-234 1111"),
+        (30, "Isabella Chen", "+60 13-345 6789"), (34, "Thomas Ashford", "+60 12-876 5432"),
+        (38, "Amelia Ross", "+60 14-567 8901"), (41, "Grace Lim", "+60 16-998 2210")
+    };
+}
+
+@section HeaderActions {
+    <a class="btn btn-md-outline md-header-btn" href="/Staff/Reservations"><i class="bi bi-arrow-left"></i>Back to reservations</a>
+}
+
+<div class="row md-grid md-section">
+    <div class="col-lg-8 col-xl-7">
+        <form method="post" id="walkInForm">
+            <input type="hidden" name="custId" id="custId" />
+            <section class="md-card">
+                <div class="md-card-header">
+                    <span class="md-card-label">Guest details</span>
+                </div>
+                <div class="md-card-body">
+                    @* Date + time of the booking (any time can be chosen) *@
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <label class="md-label" for="reservationDate">Date</label>
+                            <input class="form-control md-input" id="reservationDate" name="reservationDate" type="date" min="@today" value="@today" required />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="md-label" for="reservationTime">Time</label>
+                            <select class="form-select md-input" id="reservationTime" name="reservationTime" data-md-select>
+                                @foreach (var t in times)
+                                {
+                                    <option value="@t" selected="@(t == defaultTime)">@t</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        @* The table clicked on the floor is chosen *@
+                        <div class="col-sm-7">
+                            <label class="md-label" for="tableId">Table</label>
+                            <select class="form-select md-input" id="tableId" name="tableId" data-md-select>
+                                @foreach (var t in tables)
+                                {
+                                    <option value="@t.No" data-seats="@t.Seats" data-busy="@t.Busy" selected="@(t.No == chosen)">@t.No · @t.Area · @t.Seats seats</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="md-label" for="partySize">Guests</label>
+                            <select class="form-select md-input" id="partySize" name="partySize">
+                                @for (int n = 1; n <= 12; n++)
+                                {
+                                    <option selected="@(n == partySize)">@n</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 mt-2">
+                            <p class="md-hint mb-0" id="tableInfo"></p>
+                            <p class="md-note-box md-note-box-danger mt-2 mb-0 d-none" id="tableTooSmall"></p>
+                        </div>
+                    </div>
+
+                    @* Choosing a guest from the list fills custId, name and phone *@
+                    <div class="mb-3">
+                        <label class="md-label" for="findGuest">Find existing guest</label>
+                        <input class="form-control md-input" id="findGuest" list="guestList" placeholder="Search by name or phone" autocomplete="off" />
+                        <datalist id="guestList">
+                            @foreach (var g in guests)
+                            {
+                                <option value="@g.Name · @g.Phone" data-id="@g.Id"></option>
+                            }
+                        </datalist>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <label class="md-label" for="guestName">Guest name</label>
+                            <input class="form-control md-input" id="guestName" name="guestName" maxlength="100" placeholder="Guest name" required />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="md-label" for="guestPhone">Phone</label>
+                            <input class="form-control md-input" id="guestPhone" name="guestPhone" type="tel" maxlength="20" placeholder="+60 1X-XXX XXXX" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="md-label" for="specialRequest">Requests or allergies</label>
+                        <textarea class="form-control md-input" id="specialRequest" name="specialRequest" rows="3" maxlength="300" placeholder="e.g. high chair, nut allergy"></textarea>
+                    </div>
+                    <p class="md-hint mb-0">A booking made by staff is confirmed straight away. Name and phone are needed. The table is held for 90 minutes + 15-minute buffer, from Settings. When the guests arrive, use Seat on the Reservations page.</p>
+                </div>
+                <div class="md-card-footer md-walkin-foot">
+                    <button type="submit" class="btn btn-md-dark" id="bookButton"><i class="bi bi-calendar-check me-2"></i>Book here</button>
+                </div>
+            </section>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @* Table dropdown opens its list below (data-md-select) *@
+    <script src="~/js/md-select.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var today = '@today';
+            var date = document.getElementById('reservationDate');
+            var time = document.getElementById('reservationTime');
+            var table = document.getElementById('tableId');
+            var size = document.getElementById('partySize');
+            var name = document.getElementById('guestName');
+            var phone = document.getElementById('guestPhone');
+            var book = document.getElementById('bookButton');
+            var stay = 105;   // minutes a booking holds the table: 90 min + 15 min buffer (Settings)
+
+            function minutes(hhmm) { var p = hhmm.split(':'); return +p[0] * 60 + +p[1]; }
+
+            // Table info, clash / size warning, hint and required fields for the chosen date, time and table.
+            // Example data only knows today's bookings (data-busy); the backend checks the real ones.
+            function apply() {
+                var option = table.options[table.selectedIndex];
+                var seats = +option.dataset.seats, guests = +size.value;
+                var start = minutes(time.value);
+                var busy = date.value === today && option.dataset.busy ? option.dataset.busy.split(' ') : [];
+                var clash = busy.find(function (w) {
+                    var p = w.split('-');
+                    return start < minutes(p[1]) && minutes(p[0]) < start + stay;
+                });
+
+                document.getElementById('tableInfo').textContent = option.value + ' seats ' + seats + ' · ' +
+                    (busy.length ? 'booked ' + busy.join(', ').replace(/-/g, '–') + ' on this day.' : 'no bookings on this day.');
+
+                var problem = guests > seats ? option.value + ' seats only ' + seats + '. Choose a bigger table for ' + guests + ' guests.'
+                    : clash ? option.value + ' is booked ' + clash.replace('-', '–') + '. Choose another time or table.' : '';
+                var warning = document.getElementById('tableTooSmall');
+                warning.textContent = problem;
+                warning.classList.toggle('d-none', !problem);
+                book.disabled = !!problem;
+            }
+
+            [date, time, table, size].forEach(function (el) { el.addEventListener('change', apply); });
+            apply();
+
+            // Find existing guest: "Sophia Haines · +60 19-234 5678" → custId, name, phone
+            var find = document.getElementById('findGuest');
+            find.addEventListener('change', function () {
+                var value = this.value;
+                var option = Array.prototype.find.call(document.querySelectorAll('#guestList option'), function (o) { return o.value === value; });
+                if (!option) return;
+                var parts = value.split(' · ');
+                document.getElementById('custId').value = option.dataset.id;
+                name.value = parts[0];
+                phone.value = parts[1];
+            });
+
+            // ?guest=12 (Guests page "New booking"): fill in that guest
+            var guestId = new URLSearchParams(location.search).get('guest');
+            var preset = guestId && document.querySelector('#guestList option[data-id="' + guestId + '"]');
+            if (preset) {
+                find.value = preset.value;
+                find.dispatchEvent(new Event('change'));
+            }
+        })();
+    </script>
+}

@@ -1,0 +1,362 @@
+@page
+@model RestaurantManagementSystem.Pages.Staff.BillingModel
+@{
+    ViewData["Title"] = "Billing";
+    ViewData["Module"] = "Staff";
+    ViewData["ActiveNav"] = "Billing";
+    ViewData["Eyebrow"] = Model.TodayLabel;
+    ViewData["Heading"] = "Billing";
+    ViewData["Subtitle"] = "Bills for served tables, payments and receipts";
+    Layout = "_DashboardLayout";
+
+    // ---------- Data comes from BillingModel (the database) ----------
+    // One bill per table visit (dine-in) or per order (takeaway). State: "awaiting" (all served, not paid) · "open" (still dining) · "paid"
+    var bills = Model.Bills;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    string Rm(decimal v) => "RM " + v.ToString("#,##0.00");
+    string Pill(string state) => state == "awaiting" ? "is-served" : state == "open" ? "is-preparing" : "is-completed";
+    string Tag(string? table) => table == null ? "TA" : (table.Length > 2 ? table[2..] : table);
+}
+
+@* Message after recording a payment (TempData["StaffMessage"]) *@
+@if (TempData["StaffMessage"] is string message)
+{
+    <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+}
+
+@* ---------- Tonight at a glance ---------- *@
+<div class="row md-grid md-section">
+    <div class="col-sm-6 col-xl-3">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Collected tonight</span>
+            <div class="md-stat-value">@Rm(Model.CollectedTonight)</div>
+            <span class="md-hint">@Model.PaidBills @(Model.PaidBills == 1 ? "bill" : "bills") paid (@Model.PaidDineIn @(Model.PaidDineIn == 1 ? "table" : "tables"), @Model.PaidTakeaway takeaway)</span>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Awaiting payment</span>
+            <div class="md-stat-value">@Rm(Model.AwaitingTotal)</div>
+            <span class="md-hint">@Model.AwaitingCount @(Model.AwaitingCount == 1 ? "bill" : "bills") served@(Model.AwaitingTables.Count > 0 ? " · " + string.Join(", ", Model.AwaitingTables) : "")</span>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Still dining</span>
+            <div class="md-stat-value">@Model.DiningTables.Count @(Model.DiningTables.Count == 1 ? "table" : "tables")</div>
+            <span class="md-hint">@(Model.DiningTables.Count > 0 ? string.Join(", ", Model.DiningTables) : "No table is waiting for its food")</span>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Covers tonight</span>
+            <div class="md-stat-value">@Model.CoversTonight</div>
+            <span class="md-hint">Guests seated or completed</span>
+        </div>
+    </div>
+</div>
+
+<div class="row md-grid md-section">
+    @* ---------- Bill list (left) ---------- *@
+    <div class="col-lg-5 col-xl-4">
+        <section class="md-card md-staff-orders">
+            <nav class="md-tabs md-filter-tabs" aria-label="Bills by day" id="billTabs">
+                <button type="button" class="active" data-day="tonight">Tonight <small>@bills.Count(b => b.Day == "tonight")</small></button>
+                <button type="button" data-day="yesterday">Yesterday <small>@bills.Count(b => b.Day == "yesterday")</small></button>
+                <button type="button" data-day="all">All <small>@bills.Count</small></button>
+            </nav>
+            @* Awaiting payment first, then still dining, then paid (sorted by BillingModel) *@
+            <ul class="md-order-list" id="billList">
+                @foreach (var b in bills)
+                {
+                    <li class="md-order md-staff-order @Pill(b.State)" data-day="@b.Day" data-code="@b.Code" data-codes="@b.Codes">
+                        <span class="md-table-badge">@Tag(b.Table)</span>
+                        <div class="md-order-main">
+                            <button type="button" class="md-staff-order-btn stretched-link" data-show-bill="@b.Code">@(b.Table ?? "Takeaway") · @b.Name</button>
+                            <span class="md-guest-meta">@b.Codes@(b.Day == "yesterday" ? " · yesterday" : b.Day == "earlier" ? " · " + b.DateText : "")@(b.PaidWith != null ? " · " + b.PaidWith : b.State == "open" ? " · " + b.OrderStatus.ToLower() : "")</span>
+                        </div>
+                        <div class="md-order-side">
+                            <span class="md-pill @Pill(b.State)">@b.StateText</span>
+                            <span class="md-order-amount">@(b.State == "open" ? "—" : Rm(b.Total))</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+            <p class="md-notice-empty @(bills.Count > 0 ? "d-none" : "")" id="billEmpty">No bills here.</p>
+        </section>
+    </div>
+
+    @* ---------- The chosen bill (right) – copied from its <template data-bill> ---------- *@
+    <div class="col-lg-7 col-xl-8">
+        <div id="billPanel"></div>
+    </div>
+</div>
+
+@foreach (var b in bills)
+{
+    bool dineIn = b.Table != null;
+    <template data-bill="@b.Code">
+        @if (b.State == "paid")
+        {
+            @* ---------- Paid: the receipt ---------- *@
+            var receipt = new ReceiptView
+            {
+                ReceiptNo = b.ReceiptNo ?? "", OrderCode = b.Codes, IsDineIn = dineIn,
+                ReservationCode = b.Res, TableCode = b.Table, PickupTime = b.Pickup, CustomerName = b.Name,
+                Items = b.Items.Select(i => new ReceiptLine { Quantity = i.Qty, Name = i.Name, UnitPrice = i.Price, Note = i.Remark, PromoCode = i.Promo, Discount = i.Discount }).ToList(),
+                PaymentMethod = b.PaidWith ?? "", PaymentStatus = "Paid",
+                PaidAt = b.PaidAtFull ?? DateTimeOffset.Now
+            };
+            <section class="md-card">
+                <div class="md-card-header">
+                    <span class="md-card-label">Receipt · @b.Codes · @(b.Table ?? "Takeaway") · @b.Name</span>
+                    <span class="md-pill is-completed">@b.StateText</span>
+                </div>
+                <div class="md-card-body">
+                    <partial name="~/Pages/Shared/Partials/_Receipt.cshtml" model="receipt" />
+                    <div class="md-receipt-actions">
+                        <button type="button" class="btn md-btn-round btn-md-dark" data-pdf-target="#receiptPaper" data-pdf-name="MaisonDoree-Receipt-@receipt.ReceiptNo"><i class="bi bi-download me-2"></i>Download receipt (PDF)</button>
+                        @if (b.CanCollect)
+                        {
+                            @* Paid takeaway that is ready: finish the order once the guest has collected it *@
+                            <form method="post" asp-page-handler="Collect" class="d-inline">
+                                <input type="hidden" name="orderId" value="@b.Code" />
+                                <button type="submit" class="btn md-btn-round md-btn-green">Mark collected</button>
+                            </form>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+        else
+        {
+            @* ---------- Awaiting payment / still dining: the bill ---------- *@
+            <section class="md-card md-section" id="billCard">
+                <div class="md-card-header">
+                    <span class="md-card-label">Bill · @b.Codes · @(b.Table ?? "Takeaway") · @b.Name</span>
+                    <span class="md-pill @Pill(b.State)">@b.StateText</span>
+                </div>
+                @* Only in the downloaded PDF: who and when *@
+                <div class="md-card-body md-pdf-only md-pdf-head">
+                    <b>@ViewData["Brand"]</b>
+                    <span>@(dineIn ? $"Table {b.Table}" + (b.Res != null ? $" · reservation {b.Res}" : "") : "Takeaway") · @b.Name@(b.Phone != null ? " · " + b.Phone : "") · ordered @b.PlacedFull</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="md-visit-table md-bill-table">
+                        <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Unit</th><th class="text-end">Amount</th></tr></thead>
+                        <tbody>
+                            @foreach (var i in b.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        @i.Name
+                                        @if (i.Remark != null)
+                                        {
+                                            <small class="md-item-note">@i.Remark</small>
+                                        }
+                                        @if (!string.IsNullOrEmpty(i.Promo) && i.Discount > 0)
+                                        {
+                                            <small class="md-item-note">Promo @i.Promo &minus;@Rm(i.Discount)</small>
+                                        }
+                                    </td>
+                                    <td class="text-end">@i.Qty</td>
+                                    <td class="text-end">@Rm(i.Price)</td>
+                                    <td class="text-end">@Rm(i.Qty * i.Price - i.Discount)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="md-card-body">
+                    <dl class="md-sum md-bill-sum mb-0">
+                        <div><dt>Subtotal</dt><dd>@Rm(b.Subtotal)</dd></div>
+                        @if (b.State == "awaiting")
+                        {
+                            <div class="md-bill-promo">
+                                <dt><label for="promotionSelect">Promotion</label></dt>
+                                <dd>
+                                    @* The dropdown is left out of the PDF; the PDF shows the chosen promotion as text.
+                                       Every option carries the bill totals it gives (worked out by BillingModel). *@
+                                    <div data-html2canvas-ignore>
+                                        <select class="form-select md-input" id="promotionSelect" name="promotionId" form="payForm" data-md-select>
+                                            @foreach (var p in b.Promos)
+                                            {
+                                                <option value="@p.Id"
+                                                        data-discount="@p.Discount.ToString("0.00", inv)"
+                                                        data-service="@p.Service.ToString("0.00", inv)"
+                                                        data-sst="@p.Sst.ToString("0.00", inv)"
+                                                        data-total="@p.Total.ToString("0.00", inv)">@p.Title</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <span class="md-pdf-only" data-bill="promo-text">None</span>
+                                </dd>
+                            </div>
+                            <div class="d-none" data-bill="discount-row"><dt>Discount</dt><dd data-bill="discount">−RM 0.00</dd></div>
+                        }
+                        @if (dineIn)
+                        {
+                            <div><dt>Service charge</dt><dd data-bill="service">@Rm(b.Service)</dd></div>
+                        }
+                        <div><dt>SST</dt><dd data-bill="sst">@Rm(b.Sst)</dd></div>
+                        <div class="md-sum-total"><dt>Total</dt><dd data-bill="total">@Rm(b.Total)</dd></div>
+                    </dl>
+                    @if (b.State == "open")
+                    {
+                        <p class="md-note-box md-note-box-info mt-3 mb-3">@(dineIn ? "Still dining" : "In progress"): the order is @b.OrderStatus.ToLower(). Payment opens when it has been served.</p>
+                        <div class="md-edit-actions">
+                            <a class="btn md-btn-round md-btn-outline" href="/Staff/Orders?view=@b.Code">View order</a>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            @if (b.State == "awaiting")
+            {
+                @* ---------- Record payment – posts to OnPostPay ---------- *@
+                <form method="post" asp-page-handler="Pay" id="payForm">
+                    <input type="hidden" name="orderId" value="@b.Code" />
+                    <section class="md-card">
+                        <div class="md-card-header">
+                            <span class="md-card-label">Record payment</span>
+                        </div>
+                        <div class="md-card-body">
+                            <span class="md-label">Payment method</span>
+                            @* Payment.paymentMethod: Cash, Card, E-Wallet (Online Banking is for online payments) *@
+                            <div class="md-choice mb-3" role="radiogroup" aria-label="Payment method">
+                                <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash" checked />
+                                <label for="payCash">Cash</label>
+                                <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Card" />
+                                <label for="payCard">Card</label>
+                                <input type="radio" class="btn-check" name="paymentMethod" id="payWallet" value="E-Wallet" />
+                                <label for="payWallet">E-Wallet</label>
+                            </div>
+                            <div class="row g-3 mb-3" data-pay="Cash">
+                                <div class="col-sm-6">
+                                    <label class="md-label" for="amountReceived">Amount received (RM)</label>
+                                    <input class="form-control md-input" id="amountReceived" name="amountReceived" type="number" min="0" step="0.01" value="@b.Total.ToString("0.00", inv)" />
+                                </div>
+                                <div class="col-sm-6">
+                                    <span class="md-label">Change due</span>
+                                    <div class="md-bill-change" data-bill="change">RM 0.00</div>
+                                </div>
+                            </div>
+                            <p class="md-hint mb-3 d-none" data-pay="Card">Take the card payment on the terminal, then confirm here.</p>
+                            <p class="md-hint mb-3 d-none" data-pay="E-Wallet">Ask the guest to scan the DuitNow QR code, then confirm here once it shows as paid.</p>
+                            <p class="md-note-box md-note-box-info mb-3">
+                                Confirming payment issues the receipt@(b.Codes.Contains(',') ? " for all " + b.Codes.Split(',').Length + " orders" : "")@(dineIn ? $", frees table {b.Table}" : "") and completes the order.
+                            </p>
+                            <div class="md-edit-actions">
+                                <button type="submit" class="btn md-btn-round md-btn-green">Confirm payment</button>
+                                <button type="button" class="btn md-btn-round md-btn-outline" data-pdf-target="#billCard" data-pdf-name="MaisonDoree-Bill-@b.Code"><i class="bi bi-download me-2"></i>Download bill (PDF)</button>
+                            </div>
+                        </div>
+                    </section>
+                </form>
+            }
+        }
+    </template>
+}
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="~/js/pdf-download.js" asp-append-version="true"></script>
+    <script src="~/js/md-select.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var list = document.getElementById('billList');
+            var rows = list.querySelectorAll(':scope > li');
+            var panel = document.getElementById('billPanel');
+            var day = 'tonight';
+            var rm = function (n) { return 'RM ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+            var r2 = function (n) { return Math.round(n * 100) / 100; };
+
+            // Tabs: Tonight / Yesterday / All
+            function applyTab() {
+                var shown = 0;
+                rows.forEach(function (row) {
+                    var ok = day === 'all' || row.dataset.day === day;
+                    row.classList.toggle('d-none', !ok);
+                    if (ok) shown++;
+                });
+                document.getElementById('billEmpty').classList.toggle('d-none', shown > 0);
+            }
+            document.querySelectorAll('#billTabs button').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    day = tab.dataset.day;
+                    document.querySelectorAll('#billTabs button').forEach(function (t) { t.classList.toggle('active', t === tab); });
+                    applyTab();
+                });
+            });
+
+            // The chosen promotion: the totals come ready-made from the server (data-* on the option),
+            // so the screen shows exactly what Confirm payment will charge.
+            function recalc() {
+                var select = document.getElementById('promotionSelect');
+                if (!select) return;
+                var option = select.options[select.selectedIndex];
+                var discount = parseFloat(option.dataset.discount) || 0;
+                var q = function (n) { return panel.querySelector('[data-bill="' + n + '"]'); };
+                q('promo-text').textContent = option.text;                      // for the PDF
+                q('discount-row').classList.toggle('d-none', discount === 0);
+                q('discount').textContent = '−' + rm(discount);
+                if (q('service')) q('service').textContent = rm(parseFloat(option.dataset.service) || 0);
+                q('sst').textContent = rm(parseFloat(option.dataset.sst) || 0);
+                var total = parseFloat(option.dataset.total) || 0;
+                q('total').textContent = rm(total);
+                var received = document.getElementById('amountReceived');
+                if (received) { received.dataset.total = total; received.value = total.toFixed(2); updateChange(); }
+            }
+
+            // Cash: change due
+            function updateChange() {
+                var received = document.getElementById('amountReceived'), out = panel.querySelector('[data-bill="change"]');
+                if (!received || !out) return;
+                var change = r2((parseFloat(received.value) || 0) - parseFloat(received.dataset.total || 0));
+                out.textContent = change < 0 ? 'Short by ' + rm(-change) : rm(change);
+                out.classList.toggle('is-short', change < 0);
+            }
+
+            // Show a bill on the right (from its template) and wire up its controls
+            function showBill(code, scroll) {
+                var template = document.querySelector('template[data-bill="' + code + '"]');
+                if (!template) return;
+                panel.innerHTML = '';
+                panel.appendChild(template.content.cloneNode(true));
+                rows.forEach(function (row) { row.classList.toggle('is-selected', row.dataset.code === code); });
+                history.replaceState(null, '', '?order=' + code);
+
+                var select = document.getElementById('promotionSelect');
+                if (select && window.mdSelect) window.mdSelect(select);
+                if (select) select.addEventListener('change', recalc);
+                var received = document.getElementById('amountReceived');
+                if (received) {
+                    received.dataset.total = received.value;
+                    received.addEventListener('input', updateChange);
+                    updateChange();
+                }
+                panel.querySelectorAll('input[name="paymentMethod"]').forEach(function (r) {
+                    r.addEventListener('change', function () {
+                        panel.querySelectorAll('[data-pay]').forEach(function (el) { el.classList.toggle('d-none', el.dataset.pay !== r.value); });
+                    });
+                });
+                if (scroll && window.innerWidth < 992) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            list.querySelectorAll('[data-show-bill]').forEach(function (b) {
+                b.addEventListener('click', function () { showBill(b.dataset.showBill, true); });
+            });
+
+            // Start: ?order=ORD-0083 (Orders page / Dashboard), otherwise the first bill of the chosen tab
+            applyTab();
+            var wanted = new URLSearchParams(location.search).get('order');
+            // ?order= may be any order on a table bill (e.g. ORD-0084 inside "ORD-0083, ORD-0084")
+            var row = null;
+            rows.forEach(function (r) { if (wanted && r.dataset.codes.split(', ').indexOf(wanted) !== -1) row = r; });
+            if (row) wanted = row.dataset.code;
+            if (row && row.dataset.day !== 'tonight') document.querySelector('#billTabs [data-day="all"]').click();
+            var start = row ? wanted : (list.querySelector('li[data-day="tonight"]') || {}).dataset?.code;
+            if (start) showBill(start);
+        })();
+    </script>
+}
