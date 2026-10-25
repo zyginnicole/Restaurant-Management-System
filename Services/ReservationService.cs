@@ -480,6 +480,16 @@ namespace RestaurantManagementSystem.Services
                 .ToListAsync();
         }
 
+        //9a. Pending requests from today on, soonest first – "waiting for approval" on the Staff pages
+        //(requests past their 15-minute deadline are already declined by CloseOverdueAsync)
+        public async Task<List<Reservation>> GetPendingUpcomingAsync()
+        {
+            return await _db.Reservations.AsNoTracking()
+                .Where(r => r.reservationStatus == ReservationStatus.Pending && r.reservationDateTime >= DateTime.Today)
+                .OrderBy(r => r.reservationDateTime)
+                .ToListAsync();
+        }
+
         //9b. Every booking between two dates (both included, all statuses) with customer, table + area and staff,
         //in date/time order (Admin › Monitor)
         public async Task<List<Reservation>> GetBetweenAsync(DateTime from, DateTime to)

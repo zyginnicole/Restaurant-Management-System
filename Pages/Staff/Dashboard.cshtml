@@ -60,9 +60,15 @@
                 <i class="is-blue" style="flex: @handled"></i>
                 <i class="is-red" style="flex: @pending"></i>
             </div>
-            @if (pending > 0)
+            @* Link counts Pending requests on ALL upcoming days (the number and bar above are today only), names the day
+               ("· Tomorrow", or "· next: Tue 28 Oct" when they are on several days) and opens the earliest day *@
+            @if (Model.PendingUpcoming > 0)
             {
-                <a class="md-stat-action" href="/Staff/Reservations?status=Pending">@pending need approval <i class="bi bi-arrow-right"></i></a>
+                var firstDay = Model.PendingFirstDate!.Value;
+                var dayName = firstDay == DateTime.Today ? "Today" : firstDay == DateTime.Today.AddDays(1) ? "Tomorrow" : firstDay.ToString("ddd d MMM", inv);
+                <a class="md-stat-action" href="/Staff/Reservations?date=@firstDay.ToString("yyyy-MM-dd", inv)&status=Pending">
+                    @Model.PendingUpcoming @(Model.PendingUpcoming == 1 ? "request needs" : "requests need") approval · @(Model.PendingDays > 1 ? "next: " : "")@dayName <i class="bi bi-arrow-right"></i>
+                </a>
             }
             else
             {
