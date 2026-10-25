@@ -16,24 +16,11 @@
     string Rm(decimal v) => "RM " + v.ToString("N2");
     var inv = System.Globalization.CultureInfo.InvariantCulture;   // "16 Sep", not "16 Sept"
 
-    // ---------- Example data – later from the database (see MonitorModel) ----------
-    // Reservations 16–20 Sep (+ Customer phone, DiningTable area, specialRequest)
-    var reservations = new (string Code, string Date, string Time, string Name, string Phone, int Guests, string Table, string Area, string Status, string? Request)[]
-    {
-        ("R-0039", "2026-09-16", "18:00", "Thomas Ashford",     "+60 12-876 5432", 3,  "T-09", "Indoor",  "Completed", "Shellfish allergy"),
-        ("R-0038", "2026-09-16", "18:15", "Amelia Ross",        "+60 14-567 8901", 2,  "T-07", "Indoor",  "No-show",   null),
-        ("R-0040", "2026-09-16", "18:30", "George Pemberton",   "+60 16-456 7890", 8,  "T-21", "VIP",     "Cancelled", "Corporate event"),
-        ("R-0041", "2026-09-16", "19:00", "Eleanor Whitmore",   "+60 12-012 3456", 4,  "T-12", "Indoor",  "Seated",    "Anniversary dinner — window seating preferred"),
-        ("R-0042", "2026-09-16", "19:30", "Marcus Delacroix",   "+60 17-098 7654", 2,  "T-06", "Indoor",  "Seated",    "Champagne on arrival"),
-        ("R-0043", "2026-09-16", "20:00", "Sophia Haines",      "+60 19-234 5678", 6,  "T-20", "VIP",     "Pending",   "One guest vegetarian, separate plating"),
-        ("R-0047", "2026-09-16", "20:15", "Daniel Tan",         "+60 11-223 4455", 2,  "T-03", "Indoor",  "Seated",    null),
-        ("R-0044", "2026-09-16", "20:45", "Victoria Blake",     "+60 12-234 1111", 4,  "T-02", "Outdoor", "Confirmed", "Tasting menu requested"),
-        ("R-0045", "2026-09-16", "21:00", "Isabella Chen",      "+60 13-345 6789", 2,  "T-04", "Indoor",  "Pending",   null),
-        ("R-0046", "2026-09-16", "21:30", "Henry Wong",         "+60 18-765 4321", 10, "T-22", "VIP",     "Declined",  null),
-        ("R-0048", "2026-09-20", "19:30", "Alexandra Beaumont", "+60 12-345 6789", 2,  "T-07", "Indoor",  "Confirmed", "Window seat if possible")
-    };
+    // ---------- Reservations: from the database (MonitorModel, ReservationService.GetBetweenAsync) ----------
+    var reservations = Model.Reservations;
     string[] resStatuses = { "Pending", "Confirmed", "Seated", "Completed", "Cancelled", "No-show", "Declined" };
 
+    // ---------- Orders and Payments: example data – later from the database (orders / payments feature) ----------
     // Orders today. Total = Order.totalAmount (dine-in + 10% service charge, then 6% SST; takeaway SST only)
     // Lines = OrderItems: quantity, Menu.menuName, unitPrice, itemRemark. Subtotal = sum of the lines.
     var orders = new (string Code, string? Table, string Name, string Time, string Status, (int Qty, string Item, decimal Price, string? Remark)[] Lines)[]
@@ -83,16 +70,16 @@
    Reservations
    ===================================================== *@
 <div class="@(tab == "reservations" ? "" : "d-none")" data-pane="reservations">
-    @* Filters – backend: ?from=2026-09-16&to=2026-09-20 reloads the list; the rest filter on screen *@
+    @* Filters – From / To reload the list (?tab=reservations&from=…&to=…); status and search filter on screen *@
     <section class="md-card md-section">
         <div class="md-card-body md-monitor-filters">
             <div>
                 <label class="md-label" for="resFrom">From</label>
-                <input type="date" class="form-control md-input" id="resFrom" value="2026-09-16" />
+                <input type="date" class="form-control md-input" id="resFrom" value="@Model.From.ToString("yyyy-MM-dd", inv)" />
             </div>
             <div>
                 <label class="md-label" for="resTo">To</label>
-                <input type="date" class="form-control md-input" id="resTo" value="2026-09-20" />
+                <input type="date" class="form-control md-input" id="resTo" value="@Model.To.ToString("yyyy-MM-dd", inv)" />
             </div>
             <div>
                 <label class="md-label" for="resStatus">Status</label>
@@ -113,7 +100,7 @@
 
     <section class="md-card md-section">
         <div class="md-card-header">
-            <span class="md-card-label">Reservations · <span id="resCount">@reservations.Length</span> results</span>
+            <span class="md-card-label">Reservations · <span id="resCount">@reservations.Count</span> results</span>
             <span class="md-card-meta">Click a row for details</span>
         </div>
         <div class="table-responsive">
@@ -124,40 +111,47 @@
                 <tbody>
                     @foreach (var r in reservations)
                     {
-                        var d = DateTime.Parse(r.Date);
-                        <tr class="md-row-click" data-res="@r.Code" data-date="@r.Date" data-status="@r.Status"
-                            data-search="@($"{r.Name} {r.Code} {r.Code.Replace("-", "")}".ToLower())" tabindex="0">
-                            <td><b>@r.Code</b></td>
-                            <td>@d.ToString("d MMM", inv) · @r.Time</td>
-                            <td>@r.Name</td>
-                            <td>@r.Guests</td>
-                            <td>@r.Table · @r.Area</td>
-                            <td><span class="md-pill @StatusClass(r.Status)">@r.Status</span></td>
+                        var code = RestaurantManagementSystem.Services.ReservationService.Code(r);
+                        var name = r.Customer?.custName ?? "Guest";
+                        var status = r.reservationStatus;
+                        <tr class="md-row-click" data-res="@code" data-status="@status"
+                            data-search="@($"{name} {code} {code.Replace("-", "")}".ToLower())" tabindex="0">
+                            <td><b>@code</b></td>
+                            <td>@r.reservationDateTime.ToString("d MMM · HH:mm", inv)</td>
+                            <td>@name</td>
+                            <td>@r.partySize</td>
+                            <td>@r.DiningTable?.tableNumber · @r.DiningTable?.DiningArea?.areaName</td>
+                            <td><span class="md-pill @StatusClass(status)">@status</span></td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
-        <p class="md-notice-empty d-none" id="resEmpty">No reservations match these filters.</p>
+        <p class="md-notice-empty @(reservations.Count == 0 ? "" : "d-none")" id="resEmpty">
+            @(reservations.Count == 0 ? "No reservations between these dates." : "No reservations match these filters.")
+        </p>
     </section>
 
     @* One details block per reservation – copied into the pop-up when its row is clicked *@
     @foreach (var r in reservations)
     {
-        var d = DateTime.Parse(r.Date);
-        <template data-res-detail="@r.Code" data-status="@r.Status" data-pill="@StatusClass(r.Status)">
+        var code = RestaurantManagementSystem.Services.ReservationService.Code(r);
+        var phone = r.Customer?.custPhone ?? "";
+        <template data-res-detail="@code" data-status="@r.reservationStatus" data-pill="@StatusClass(r.reservationStatus)">
             <dl class="md-feedback-contact">
-                <div><dt>Guest</dt><dd>@r.Name<br /><a href="tel:@(new string(r.Phone.Where(c => char.IsDigit(c) || c == '+').ToArray()))">@r.Phone</a></dd></div>
-                <div><dt>When</dt><dd>@d.ToString("ddd d MMM yyyy", inv)<br />@r.Time</dd></div>
-                <div><dt>Guests</dt><dd>@r.Guests</dd></div>
-                <div><dt>Table</dt><dd>@r.Table · @r.Area</dd></div>
+                <div><dt>Guest</dt><dd>@(r.Customer?.custName ?? "Guest")<br /><a href="tel:@phone">@phone</a><br />@r.Customer?.custEmail</dd></div>
+                <div><dt>When</dt><dd>@r.reservationDateTime.ToString("ddd d MMM yyyy", inv)<br />@r.reservationDateTime.ToString("HH:mm", inv)</dd></div>
+                <div><dt>Guests</dt><dd>@r.partySize</dd></div>
+                <div><dt>Table</dt><dd>@r.DiningTable?.tableNumber · @r.DiningTable?.DiningArea?.areaName</dd></div>
             </dl>
-            @if (r.Request != null)
+            @if (r.specialRequest != null)
             {
                 <span class="md-label">Special request</span>
-                <p class="md-note-box mb-0">@r.Request</p>
+                <p class="md-note-box mb-0">@r.specialRequest</p>
             }
-            <p class="md-hint mt-3 mb-0">Bookings are confirmed, seated or cancelled by staff on the Staff Reservations page.</p>
+            @* How it was booked / who handled it (same text as the Staff pages) *@
+            <p class="md-hint mt-3 mb-0">@RestaurantManagementSystem.Pages.Staff.StaffReservationText.Booked(r)</p>
+            <p class="md-hint mt-1 mb-0">Bookings are confirmed, seated or cancelled by staff on the Staff Reservations page.</p>
         </template>
     }
 </div>
@@ -378,19 +372,29 @@
                 from: document.getElementById('resFrom'), to: document.getElementById('resTo'),
                 status: document.getElementById('resStatus'), search: document.getElementById('resSearch')
             };
+            // From / To: reload the list for the new dates (the server loads that range)
+            [f.from, f.to].forEach(function (input) {
+                input.addEventListener('change', function () {
+                    if (!f.from.value || !f.to.value) return;
+                    window.location.search = '?tab=reservations&from=' + f.from.value + '&to=' + f.to.value;
+                });
+            });
+
+            // Status + search: filter the rows on screen
             function applyFilters() {
+                if (!rows.length) return;
                 var text = f.search.value.trim().toLowerCase(), shown = 0;
                 rows.forEach(function (r) {
                     var d = r.dataset;
-                    var ok = (!f.from.value || d.date >= f.from.value) && (!f.to.value || d.date <= f.to.value)
-                        && (!f.status.value || d.status === f.status.value) && (!text || d.search.indexOf(text) !== -1);
+                    var ok = (!f.status.value || d.status === f.status.value) && (!text || d.search.indexOf(text) !== -1);
                     r.classList.toggle('d-none', !ok);
                     if (ok) shown++;
                 });
                 document.getElementById('resCount').textContent = shown;
                 document.getElementById('resEmpty').classList.toggle('d-none', shown > 0);
             }
-            Object.keys(f).forEach(function (k) { f[k].addEventListener(k === 'search' ? 'input' : 'change', applyFilters); });
+            f.status.addEventListener('change', applyFilters);
+            f.search.addEventListener('input', applyFilters);
 
             // ---------- Reservation details pop-up (read-only) ----------
             var detail = new bootstrap.Modal(document.getElementById('resDetailPopup'));
