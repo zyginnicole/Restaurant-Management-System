@@ -20,6 +20,12 @@
             session.Clear();
         }
 
+        // Call after users change their own name (Profile page), so the sidebar shows the new name.
+        public static void UpdateUserName(this ISession session, string userName)
+        {
+            session.SetString(SessionKeys.UserName, userName);
+        }
+
         public static int? GetUserId(this ISession session)
         {
             return session.GetInt32(SessionKeys.UserId);

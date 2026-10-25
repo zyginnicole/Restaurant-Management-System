@@ -4,9 +4,9 @@ using RestaurantManagementSystem.Model;
 
 namespace RestaurantManagementSystem.Services
 {
-    // Creates demo accounts so everyone in the team can sign in to the Staff Portal
-    // without typing rows into the database. Runs when the app starts (development only)
-    // and only adds an account if its email is not in the database yet.
+    // Creates demo accounts so everyone in the team has the same logins on every PC
+    // (each PC has its own LocalDB, so accounts typed on one PC don't exist on another).
+    // Runs when the app starts (development only) and only adds an account if its email is not there yet.
     public class DemoAccountSeeder
     {
         // Demo sign-in details: for testing and the viva demo only
@@ -14,6 +14,7 @@ namespace RestaurantManagementSystem.Services
         public const string AdminEmail = "admin@maisondoree.my";
         public const string StaffEmail = "staff@maisondoree.my";
         public const string InactiveStaffEmail = "inactive@maisondoree.my";
+        public const string CustomerEmail = "customer@maisondoree.my";
 
         private readonly ApplicationDbContext _context;
         private readonly PasswordService _passwordService;
@@ -65,6 +66,21 @@ namespace RestaurantManagementSystem.Services
                     staffRole = "Waiter",
                     staffActive = false,
                     staffCreateAt = DateTimeOffset.Now
+                });
+            }
+
+            // Customer (same name the customer pages' design uses), for testing reservations, orders, etc.
+            if (!await _context.Customers.AnyAsync(c => c.custEmail == CustomerEmail))
+            {
+                _context.Customers.Add(new Customer
+                {
+                    custName = "Alexandra Beaumont",
+                    custEmail = CustomerEmail,
+                    custPassword = _passwordService.HashPassword(DemoPassword),
+                    custPhone = "0198765432",
+                    DietaryPref = "None",
+                    promoOptIn = true,
+                    custCreateAt = DateTimeOffset.Now
                 });
             }
 

@@ -1,5 +1,6 @@
 @page
 @model RestaurantManagementSystem.Pages.Admin.AccountsModel
+@using RestaurantManagementSystem.Helpers
 @{
     ViewData["Title"] = "Accounts";
     ViewData["Module"] = "Admin";
@@ -9,50 +10,37 @@
     ViewData["Subtitle"] = "Customer and staff accounts, role assignment and access";
     Layout = "_DashboardLayout";
 
-    // ---------- Example data – later from the database (see AccountsModel) ----------
-    // Staff tab: Staff rows (S-…) + Admin rows (A-…). Role "Administrator" = Admin table.
-    var staff = new (string Id, string Name, string Email, string Phone, string Title, string Role, bool Active, string LastSignIn)[]
-    {
-        ("A-1",  "Richard Beaumont", "r.beaumont@maisondoree.my", "",                "Manager",       "Administrator", true,  "Today 17:42"),
-        ("S-42", "Sophie Clarke",    "s.clarke@maisondoree.my",   "+60 12-345 6789", "Senior Waiter", "Staff",         true,  "Today 17:55"),
-        ("S-17", "Hafiz Rahman",     "h.rahman@maisondoree.my",   "+60 13-222 4810", "Head Chef",     "Staff",         true,  "Today 16:30"),
-        ("S-23", "Mei Ling Ong",     "m.ong@maisondoree.my",      "+60 16-778 9021", "Host",          "Staff",         true,  "Yesterday"),
-        ("S-31", "Daniel Lim",       "d.lim@maisondoree.my",      "+60 11-503 6677", "Cashier",       "Staff",         true,  "Today 17:10"),
-        ("S-35", "Nurul Aina",       "n.aina@maisondoree.my",     "+60 19-660 1243", "Waiter",        "Staff",         true,  "14 Sep 2026"),
-        ("S-38", "Kevin Tan",        "k.tan@maisondoree.my",      "+60 12-889 0345", "Chef",          "Staff",         true,  "Today 15:58"),
-        ("S-29", "Arjun Nair",       "a.nair@maisondoree.my",     "+60 17-441 2290", "Waiter",        "Staff",         false, "2 Aug 2026")
-    };
+    // Data comes from the database (AccountsModel → AccountService)
+    var staff = Model.StaffAccounts;
+    var customers = Model.Customers;
+    var now = DateTimeOffset.Now;
     var jobTitles = new[] { "Manager", "Senior Waiter", "Waiter", "Host", "Cashier", "Head Chef", "Chef" };
 
-    // Customers tab (first page). LockedUntil = lockoutEnd (null = not locked)
-    var customers = new (int Id, string Name, string Email, string Phone, string Since, int Visits, bool Promo, string? LockedUntil)[]
-    {
-        (52, "Natalia Voss",       "natalia.voss@example.com",  "+60 12-554 2018", "15 Sep 2026", 0,  true,  null),
-        (48, "Alexandra Beaumont", "alexandra@example.com",     "+60 12-345 6789", "Mar 2025",    6,  true,  null),
-        (44, "James Carlton",      "j.carlton@example.com",     "+60 17-220 9184", "Jan 2026",    2,  false, "21:05"),
-        (41, "Grace Lim",          "grace.lim@example.com",     "+60 16-998 2210", "Dec 2025",    1,  true,  null),
-        (34, "Thomas Ashford",     "t.ashford@example.com",     "+60 12-876 5432", "Jun 2025",    5,  false, null),
-        (27, "Victoria Blake",     "victoria.blake@example.com","+60 12-234 1111", "Apr 2025",    8,  true,  null),
-        (15, "Eleanor Whitmore",   "eleanor.w@example.com",     "+60 12-012 3456", "Nov 2024",    11, true,  null),
-        (12, "Sophia Haines",      "sophia.haines@example.com", "+60 19-234 5678", "Oct 2024",    3,  true,  null)
-    };
-    int customerTotal = 847;
+    int customerTotal = Model.Stats.CustomerTotal;
+    string Initials(string name) => NameFormatter.GetInitials(name);
 
-    string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0]));
+    // Paging links for the Customers tab keep the search text
+    int firstShown = customers.Count == 0 ? 0 : (Model.CurrentPage - 1) * RestaurantManagementSystem.Services.AccountService.CustomersPerPage + 1;
+    int lastShown = firstShown == 0 ? 0 : firstShown + customers.Count - 1;
+    string PageLink(int p) => $"?tab=customers&page={p}" + (Model.Search != null ? "&q=" + Uri.EscapeDataString(Model.Search) : "");
 
-    // ?tab=customers opens the Customers tab (after an action on that tab)
+    // ?tab=customers opens the Customers tab (after an action on that tab, a search or a page link)
     bool customersTab = Request.Query["tab"] == "customers";
 }
 
 @section HeaderActions {
-    @* Filters the rows of the open tab on screen. Backend: ?q= for the customer pages. *@
-    <input type="search" class="form-control md-input md-header-search" id="accountSearch" placeholder="Search name or email" aria-label="Search accounts" />
+    @* Typing filters the rows on screen; Enter on the Customers tab searches all customers (?q=) *@
+    <input type="search" class="form-control md-input md-header-search" id="accountSearch" placeholder="Search name or email" aria-label="Search accounts" value="@Model.Search" />
 }
 
 @* Message after an action (TempData["AdminMessage"] set by the PageModel) *@
 @if (TempData["AdminMessage"] is string message)
 {
     <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+}
+@if (TempData["AdminError"] is string errorMessage)
+{
+    <div class="md-alert-danger md-section" role="alert"><i class="bi bi-exclamation-circle me-2"></i>@errorMessage</div>
 }
 
 @* ---------- Stat cards ---------- *@
@@ -61,27 +49,27 @@
         <div class="md-stat md-staff-stat">
             <span class="md-label">Customers</span>
             <div class="md-stat-value">@customerTotal</div>
-            <span class="md-hint">7 new this week</span>
+            <span class="md-hint">@Model.Stats.CustomersNewThisWeek new this week</span>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="md-stat md-staff-stat">
             <span class="md-label">Staff accounts</span>
-            <div class="md-stat-value">@staff.Count(s => s.Role == "Staff")</div>
-            <span class="md-hint">@staff.Count(s => s.Role == "Staff" && s.Active) active · @staff.Count(s => !s.Active) deactivated</span>
+            <div class="md-stat-value">@(Model.Stats.StaffActive + Model.Stats.StaffDeactivated)</div>
+            <span class="md-hint">@Model.Stats.StaffActive active · @Model.Stats.StaffDeactivated deactivated</span>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="md-stat md-staff-stat">
             <span class="md-label">Administrators</span>
-            <div class="md-stat-value">@staff.Count(s => s.Role == "Administrator")</div>
+            <div class="md-stat-value">@Model.Stats.AdminTotal</div>
             <span class="md-hint">Full access</span>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="md-stat md-staff-stat">
             <span class="md-label">Locked accounts</span>
-            <div class="md-stat-value">@customers.Count(c => c.LockedUntil != null)</div>
+            <div class="md-stat-value">@Model.Stats.LockedCustomers</div>
             <span class="md-hint">After too many failed sign-ins</span>
         </div>
     </div>
@@ -89,7 +77,7 @@
 
 <nav class="md-tabs md-page-tabs" aria-label="Account type" id="accountTabs">
     <button type="button" class="@(customersTab ? "active" : "")" data-tab="customers">Customers <small>@customerTotal</small></button>
-    <button type="button" class="@(customersTab ? "" : "active")" data-tab="staff">Staff <small>@staff.Length</small></button>
+    <button type="button" class="@(customersTab ? "" : "active")" data-tab="staff">Staff <small>@staff.Count</small></button>
 </nav>
 
 @* =====================================================
@@ -99,13 +87,13 @@
     <div>
         <section class="md-card">
             <div class="md-card-header">
-                <span class="md-card-label">Staff accounts · @staff.Length</span>
+                <span class="md-card-label">Staff accounts · @staff.Count</span>
                 <button type="button" class="btn md-btn-round md-btn-sm btn-md-dark" data-bs-toggle="modal" data-bs-target="#createStaffPopup"><i class="bi bi-person-plus me-1"></i>New staff</button>
             </div>
             <div class="table-responsive">
                 <table class="md-visit-table md-account-table">
                     <thead>
-                        <tr><th>Name</th><th>Job title</th><th>System role</th><th>Status</th><th>Last sign-in</th><th></th></tr>
+                        <tr><th>Name</th><th>Job title</th><th>System role</th><th>Status</th><th></th></tr>
                     </thead>
                     <tbody>
                         @foreach (var s in staff)
@@ -121,20 +109,23 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td>@s.Title</td>
+                                <td>@(string.IsNullOrEmpty(s.JobTitle) ? "—" : s.JobTitle)</td>
                                 <td><span class="md-role @(admin ? "is-admin" : "is-staff")">@s.Role</span></td>
                                 <td><span class="md-pill @(s.Active ? "is-active" : "is-deactivated")">@(s.Active ? "Active" : "Deactivated")</span></td>
-                                <td>@s.LastSignIn</td>
                                 <td class="text-end">
                                     @if (s.Active)
                                     {
                                         <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-bs-toggle="modal" data-bs-target="#editAccountPopup"
-                                                data-id="@s.Id" data-name="@s.Name" data-email="@s.Email" data-phone="@s.Phone" data-title="@s.Title" data-role="@s.Role">Edit</button>
+                                                data-id="@s.AccountId" data-name="@s.Name" data-email="@s.Email" data-phone="@s.Phone" data-title="@s.JobTitle" data-role="@s.Role">
+                                            Edit
+                                        </button>
                                     }
                                     else
                                     {
                                         <button type="button" class="btn md-btn-round md-btn-sm md-btn-confirm" data-bs-toggle="modal" data-bs-target="#reactivatePopup"
-                                                data-id="@s.Id" data-name="@s.Name" data-details="@s.Name · @s.Title · @s.Email">Reactivate</button>
+                                                data-id="@s.AccountId" data-name="@s.Name" data-details="@s.Name · @s.JobTitle · @s.Email">
+                                            Reactivate
+                                        </button>
                                     }
                                 </td>
                             </tr>
@@ -170,12 +161,12 @@
                     </div>
                     <div class="col-sm-6">
                         <label class="md-label" for="newPhone">Phone</label>
-                        <input class="form-control md-input" id="newPhone" name="staffPhone" type="tel" maxlength="20" placeholder="+60 1X-XXX XXXX" />
+                        <input class="form-control md-input" id="newPhone" name="staffPhone" type="tel" maxlength="11" inputmode="numeric" placeholder="0123456789" />
                     </div>
                     <div class="col-sm-6">
                         @* Staff.staffPosition – pick one or type a new title *@
                         <label class="md-label" for="newTitle">Job title</label>
-                        <input class="form-control md-input" id="newTitle" name="staffPosition" list="jobTitleList" maxlength="50" placeholder="e.g. Waiter, Host, Chef" required />
+                        <input class="form-control md-input" id="newTitle" name="staffPosition" list="jobTitleList" maxlength="50" placeholder="e.g. Waiter, Host, Chef" />
                         <datalist id="jobTitleList">
                             @foreach (var t in jobTitles)
                             {
@@ -191,17 +182,9 @@
                         </select>
                     </div>
                 </div>
-                <p class="md-hint mb-3">The system role decides what this person can access: Staff portal or full administration. Job title is for display only.</p>
-                <div class="md-switch-row mb-0">
-                    <div>
-                        <label class="md-switch-title" for="sendLink">Email a set-password link</label>
-                        <span class="md-hint d-block mt-0">They choose their own password.</span>
-                    </div>
-                    <div class="form-check form-switch m-0">
-                        <input class="form-check-input md-switch" type="checkbox" role="switch" id="sendLink" name="sendSetPasswordLink" value="true" checked />
-                        <input type="hidden" name="sendSetPasswordLink" value="false" />
-                    </div>
-                </div>
+                <p class="md-hint mb-3">The system role decides what this person can access: Staff portal or full administration. Job title is for display only. Phone and job title are needed for Staff only.</p>
+                @* No email is sent: a temporary password is created and shown once after saving *@
+                <p class="md-note-box md-note-box-info mb-0">A temporary password is created and shown to you once. Give it to them privately; they can change it in My profile.</p>
             </div>
             <div class="modal-footer">
                 <button type="submit" class="btn md-btn-round btn-md-green"><i class="bi bi-person-plus me-2"></i>Create account</button>
@@ -227,6 +210,7 @@
                 <tbody>
                     @foreach (var c in customers)
                     {
+                        bool locked = c.LockedUntil.HasValue && c.LockedUntil.Value > now;
                         <tr data-search="@($"{c.Name} {c.Email}".ToLower())">
                             <td>
                                 <div class="md-account-name">
@@ -238,14 +222,14 @@
                                 </div>
                             </td>
                             <td>@c.Phone</td>
-                            <td>@c.Since</td>
+                            <td>@c.MemberSince.ToString("d MMM yyyy")</td>
                             <td>@c.Visits</td>
-                            <td>@(c.Promo ? "Opted in" : "—")</td>
+                            <td>@(c.PromoOptIn ? "Opted in" : "—")</td>
                             <td>
-                                @if (c.LockedUntil != null)
+                                @if (locked)
                                 {
                                     <span class="md-pill is-locked">Locked</span>
-                                    <small class="md-locked-until">until @c.LockedUntil</small>
+                                    <small class="md-locked-until">until @(c.LockedUntil!.Value.ToString("HH:mm"))</small>
                                 }
                                 else
                                 {
@@ -253,10 +237,12 @@
                                 }
                             </td>
                             <td class="text-end">
-                                @if (c.LockedUntil != null)
+                                @if (locked)
                                 {
                                     <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-bs-toggle="modal" data-bs-target="#unlockPopup"
-                                            data-id="@c.Id" data-name="@c.Name" data-details="@c.Name · @c.Email">Unlock</button>
+                                            data-id="@c.CustId" data-name="@c.Name" data-details="@c.Name · @c.Email">
+                                        Unlock
+                                    </button>
                                 }
                             </td>
                         </tr>
@@ -265,12 +251,18 @@
             </table>
         </div>
         <p class="md-notice-empty d-none" data-empty>No customers match this search.</p>
-        @* Paging – backend: ?page=2 (20 per page) *@
+        @* Paging: 20 customers per page (?page=2), keeps the search (?q=) *@
         <div class="md-table-foot">
-            <span>Showing 1–@customers.Length of @customerTotal</span>
+            <span>
+                Showing @firstShown–@lastShown of @Model.CustomerMatches
+                @if (Model.Search != null)
+                {
+                    <text> matching “@Model.Search” · <a href="?tab=customers">Clear search</a></text>
+                }
+            </span>
             <div class="d-flex gap-2">
-                <a class="btn md-btn-round md-btn-sm md-btn-outline disabled" href="?tab=customers&amp;page=0" aria-disabled="true"><i class="bi bi-chevron-left"></i></a>
-                <a class="btn md-btn-round md-btn-sm md-btn-outline" href="?tab=customers&amp;page=2" aria-label="Next page"><i class="bi bi-chevron-right"></i></a>
+                <a class="btn md-btn-round md-btn-sm md-btn-outline @(Model.CurrentPage <= 1 ? "disabled" : "")" href="@PageLink(Model.CurrentPage - 1)" aria-label="Previous page" aria-disabled="@(Model.CurrentPage <= 1 ? "true" : "false")"><i class="bi bi-chevron-left"></i></a>
+                <a class="btn md-btn-round md-btn-sm md-btn-outline @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")" href="@PageLink(Model.CurrentPage + 1)" aria-label="Next page" aria-disabled="@(Model.CurrentPage >= Model.TotalPages ? "true" : "false")"><i class="bi bi-chevron-right"></i></a>
             </div>
         </div>
     </section>
@@ -297,7 +289,7 @@
                 <div class="row g-3 mb-3" data-staff-only>
                     <div class="col-sm-6">
                         <label class="md-label" for="editPhone">Phone</label>
-                        <input class="form-control md-input" id="editPhone" name="staffPhone" type="tel" maxlength="20" />
+                        <input class="form-control md-input" id="editPhone" name="staffPhone" type="tel" maxlength="11" inputmode="numeric" placeholder="0123456789" />
                     </div>
                     <div class="col-sm-6">
                         <label class="md-label" for="editTitle">Job title</label>
@@ -331,27 +323,49 @@
 @{
     var deactivatePopup = new ConfirmPopupView
     {
-        Id = "deactivatePopup", Eyebrow = "Staff account", Title = "Deactivate {name}?", Message = "{details}",
+        Id = "deactivatePopup",
+        Eyebrow = "Staff account",
+        Title = "Deactivate {name}?",
+        Message = "{details}",
         Note = "They can no longer sign in. Their past reservations and orders stay in the records. You can reactivate the account later.",
-        Handler = "Deactivate", IdField = "accountId", BackText = "Keep active", ConfirmText = "Deactivate", Danger = true
+        Handler = "Deactivate",
+        IdField = "accountId",
+        BackText = "Keep active",
+        ConfirmText = "Deactivate",
+        Danger = true
     };
     var reactivatePopup = new ConfirmPopupView
     {
-        Id = "reactivatePopup", Eyebrow = "Staff account", Title = "Reactivate {name}?", Message = "{details}",
+        Id = "reactivatePopup",
+        Eyebrow = "Staff account",
+        Title = "Reactivate {name}?",
+        Message = "{details}",
         Note = "They can sign in to the Staff portal again with their existing password.",
-        Handler = "Reactivate", IdField = "accountId", ConfirmText = "Reactivate"
+        Handler = "Reactivate",
+        IdField = "accountId",
+        ConfirmText = "Reactivate"
     };
     var resetPasswordPopup = new ConfirmPopupView
     {
-        Id = "resetPasswordPopup", Eyebrow = "Account", Title = "Reset {name}'s password?", Message = "{details}",
-        Note = "A set-password link is emailed to them. Their current password stops working once they set a new one.",
-        Handler = "ResetPassword", IdField = "accountId", ConfirmText = "Send reset link"
+        Id = "resetPasswordPopup",
+        Eyebrow = "Account",
+        Title = "Reset {name}'s password?",
+        Message = "{details}",
+        Note = "A new temporary password is created and shown to you once. Their current password stops working straight away.",
+        Handler = "ResetPassword",
+        IdField = "accountId",
+        ConfirmText = "Reset password"
     };
     var unlockPopup = new ConfirmPopupView
     {
-        Id = "unlockPopup", Eyebrow = "Customer account", Title = "Unlock {name}?", Message = "{details}",
+        Id = "unlockPopup",
+        Eyebrow = "Customer account",
+        Title = "Unlock {name}?",
+        Message = "{details}",
         Note = "The account was locked after too many failed sign-ins. Unlocking lets them sign in again straight away.",
-        Handler = "Unlock", IdField = "custId", ConfirmText = "Unlock account"
+        Handler = "Unlock",
+        IdField = "custId",
+        ConfirmText = "Unlock account"
     };
 }
 <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="deactivatePopup" />
@@ -380,8 +394,19 @@
             });
             createEl.addEventListener('shown.bs.modal', function () { document.getElementById('newName').focus(); });
 
-            // Search: filters both tables by name or email
-            document.getElementById('accountSearch').addEventListener('input', function () {
+            // Search: Enter on the Customers tab searches ALL customers on the server (?q=), not just this page
+            var searchBox = document.getElementById('accountSearch');
+            searchBox.addEventListener('keydown', function (e) {
+                if (e.key !== 'Enter') return;
+                var customersOpen = document.querySelector('#accountTabs button.active').dataset.tab === 'customers';
+                if (!customersOpen) return;
+                e.preventDefault();
+                var text = this.value.trim();
+                window.location.search = '?tab=customers' + (text ? '&q=' + encodeURIComponent(text) : '');
+            });
+
+            // Search: typing filters the rows shown in both tables by name or email
+            searchBox.addEventListener('input', function () {
                 var text = this.value.trim().toLowerCase();
                 document.querySelectorAll('[data-pane]').forEach(function (pane) {
                     var shown = 0;
