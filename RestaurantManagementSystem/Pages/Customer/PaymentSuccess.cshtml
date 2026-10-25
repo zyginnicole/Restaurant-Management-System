@@ -1,0 +1,84 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.PaymentSuccessModel
+@{
+    // Receipt and tracker come from PaymentSuccessModel (the real orders + payment).
+    // Dine-in: one receipt for every order of the table that was paid together.
+    var receipt = Model.Receipt;
+    bool dineIn = Model.IsDineIn;
+    string firstName = (receipt.CustomerName ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+
+    // Tracker: Order placed → Preparing → Served → Completed
+    string status = Model.OrderStatus;
+    bool stepPreparing = status == "Preparing" || status == "Served" || status == "Completed";
+    bool stepServed = status == "Served" || status == "Completed";
+    bool stepCompleted = status == "Completed";
+    string badgeClass = status switch
+    {
+        "Order placed" => "md-badge-placed",
+        "Preparing" => "md-badge-preparing",
+        "Served" => "md-badge-served",
+        _ => "md-badge-completed"
+    };
+
+    ViewData["Title"] = "Payment successful";
+    ViewData["ActiveNav"] = "Orders";
+    ViewData["Eyebrow"] = "Payment successful";
+    ViewData["Heading"] = string.IsNullOrEmpty(firstName) ? "Thank you" : "Thank you, " + firstName;
+    ViewData["Subtitle"] = $"Your payment of RM {receipt.Total:#,##0.00} was received.";
+    Layout = "_CustomerLayout";
+}
+
+<div class="row md-grid md-section">
+    @* ---------- Receipt (shared _Receipt partial) ---------- *@
+    <div class="col-lg-6">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Receipt</span>
+                <span class="md-badge md-badge-paid">Paid</span>
+            </div>
+            <div class="md-card-body">
+                <partial name="~/Pages/Shared/Partials/_Receipt.cshtml" model="receipt" />
+                <div class="md-receipt-actions">
+                    @* Downloads only the receipt paper as a PDF (wwwroot/js/pdf-download.js) – file name from the receipt no. *@
+                    <button type="button" class="btn btn-md-dark" data-pdf-target="#receiptPaper" data-pdf-name="MaisonDoree-Receipt-@receipt.ReceiptNo"><i class="bi bi-download me-2"></i>Download receipt (PDF)</button>
+                    <a class="btn btn-md-outline" href="/Customer/History">View in History</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    @* ---------- Track order ---------- *@
+    <div class="col-lg-6">
+        <section class="md-card h-100 md-card-clickable">
+            <a class="stretched-link" href="/Customer/Orders" aria-label="Track order @receipt.OrderCode on the Orders page"></a>
+            <div class="md-card-header">
+                <span class="md-card-label">Track order — <strong class="md-card-code">@receipt.OrderCode</strong></span>
+                <span class="md-badge @badgeClass">@status</span>
+            </div>
+            <div class="md-card-body">
+                <ol class="md-tracker">
+                    <li class="@(status == "Order placed" ? "current" : "done")"><span>Order placed</span><small class="md-tracker-time">@Model.PlacedTime</small></li>
+                    <li class="@(status == "Preparing" ? "current" : (stepPreparing ? "done" : ""))"><span>Preparing</span><small class="md-tracker-time">—</small></li>
+                    <li class="@(status == "Served" ? "current" : (stepServed ? "done" : ""))"><span>Served</span><small class="md-tracker-time">—</small></li>
+                    <li class="@(status == "Completed" ? "current" : (stepCompleted ? "done" : ""))"><span>Completed</span><small class="md-tracker-time">@(dineIn ? Model.PaidTime : "—")</small></li>
+                </ol>
+                @if (dineIn)
+                {
+                    @* Dine-in: the bill is paid after everything is served, so the orders are complete *@
+                    <p class="mb-2">Your bill for table <b>@receipt.TableCode</b> is settled. We hope you enjoyed your evening.</p>
+                    <p class="md-hint mb-0">You can rate this visit from your History page.</p>
+                }
+                else
+                {
+                    <p class="mb-2">@(status == "Order placed" ? "Your order has been sent to the kitchen." : status == "Preparing" ? "The kitchen is preparing your order." : "Your order is ready.")@(receipt.PickupTime != null ? " Pick-up at " + receipt.PickupTime + "." : "")</p>
+                    <p class="md-hint mb-0">You'll get a notification when it's ready. Open the Orders page to follow it.</p>
+                }
+            </div>
+        </section>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="~/js/pdf-download.js" asp-append-version="true"></script>
+}

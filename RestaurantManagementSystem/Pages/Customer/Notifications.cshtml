@@ -1,0 +1,183 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.NotificationsModel
+@{
+    ViewData["Title"] = "Notifications";
+    ViewData["ActiveNav"] = "Notifications";
+    ViewData["Eyebrow"] = "Updates";
+    ViewData["Heading"] = "Notifications";
+    ViewData["HideBell"] = true;   // no bell icon on the Notifications page itself
+    Layout = "_CustomerLayout";
+}
+
+@* Example data. Clicking a notification opens the shared pop-up (_NotificationPopup, notifications.js)
+   and marks it as read on screen. data-category is used by the filter tabs. *@
+
+@section HeaderActions {
+    @* Marks every notification as read (OnPostReadAll); the script also updates the page straight away *@
+    <form method="post" asp-page-handler="ReadAll" class="d-inline">
+        <button type="submit" class="btn btn-md-outline" id="markAllRead"><i class="bi bi-check2-all me-2"></i>Mark all as read</button>
+    </form>
+}
+
+<section class="md-card md-section">
+    <div class="md-card-header md-notice-toolbar">
+        <nav class="md-tabs" aria-label="Filter notifications" id="noticeTabs">
+            <button type="button" class="active" data-filter="all">All <small data-count="all">7</small></button>
+            <button type="button" data-filter="unread">Unread <small data-count="unread">2</small></button>
+            <button type="button" data-filter="reservation">Reservations <small data-count="reservation">2</small></button>
+            <button type="button" data-filter="order">Orders <small data-count="order">3</small></button>
+            <button type="button" data-filter="promotion">Promotions <small data-count="promotion">1</small></button>
+        </nav>
+    </div>
+
+    <ul class="md-notice-list" id="noticeList">
+        <li class="md-notice unread" data-category="order">
+            <button type="button" class="md-notice-btn md-notice-row"
+                    data-type="Order update" data-title="Your order is being prepared"
+                    data-message="The kitchen has started preparing ORD-0088 (Wagyu Beef Tenderloin and a glass of Château Margaux 2018) for table T-07."
+                    data-time="10 minutes ago" data-link="/Customer/Orders" data-link-text="Track order">
+                <span class="md-notice-icon is-order" aria-hidden="true"><i class="bi bi-fire"></i></span>
+                <span class="md-notice-text">
+                    <span class="md-notice-title">Your order is being prepared</span>
+                    <p>The kitchen has started preparing ORD-0088 for table T-07.</p>
+                    <span class="md-notice-time">10 minutes ago</span>
+                </span>
+            </button>
+        </li>
+        <li class="md-notice unread" data-category="reservation">
+            <button type="button" class="md-notice-btn md-notice-row"
+                    data-type="Reservation" data-title="Reservation confirmed"
+                    data-message="Your table for 2 on Sunday, 20 September at 19:30 is confirmed (R-0041, T-07 Indoor). Free cancellation until 17:30 on the day."
+                    data-time="2 hours ago" data-link="/Customer/Reservations?view=R-0041" data-link-text="View reservation">
+                <span class="md-notice-icon is-reservation" aria-hidden="true"><i class="bi bi-calendar-check"></i></span>
+                <span class="md-notice-text">
+                    <span class="md-notice-title">Reservation confirmed</span>
+                    <p>Your table for 2 on Sunday, 20 September at 19:30 is confirmed.</p>
+                    <span class="md-notice-time">2 hours ago</span>
+                </span>
+            </button>
+        </li>
+        <li class="md-notice" data-category="order">
+            <button type="button" class="md-notice-btn md-notice-row"
+                    data-type="Order update" data-title="Your order has been served"
+                    data-message="Everything for ORD-0087 at table T-05 has been served. Ask our staff for the bill when you're ready."
+                    data-time="Today, 19:48" data-link="/Customer/Orders" data-link-text="View order">
+                <span class="md-notice-icon is-order" aria-hidden="true"><i class="bi bi-check2-circle"></i></span>
+                <span class="md-notice-text">
+                    <span class="md-notice-title">Your order has been served</span>
+                    <p>Everything for ORD-0087 at table T-05 has been served.</p>
+                    <span class="md-notice-time">Today, 19:48</span>
+                </span>
+            </button>
+        </li>
+        <li class="md-notice" data-category="reservation">
+            <button type="button" class="md-notice-btn md-notice-row"
+                    data-type="Reservation" data-title="Booking received"
+                    data-message="We've received your booking for 8 guests on Sunday, 4 October at 20:00 in VIP (R-0049). Large parties are confirmed by our team, usually within 2 hours."
+                    data-time="Today, 09:40" data-link="/Customer/Reservations?view=R-0049" data-link-text="View reservation">
+                <span class="md-notice-icon is-reservation" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>
+                <span class="md-notice-text">
+                    <span class="md-notice-title">Booking received</span>
+                    <p>We've received your booking for 8 guests on Sunday, 4 October at 20:00.</p>
+                    <span class="md-notice-time">Today, 09:40</span>
+                </span>
+            </button>
+        </li>
+        <li class="md-notice" data-category="promotion">
+            <button type="button" class="md-notice-btn md-notice-row"
+                    data-type="Promotion" data-title="Weekend Tasting Menu"
+                    data-message="This weekend only: Chef's eight-course tasting menu, RM 388 per guest. Reserve your table now."
+                    data-time="1 day ago" data-link="/Customer/Reservations" data-link-text="Reserve a table">
+                <span class="md-notice-icon is-promotion" aria-hidden="true"><i class="bi bi-stars"></i></span>
+                <span class="md-notice-text">
+                    <span class="md-notice-title">Weekend Tasting Menu</span>
+                    <p>This weekend only: Chef's eight-course tasting menu is available.</p>
+                    <span class="md-notice-time">1 day ago</span>
+                </span>
+            </button>
+        </li>
+        <li class="md-notice" data-category="order">
+            <button type="button" class="md-notice-btn md-notice-row"
+                    data-type="Payment" data-title="Refund completed"
+                    data-message="RM 140.98 for the cancelled takeaway order ORD-0071 has been refunded to your Touch 'n Go e-wallet."
+                    data-time="28 Jul 2026, 18:20" data-link="/Customer/History" data-link-text="View in History">
+                <span class="md-notice-icon is-order" aria-hidden="true"><i class="bi bi-arrow-counterclockwise"></i></span>
+                <span class="md-notice-text">
+                    <span class="md-notice-title">Refund completed</span>
+                    <p>RM 140.98 for ORD-0071 has been refunded to your e-wallet.</p>
+                    <span class="md-notice-time">28 Jul 2026, 18:20</span>
+                </span>
+            </button>
+        </li>
+        <li class="md-notice" data-category="account">
+            <button type="button" class="md-notice-btn md-notice-row"
+                    data-type="Account" data-title="Welcome to Maison Dorée"
+                    data-message="Your member account is ready. Book tables, order online and keep track of your visits from your Overview."
+                    data-time="12 Mar 2025" data-link="/Customer/Profile" data-link-text="Complete your profile">
+                <span class="md-notice-icon is-account" aria-hidden="true"><i class="bi bi-person-check"></i></span>
+                <span class="md-notice-text">
+                    <span class="md-notice-title">Welcome to Maison Dorée</span>
+                    <p>Your member account is ready.</p>
+                    <span class="md-notice-time">12 Mar 2025</span>
+                </span>
+            </button>
+        </li>
+    </ul>
+    <p class="md-notice-empty d-none" id="noticeEmpty">No notifications here.</p>
+</section>
+
+<partial name="~/Pages/Shared/Popups/_NotificationPopup.cshtml" />
+
+@section Scripts {
+    <script src="~/js/notifications.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var list = document.getElementById('noticeList');
+            var tabs = document.querySelectorAll('#noticeTabs button');
+            var current = 'all';
+
+            function matches(item, filter) {
+                if (filter === 'all') return true;
+                if (filter === 'unread') return item.classList.contains('unread');
+                return item.dataset.category === filter;
+            }
+
+            // Show the rows for the chosen tab and refresh every tab's count
+            function refresh() {
+                var items = list.querySelectorAll('.md-notice'), shown = 0;
+                items.forEach(function (item) {
+                    var show = matches(item, current);
+                    item.classList.toggle('d-none', !show);
+                    if (show) shown++;
+                });
+                tabs.forEach(function (tab) {
+                    var n = Array.prototype.filter.call(items, function (item) { return matches(item, tab.dataset.filter); }).length;
+                    tab.querySelector('[data-count]').textContent = n;
+                });
+                document.getElementById('noticeEmpty').classList.toggle('d-none', shown > 0);
+            }
+
+            tabs.forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    current = tab.dataset.filter;
+                    tabs.forEach(function (t) { t.classList.toggle('active', t === tab); });
+                    refresh();
+                });
+            });
+
+            // Opening a notification marks it read (notifications.js) – update the counts afterwards
+            list.addEventListener('click', function () { setTimeout(refresh, 0); });
+
+            // Mark all as read: update the page now.
+            // Static UI: preventDefault stops the post (otherwise the reload brings the example "unread" back).
+            // Backend: remove e.preventDefault() once OnPostReadAll saves isRead = true.
+            document.getElementById('markAllRead').addEventListener('click', function (e) {
+                e.preventDefault();
+                list.querySelectorAll('.md-notice.unread').forEach(function (item) { item.classList.remove('unread'); });
+                refresh();
+            });
+
+            refresh();
+        })();
+    </script>
+}
