@@ -33,6 +33,11 @@ namespace RestaurantManagementSystem.Pages.Staff
         public int TablesOccupied { get; set; }
         public int TablesTotal { get; set; }
 
+        // Pending requests from today on (all days) and the day of the earliest one – "X need approval" link
+        public int PendingUpcoming { get; set; }
+        public DateTime? PendingFirstDate { get; set; }
+        public int PendingDays { get; set; }   // how many different days those requests are on
+
         public async Task OnGetAsync()
         {
             Settings = await _settings.GetAsync();
@@ -42,6 +47,11 @@ namespace RestaurantManagementSystem.Pages.Staff
             Guests = Today.Where(r => Shown.Contains(r.reservationStatus))
                           .OrderBy(r => r.reservationDateTime)
                           .ToList();
+
+            var pending = await _reservations.GetPendingUpcomingAsync();
+            PendingUpcoming = pending.Count;
+            PendingFirstDate = pending.FirstOrDefault()?.reservationDateTime.Date;
+            PendingDays = pending.Select(r => r.reservationDateTime.Date).Distinct().Count();
 
             // Tables in use right now: a Seated booking, or tableStatus Occupied (e.g. a walk-in order). Out-of-service tables don't count.
             var tables = await _db.DiningTables.AsNoTracking().Where(t => t.tableStatus != "Maintenance").ToListAsync();

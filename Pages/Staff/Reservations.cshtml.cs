@@ -38,6 +38,7 @@ namespace RestaurantManagementSystem.Pages.Staff
         public List<Reservation> Bookings { get; set; } = new();     // the chosen day, latest first
         public List<string> AreaNames { get; set; } = new();
         public List<FloorTable> Floor { get; set; } = new();          // every table, state right now
+        public List<Reservation> PendingUpcoming { get; set; } = new(); // all Pending requests from today on (approval notice)
 
         // One floor tile. State: free · seated · reserved (Info = time of the next booking today) · unavailable
         // Bookings = today's Pending / Confirmed / Seated bookings on the table (the list in the table pop-up)
@@ -52,6 +53,7 @@ namespace RestaurantManagementSystem.Pages.Staff
             Settings = await _settings.GetAsync();
             Bookings = await _reservations.GetDayAsync(Date);
             AreaNames = await _db.DiningAreas.AsNoTracking().OrderBy(a => a.areaID).Select(a => a.areaName).ToListAsync();
+            PendingUpcoming = await _reservations.GetPendingUpcomingAsync();
 
             // Floor = today, whatever day is picked below
             var today = Date == DateTime.Today ? Bookings : await _reservations.GetDayAsync(DateTime.Today);

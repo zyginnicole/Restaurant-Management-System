@@ -94,6 +94,29 @@
     </div>
 </section>
 
+@* ---------- Waiting for approval (every upcoming day, whatever date is shown below) ----------
+   All Pending requests from today on, grouped by day. Each day opens that day with Status = Pending.
+   Hidden when there is nothing to approve. Requests not confirmed 15 minutes before their time are declined automatically. *@
+@if (Model.PendingUpcoming.Count > 0)
+{
+    var first = Model.PendingUpcoming[0];
+    var days = Model.PendingUpcoming.GroupBy(r => r.reservationDateTime.Date).ToList();
+    string DayName(DateTime d) => d == DateTime.Today ? "Today" : d == DateTime.Today.AddDays(1) ? "Tomorrow" : d.ToString("ddd d MMM", inv);
+    <div class="md-approval-notice md-section" role="status">
+        <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+        <div class="md-approval-text">
+            <b>@Model.PendingUpcoming.Count booking @(Model.PendingUpcoming.Count == 1 ? "request is" : "requests are") waiting for approval.</b>
+            <span>Next deadline: @ReservationService.PendingDeadline(first).ToString("HH:mm", inv)@(first.reservationDateTime.Date == DateTime.Today ? " today" : " on " + first.reservationDateTime.ToString("d MMM", inv)) (@ReservationService.Code(first)).</span>
+        </div>
+        <div class="md-approval-days">
+            @foreach (var d in days)
+            {
+                <a class="md-approval-day @(d.Key == Model.Date ? "is-current" : "")" href="?date=@d.Key.ToString("yyyy-MM-dd", inv)&status=Pending">@DayName(d.Key) <b>@d.Count()</b></a>
+            }
+        </div>
+    </div>
+}
+
 @* =====================================================
    Bookings of the chosen day – filters and one row per Reservation
    ===================================================== *@
@@ -229,6 +252,17 @@
     .md-table-booking-main { flex: 1; min-width: 0; }
     .md-table-booking-main small { display: block; color: var(--md-muted); }
     .md-table-booking .bi-chevron-right { color: var(--md-muted); }
+
+    /* Waiting-for-approval notice (pale red like the Pending tag) */
+    .md-approval-notice { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; padding: .9rem 1.1rem; background: #fbe9eb; border: 1px solid #f1c6cb; color: #8f2a31; }
+    .md-approval-notice > .bi { font-size: 1.2rem; }
+    .md-approval-text { flex: 1 1 18rem; min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
+    .md-approval-text span { font-size: .88rem; }
+    .md-approval-days { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .md-approval-day { padding: .35rem .8rem; border: 1px solid #e3a9b0; background: #fff; color: #8f2a31; text-decoration: none; font-size: .88rem; white-space: nowrap; }
+    .md-approval-day b { margin-left: .3rem; }
+    .md-approval-day:hover, .md-approval-day:focus-visible { border-color: #8f2a31; color: #8f2a31; outline: none; }
+    .md-approval-day.is-current { background: #8f2a31; border-color: #8f2a31; color: #fff; }
 </style>
 <div class="modal fade md-popup" id="reserveTablePopup" tabindex="-1" aria-labelledby="reserveTableTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -313,7 +347,15 @@
             // ?status=Pending (Staff Dashboard "need approval"): pick that status and scroll down to the booking list
             var wanted = new URLSearchParams(location.search).get('status');
             var opened = !!wanted && Array.prototype.some.call(statusSelect.options, function (o) { return o.value === wanted; });
-            if (opened) statusSelect.value = wanted;
+            if (opened) {
+                // Opened from the approval notice / Dashboard: show every row with that status (other filters cleared)
+                statusSelect.value = wanted;
+                area.value = 'all';
+                search.value = '';
+                service = 'all';
+                pick(services, document.querySelector('#resService [data-service="all"]'));
+                save();
+            }
             if (!statusSelect.value) statusSelect.value = 'all';
             if (!area.value) area.value = 'all';
             apply();
