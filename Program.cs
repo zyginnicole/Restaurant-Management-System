@@ -33,6 +33,12 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;                // session works without a cookie-consent banner
 });
 
+// Email (Gmail SMTP): the Gmail address and App Password come from User Secrets, never from GitHub
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+
+// Server memory: holds password reset codes for 10 minutes
+builder.Services.AddMemoryCache();
+
 // Account services (business logic layer)
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<AuthService>();
@@ -41,6 +47,10 @@ builder.Services.AddScoped<ReservationService>();
 // Closes unanswered Pending requests (15 min before the booking) and earlier days' open bookings (on start, then every minute)
 builder.Services.AddHostedService<ReservationCleanupService>();
 builder.Services.AddScoped<RecommendationService>();
+builder.Services.AddScoped<ProfileService>();
+builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<EmailService>();
+builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<DemoAccountSeeder>();
 
 var app = builder.Build();

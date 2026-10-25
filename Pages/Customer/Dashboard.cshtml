@@ -10,6 +10,7 @@
     ViewData["ActiveNav"] = "Overview";
     ViewData["Eyebrow"] = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
     ViewData["Heading"] = HttpContext.Session.GetUserName() ?? "Welcome";
+    Layout = "_CustomerLayout";
 
     // Next reservations card: the customer's Pending / Confirmed / Seated reservations in the next 7 days, soonest first
     // (DashboardModel.NextReservations). The card always has two slots:
