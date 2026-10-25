@@ -4,13 +4,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace RestaurantManagementSystem.Model
 {
     [Table("Customer")]
-    public class Customer
+    public class Customer : ILockable
     {
         [Key] // Sets this as the Primary Key
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)] // Enforces Auto-Increment
         public int custID { get; set; }
 
-        [Required(ErrorMessage = "Full name is required!")] 
+        [Required(ErrorMessage = "Full name is required!")]
         public string custName { get; set; }
 
         [Required(ErrorMessage = "Email is required!")]
@@ -19,7 +19,7 @@ namespace RestaurantManagementSystem.Model
 
         [Required(ErrorMessage = "Password is required!")]
         [DataType(DataType.Password)]
-        public string custPassword { get; set; }   
+        public string custPassword { get; set; }
 
         [Required]
         [MaxLength(11, ErrorMessage = "Maximum 11 digits including the leading 0.")]
@@ -27,7 +27,16 @@ namespace RestaurantManagementSystem.Model
 
         public DateTimeOffset custCreateAt { get; set; } = DateTimeOffset.Now;
 
+        // Optional. Used for birthday promotions (valid during the customer's birthday month)
+        [DataType(DataType.Date)]
+        [Column(TypeName = "date")]
+        public DateTime? custBirthday { get; set; }
+
+        // Comma-separated dish tags the customer likes (MenuVocabulary.Tags), e.g. "Vegetarian,Spicy". "None" = no preference
         public string DietaryPref { get; set; } = "None";
+
+        // Comma-separated allergens (MenuVocabulary.Allergens). Dishes containing them are never recommended. "None" = no allergies
+        public string Allergies { get; set; } = "None";
 
         public bool promoOptIn { get; set; } = false;
 

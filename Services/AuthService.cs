@@ -42,6 +42,54 @@ namespace RestaurantManagementSystem.Services
                 || await _context.Admins.AnyAsync(a => a.adminEmail == normalised);
         }
 
+        // ---------- Lockout (shared by customer, staff and admin) ----------
+
+        // Returns a "locked" result if the account is locked right now, otherwise null
+        private static LoginResult? CheckLocked(ILockable account)
+        {
+            DateTimeOffset now = DateTimeOffset.Now;
+            if (account.LockoutEnd.HasValue && account.LockoutEnd.Value > now)
+            {
+                int minutesLeft = (int)Math.Ceiling((account.LockoutEnd.Value - now).TotalMinutes);
+                return LoginResult.Failed(
+                    $"This account is locked after too many failed attempts. Try again in {minutesLeft} minute(s).");
+            }
+
+            return null;
+        }
+
+        // Counts one wrong password. Locks the account when the limit from Settings is reached.
+        private async Task<LoginResult> RegisterFailureAsync(ILockable account)
+        {
+            int maxAttempts = (await _settings.GetAsync()).maxFailedLogins;
+
+            account.FailedLoginAttempts++;
+
+            if (account.FailedLoginAttempts >= maxAttempts)
+            {
+                account.FailedLoginAttempts = 0;
+                account.LockoutEnd = DateTimeOffset.Now.AddMinutes(LockoutMinutes);
+                await _context.SaveChangesAsync();
+
+                return LoginResult.Failed(
+                    $"Too many failed attempts. Your account is locked for {LockoutMinutes} minutes.");
+            }
+
+            await _context.SaveChangesAsync();
+
+            int attemptsLeft = maxAttempts - account.FailedLoginAttempts;
+            return LoginResult.Failed(
+                $"{WrongDetailsMessage} {attemptsLeft} attempt(s) left before the account is locked for {LockoutMinutes} minutes.");
+        }
+
+        // Correct password: clear the counters
+        private async Task ClearFailuresAsync(ILockable account)
+        {
+            account.FailedLoginAttempts = 0;
+            account.LockoutEnd = null;
+            await _context.SaveChangesAsync();
+        }
+
         // ---------- Customer ----------
 
         // Saves a new customer. The password is hashed BEFORE it reaches the database.
@@ -75,49 +123,27 @@ namespace RestaurantManagementSystem.Services
             }
 
             // 2. Account is locked right now
-            DateTimeOffset now = DateTimeOffset.Now;
-            if (customer.LockoutEnd.HasValue && customer.LockoutEnd.Value > now)
+            LoginResult? locked = CheckLocked(customer);
+            if (locked != null)
             {
-                int minutesLeft = (int)Math.Ceiling((customer.LockoutEnd.Value - now).TotalMinutes);
-                return LoginResult.Failed(
-                    $"This account is locked after too many failed attempts. Try again in {minutesLeft} minute(s).");
+                return locked;
             }
 
             // 3. Wrong password: count it, lock when the limit from Settings is reached
             if (!_passwordService.VerifyPassword(customer.custPassword, password))
             {
-                int maxAttempts = (await _settings.GetAsync()).maxFailedLogins;
-
-                customer.FailedLoginAttempts++;
-
-                if (customer.FailedLoginAttempts >= maxAttempts)
-                {
-                    customer.FailedLoginAttempts = 0;
-                    customer.LockoutEnd = now.AddMinutes(LockoutMinutes);
-                    await _context.SaveChangesAsync();
-
-                    return LoginResult.Failed(
-                        $"Too many failed attempts. Your account is locked for {LockoutMinutes} minutes.");
-                }
-
-                await _context.SaveChangesAsync();
-
-                int attemptsLeft = maxAttempts - customer.FailedLoginAttempts;
-                return LoginResult.Failed(
-                    $"{WrongDetailsMessage} {attemptsLeft} attempt(s) left before the account is locked for {LockoutMinutes} minutes.");
+                return await RegisterFailureAsync(customer);
             }
 
             // 4. Correct password: clear the counters
-            customer.FailedLoginAttempts = 0;
-            customer.LockoutEnd = null;
-            await _context.SaveChangesAsync();
+            await ClearFailuresAsync(customer);
 
             return LoginResult.Success(customer.custID, UserRoles.Customer, customer.custName);
         }
 
         // ---------- Staff Portal (Staff and Administrator) ----------
 
-        // Checks an ADMIN email + password (Administrator tab).
+        // Checks an ADMIN email + password (Administrator tab). Counts failed attempts like customers.
         public async Task<LoginResult> LoginAdminAsync(string email, string password)
         {
             string normalised = NormaliseEmail(email);
@@ -125,15 +151,29 @@ namespace RestaurantManagementSystem.Services
             Admin? admin = await _context.Admins
                 .FirstOrDefaultAsync(a => a.adminEmail == normalised);
 
-            if (admin == null || !_passwordService.VerifyPassword(admin.adminPassword, password))
+            if (admin == null)
             {
                 return LoginResult.Failed(WrongDetailsMessage);
             }
 
+            LoginResult? locked = CheckLocked(admin);
+            if (locked != null)
+            {
+                return locked;
+            }
+
+            if (!_passwordService.VerifyPassword(admin.adminPassword, password))
+            {
+                return await RegisterFailureAsync(admin);
+            }
+
+            await ClearFailuresAsync(admin);
+
             return LoginResult.Success(admin.adminID, UserRoles.Admin, admin.adminName);
         }
 
-        // Checks a STAFF email + password (Staff tab). Deactivated staff are refused.
+        // Checks a STAFF email + password (Staff tab). Counts failed attempts like customers.
+        // Deactivated staff are refused.
         public async Task<LoginResult> LoginStaffAsync(string email, string password)
         {
             string normalised = NormaliseEmail(email);
@@ -141,9 +181,20 @@ namespace RestaurantManagementSystem.Services
             Staff? staff = await _context.StaffMembers
                 .FirstOrDefaultAsync(s => s.staffEmail == normalised);
 
-            if (staff == null || !_passwordService.VerifyPassword(staff.staffPassword, password))
+            if (staff == null)
             {
                 return LoginResult.Failed(WrongDetailsMessage);
+            }
+
+            LoginResult? locked = CheckLocked(staff);
+            if (locked != null)
+            {
+                return locked;
+            }
+
+            if (!_passwordService.VerifyPassword(staff.staffPassword, password))
+            {
+                return await RegisterFailureAsync(staff);
             }
 
             // Only say "deactivated" AFTER the password is right, so strangers learn nothing
@@ -151,6 +202,8 @@ namespace RestaurantManagementSystem.Services
             {
                 return LoginResult.Failed("This account has been deactivated. Please contact management.");
             }
+
+            await ClearFailuresAsync(staff);
 
             return LoginResult.Success(staff.staffID, UserRoles.Staff, staff.staffName);
         }

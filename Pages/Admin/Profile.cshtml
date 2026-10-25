@@ -1,5 +1,6 @@
 @page
 @model RestaurantManagementSystem.Pages.Admin.ProfileModel
+@using RestaurantManagementSystem.Helpers
 @{
     ViewData["Title"] = "My profile";
     ViewData["Module"] = "Admin";
@@ -9,18 +10,16 @@
     ViewData["Subtitle"] = "Manage your personal information";
     Layout = "_DashboardLayout";
 
-    // ---------- Example data – later from the signed-in Admin (see ProfileModel) ----------
-    var adminCode = "ADM-0001";            // adminID 1
-    var since = "Jan 2024";                // adminCreateAt
-    var adminName = "Richard Beaumont";
-    var adminEmail = "r.beaumont@maisondoree.my";
+    // Values come from the signed-in administrator (see ProfileModel)
     var systemRole = "Administrator";      // always Administrator here (Admin table)
-    var lastSignIn = "Today 17:42";        // no field yet (same as the Accounts page)
-
-    string initials = string.Concat(adminName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0]));
+    var lastSignIn = "Not recorded yet";   // no field in the Admin table yet
+    string initials = NameFormatter.GetInitials(Model.DisplayName);
 
     // Open the Change password pop-up again when OnPostPassword returns Page() with errors
     var reopenPassword = Request.Query["handler"] == "Password" && !ViewData.ModelState.IsValid;
+
+    // Stay in Edit mode when OnPostProfile returns Page() with errors
+    var reopenEdit = Request.Query["handler"] == "Profile" && !ViewData.ModelState.IsValid;
 }
 
 @* Message after saving the profile or the password (TempData["AdminMessage"]) *@
@@ -29,9 +28,23 @@
     <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
 }
 
+@* Errors from saving the profile (the password pop-up shows its own errors) *@
+@if (reopenEdit)
+{
+    <div class="md-alert-danger md-section" role="alert">
+        <strong>Please fix the following:</strong>
+        <ul class="mb-0 mt-1 ps-3">
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <li>@error.ErrorMessage</li>
+            }
+        </ul>
+    </div>
+}
+
 @* Personal information is read-only until Edit is clicked; the same button then turns into Save changes (green)
    and posts to OnPostProfile. Account details are always read-only and are not posted (no name attribute). *@
-<form method="post" asp-page-handler="Profile" id="profileForm">
+<form method="post" asp-page-handler="Profile" id="profileForm" data-start-editing="@(reopenEdit ? "true" : "false")">
 <fieldset id="profileFields" class="md-profile-fields" disabled>
 <div class="row md-grid md-section">
     @* ---------- Personal information ---------- *@
@@ -39,25 +52,25 @@
         <section class="md-card h-100">
             <div class="md-card-header">
                 <span class="md-card-label">Personal information</span>
-                <span class="md-card-meta">Administrator since @since</span>
+                <span class="md-card-meta">Administrator since @Model.AdminSince</span>
             </div>
             <div class="md-card-body">
                 <div class="md-guest-id">
                     <span class="md-avatar">@initials</span>
                     <div>
-                        <div class="md-guest-name">@adminName</div>
-                        <span class="md-guest-meta">Admin ID @adminCode · Full access</span>
+                        <div class="md-guest-name">@Model.DisplayName</div>
+                        <span class="md-guest-meta">Admin ID @Model.AdminCode · Full access</span>
                     </div>
                 </div>
                 @* Admin.adminName, Admin.adminEmail – the email is the sign-in name, so it must stay unique *@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="md-label" for="Admin_adminName">Full name</label>
-                        <input class="form-control md-input" id="Admin_adminName" name="Admin.adminName" type="text" maxlength="100" autocomplete="name" required value="@adminName" />
+                        <input class="form-control md-input" id="Admin_adminName" name="Admin.adminName" type="text" maxlength="100" autocomplete="name" required value="@Model.Input.adminName" />
                     </div>
                     <div class="col-md-6">
                         <label class="md-label" for="Admin_adminEmail">Email (sign-in)</label>
-                        <input class="form-control md-input" id="Admin_adminEmail" name="Admin.adminEmail" type="email" maxlength="100" autocomplete="email" required value="@adminEmail" />
+                        <input class="form-control md-input" id="Admin_adminEmail" name="Admin.adminEmail" type="email" maxlength="100" autocomplete="email" required value="@Model.Input.adminEmail" />
                     </div>
                 </div>
             </div>
@@ -126,7 +139,7 @@
                         <input class="form-control md-input pe-5" id="newPassword" name="newPassword" type="password" autocomplete="new-password" required />
                         <button type="button" class="md-eye-btn" data-toggle-password="newPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye"></i></button>
                     </div>
-                    <p class="md-hint mt-2 mb-0">At least 8 characters, with an uppercase letter, a lowercase letter, a number and a symbol (@@ $ ! % * ? &amp;).</p>
+                    <p class="md-hint mt-2 mb-0">@Model.PasswordHint</p>
                 </div>
                 <div>
                     <label class="md-label" for="confirmPassword">Confirm new password</label>
@@ -168,6 +181,9 @@
                 setTimeout(function () { button.type = 'submit'; }, 0);
                 document.getElementById('Admin_adminName').focus();
             });
+
+            // After a failed save, open Edit mode again so the user can fix the fields
+            if (document.getElementById('profileForm').dataset.startEditing === 'true') button.click();
         })();
     </script>
 }

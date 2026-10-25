@@ -1,3 +1,4 @@
+using RestaurantManagementSystem.Services;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
@@ -5,7 +6,7 @@ using RestaurantManagementSystem.Helpers;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
-    // Customer overview (dashboard). Only the "Order in progress" card reads real data so far;
+    // Customer overview (dashboard). The recommendation hero and the "Order in progress" card read real data;
     // the other cards are still the static design.
     public class DashboardModel : PageModel
     {
@@ -13,11 +14,16 @@ namespace RestaurantManagementSystem.Pages.Customer
         private static readonly string[] OpenStatuses = { "Order placed", "Preparing", "Served" };
 
         private readonly ApplicationDbContext _context;
+        private readonly RecommendationService _recommendations;
 
-        public DashboardModel(ApplicationDbContext context)
+        public DashboardModel(ApplicationDbContext context, RecommendationService recommendations)
         {
             _context = context;
+            _recommendations = recommendations;
         }
+
+        // Slides of the black recommendation section at the top (empty = the section is hidden)
+        public List<HeroSlide> HeroSlides { get; set; } = new();
 
         // The customer's most recent open order, or null (the card then shows an empty state)
         public OrderInProgressView? OrderInProgress { get; set; }
@@ -43,6 +49,10 @@ namespace RestaurantManagementSystem.Pages.Customer
                 ? HttpContext.Session.GetUserId()
                 : null;
             if (custId == null) return;
+
+            // Same recommendations as the Menu page (allergies already filtered out)
+            var recs = await _recommendations.GetForCustomerAsync(custId.Value);
+            HeroSlides = recs.ToHeroSlides();
 
             var openStatuses = OpenStatuses;
 

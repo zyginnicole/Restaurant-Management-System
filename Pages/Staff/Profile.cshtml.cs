@@ -1,40 +1,142 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using RestaurantManagementSystem.Helpers;
+using RestaurantManagementSystem.Services;
+using StaffEntity = RestaurantManagementSystem.Model.Staff;
 
 namespace RestaurantManagementSystem.Pages.Staff
 {
-    // Staff My profile: personal details and password of the signed-in staff member.
-    // Static UI for now – backend notes:
-    //  - OnGet: load the Staff for staffID from Session.
-    //    Shown: staffName, staffPhone (editable) · staffEmail, staffPosition (read-only) · staffID as "STF-0042",
-    //    staffCreateAt as "Staff since". System role is always "Staff" (admins are in the Admin table).
-    //    The shift line ("Evening service") has no field yet – ask the leader, or remove it.
-    //  - Field names allow a [BindProperty] Staff: Staff.staffName (max 100), Staff.staffPhone (max 20).
-    //  - OnPostProfile (Edit → Save changes): update only staffName and staffPhone.
-    //    staffEmail, staffPosition and isActive are changed by an administrator on the Admin Staff page –
-    //    don't read them from the form.
-    //  - OnPostPassword (Change password pop-up; fields: currentPassword, newPassword, confirmPassword):
-    //    check the current password with PasswordService, apply the same rules as Register, then save the new hash.
-    //    On an error: ModelState.AddModelError("", "Current password is incorrect.") and return Page() –
-    //    the pop-up opens again by itself and shows the message in its red box.
-    //  - After saving, set TempData["StaffMessage"] and redirect back; the page shows it in the green box.
+    // Staff My profile: personal details (editable) and work details (read-only), plus change password.
+    // Only signed-in staff reach this page (RequireRoleFilter on /Staff);
+    // the staff ID always comes from the session, never from the URL or the form.
     public class ProfileModel : PageModel
     {
-        public void OnGet()
+        private readonly ProfileService _profileService;
+        private readonly SettingsService _settingsService;
+
+        public ProfileModel(ProfileService profileService, SettingsService settingsService)
         {
+            _profileService = profileService;
+            _settingsService = settingsService;
         }
 
-        // UI flow only (no saving yet) – backend: save first, then redirect.
-        public IActionResult OnPostProfile()
+        // Editable fields: the saved values, or what the user typed after a failed save
+        public StaffProfileInput Input { get; set; } = new StaffProfileInput();
+
+        // Read-only details shown on the page (always the saved values)
+        public string DisplayName { get; set; } = string.Empty;
+        public string StaffCode { get; set; } = string.Empty;     // e.g. STF-0001
+        public string StaffSince { get; set; } = string.Empty;
+        public string StaffEmail { get; set; } = string.Empty;
+        public string JobTitle { get; set; } = string.Empty;
+        public string PasswordHint { get; set; } = string.Empty;
+
+        public async Task<IActionResult> OnGetAsync()
         {
-            TempData["StaffMessage"] = "Your profile has been saved.";
-            return RedirectToPage();
+            return await LoadPageAsync(fillForm: true) ? Page() : SignOutAndGoToLogin();
         }
 
-        public IActionResult OnPostPassword()
+        // Edit → Save changes. [Bind(Prefix = "Staff")] reads the fields named Staff.xxx
+        public async Task<IActionResult> OnPostProfileAsync([Bind(Prefix = "Staff")] StaffProfileInput input)
         {
+            Input = input;
+
+            int? staffId = HttpContext.Session.GetUserId();
+            if (staffId == null)
+            {
+                return SignOutAndGoToLogin();
+            }
+
+            if (ModelState.IsValid)
+            {
+                string? error = await _profileService.UpdateStaffProfileAsync(staffId.Value, input);
+                if (error == null)
+                {
+                    HttpContext.Session.UpdateUserName(input.staffName.Trim());
+
+                    TempData["StaffMessage"] = "Your profile has been saved.";
+                    return RedirectToPage();
+                }
+
+                ModelState.AddModelError(string.Empty, error);
+            }
+
+            return await LoadPageAsync(fillForm: false) ? Page() : SignOutAndGoToLogin();
+        }
+
+        // Change password pop-up
+        public async Task<IActionResult> OnPostPasswordAsync(string? currentPassword, string? newPassword, string? confirmPassword)
+        {
+            int? staffId = HttpContext.Session.GetUserId();
+            if (staffId == null)
+            {
+                return SignOutAndGoToLogin();
+            }
+
+            if (string.IsNullOrEmpty(currentPassword) || string.IsNullOrEmpty(newPassword) || string.IsNullOrEmpty(confirmPassword))
+            {
+                ModelState.AddModelError(string.Empty, "Please fill in all three password fields.");
+            }
+            else if (newPassword != confirmPassword)
+            {
+                ModelState.AddModelError(string.Empty, "The new passwords do not match.");
+            }
+            else
+            {
+                string? error = await _profileService.ChangeStaffPasswordAsync(staffId.Value, currentPassword, newPassword);
+                if (error != null)
+                {
+                    ModelState.AddModelError(string.Empty, error);
+                }
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return await LoadPageAsync(fillForm: true) ? Page() : SignOutAndGoToLogin();
+            }
+
             TempData["StaffMessage"] = "Your password has been updated.";
             return RedirectToPage();
+        }
+
+        // Loads what every version of the page needs. Returns false if the account no longer exists.
+        private async Task<bool> LoadPageAsync(bool fillForm)
+        {
+            int? staffId = HttpContext.Session.GetUserId();
+            if (staffId == null)
+            {
+                return false;
+            }
+
+            StaffEntity? staff = await _profileService.GetStaffAsync(staffId.Value);
+            if (staff == null)
+            {
+                return false;
+            }
+
+            DisplayName = staff.staffName;
+            StaffCode = $"STF-{staff.staffID:D4}";
+            StaffSince = staff.staffCreateAt.ToString("MMM yyyy");
+            StaffEmail = staff.staffEmail;
+            JobTitle = staff.staffRole;
+            PasswordHint = PasswordPolicy.Describe(await _settingsService.GetAsync());
+
+            if (fillForm)
+            {
+                Input = new StaffProfileInput
+                {
+                    staffName = staff.staffName,
+                    staffPhone = staff.staffPhone
+                };
+            }
+
+            return true;
+        }
+
+        private IActionResult SignOutAndGoToLogin()
+        {
+            HttpContext.Session.SignOutUser();
+            return RedirectToPage("/Staff/Login");
         }
     }
 }

@@ -54,7 +54,7 @@ namespace RestaurantManagementSystem.Model
 
         public bool autoConfirm { get; set; } = true;
 
-        // ---- Billing & payments ----
+        // ---- Billing & payments (cashless only: at least one method must stay on) ----
         [Column(TypeName = "decimal(5,2)")]
         [Range(0, 100, ErrorMessage = "Service charge must be 0–100%.")]
         public decimal serviceChargePct { get; set; } = 10;
@@ -66,7 +66,6 @@ namespace RestaurantManagementSystem.Model
         [StringLength(200)]
         public string? receiptFooter { get; set; } = "Thank you for dining with us.";
 
-        public bool acceptCash { get; set; } = true;
         public bool acceptCard { get; set; } = true;
         public bool acceptFpx { get; set; } = true;
         public bool acceptEwallet { get; set; } = false;
@@ -84,7 +83,5 @@ namespace RestaurantManagementSystem.Model
 
         [Range(5, 480, ErrorMessage = "Idle timeout must be 5–480 minutes.")]
         public int idleTimeoutMinutes { get; set; } = 30;
-
-        public bool requireTwoStep { get; set; } = false;
     }
 }

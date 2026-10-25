@@ -11,11 +11,27 @@
     var count = document.getElementById('menuCount');
     var empty = document.getElementById('menuEmpty');
     var activeFilter = 'Recommendations';
+    var selectedTags = [];       // tag chips that are switched on (a dish must have all of them)
+    var hideUnsafe = false;      // "Hide dishes with my allergens" switch (set below)
+
+    function csv(value) { return (value || '').split(',').filter(Boolean); }
 
     // Tabs that show their own panel instead of the dish grid
     var panels = {
-        Recommendations: { element: document.getElementById('recommendationsPanel'), label: 'Picked for you · 6 dishes' },
-        Promotions: { element: document.getElementById('promotionsPanel'), label: 'Current promotions · 3 offers' }
+        Recommendations: {
+            element: document.getElementById('recommendationsPanel'),
+            label: function () {
+                var n = document.querySelectorAll('#recommendationsPanel .md-menu-card').length;
+                return 'Picked for you · ' + n + (n === 1 ? ' dish' : ' dishes');
+            }
+        },
+        Promotions: {
+            element: document.getElementById('promotionsPanel'),
+            label: function () {
+                var n = document.querySelectorAll('#promotionsPanel .md-promo-section').length;
+                return 'Current promotions · ' + n + (n === 1 ? ' offer' : ' offers');
+            }
+        }
     };
 
     function setActiveTab(filter) {
@@ -31,10 +47,14 @@
             panels[name].element.classList.toggle('d-none', name !== activeFilter);
         });
 
+        // Tag chips only apply to the dish grid (All + category tabs)
+        var chipBar = document.getElementById('tagChips');
+        if (chipBar) chipBar.classList.toggle('d-none', !!panels[activeFilter]);
+
         if (panels[activeFilter]) {
             grid.classList.add('d-none');
             empty.classList.add('d-none');
-            count.textContent = panels[activeFilter].label;
+            if (count) count.textContent = panels[activeFilter].label();
             return;
         }
 
@@ -46,13 +66,17 @@
         items.forEach(function (item) {
             var matchesCategory = activeFilter === 'All' || item.dataset.category === activeFilter;
             var matchesText = item.dataset.name.toLowerCase().indexOf(text) !== -1;
-            var visible = matchesCategory && matchesText;
+            var card = item.querySelector('.md-menu-card');
+            var dishTags = card ? csv(card.dataset.tags) : [];
+            var matchesTags = selectedTags.every(function (tag) { return dishTags.indexOf(tag) !== -1; });
+            var hiddenByAllergy = hideUnsafe && card && card.classList.contains('is-unsafe');
+            var visible = matchesCategory && matchesText && matchesTags && !hiddenByAllergy;
             item.classList.toggle('d-none', !visible);
             if (visible) shown++;
         });
 
         var label = activeFilter === 'All' ? 'Complete seasonal selection' : activeFilter;
-        count.textContent = label + ' · ' + shown + (shown === 1 ? ' item' : ' items');
+        if (count) count.textContent = label + ' · ' + shown + (shown === 1 ? ' item' : ' items');
         empty.classList.toggle('d-none', shown !== 0);
     }
 
@@ -125,7 +149,7 @@
         var qty = quantities[name] || 0;
         document.querySelectorAll('.md-add-row').forEach(function (row) {
             if (row.dataset.dish !== name) return;
-            
+
             // Toggle quantity stepper (- qty +)
             row.querySelector('.md-qty').classList.toggle('d-none', qty === 0);
             row.querySelector('[data-qty]').textContent = qty;
@@ -205,12 +229,105 @@
         });
 
         button.addEventListener('click', function () {
-            changeQuantity(name, (quantities[name] || 0) + 1);
+            var current = quantities[name] || 0;
+            if (current === 0 && !confirmAllergen(button)) return;   // ask once, when the dish is first added
+            changeQuantity(name, current + 1);
         });
     });
 
     // Cards of dishes that are already in the saved cart show their state straight away
     Object.keys(quantities).forEach(showQuantity);
+
+    // ---------- Allergens + tags ----------
+    // Allergies of the signed-in customer (set by Menu.cshtml)
+    var myAllergies = ((window.MD_USER && window.MD_USER.allergies) || []).map(function (a) { return a.toLowerCase(); });
+    var hideSwitch = document.getElementById('hideAllergens');
+    hideUnsafe = !!hideSwitch && hideSwitch.checked;
+
+    // Mark every dish card: has-allergen = contains one of my allergens,
+    // allergen-unknown = the admin never filled in the allergens. Both are "unsafe" (same rule as the recommendations).
+    if (myAllergies.length) {
+        document.querySelectorAll('.md-menu-card').forEach(function (card) {
+            var known = card.dataset.allergensKnown === 'yes';
+            var conflicts = csv(card.dataset.allergens).filter(function (a) {
+                return myAllergies.indexOf(a.toLowerCase()) !== -1;
+            });
+            card.dataset.conflicts = conflicts.join(',');
+
+            if (conflicts.length) {
+                card.classList.add('has-allergen', 'is-unsafe');
+                card.querySelectorAll('[data-allergen]').forEach(function (el) {
+                    if (conflicts.indexOf(el.dataset.allergen) !== -1) el.classList.add('is-mine');
+                });
+                var mine = card.querySelector('[data-allergen-mine]');
+                if (mine) {
+                    mine.textContent = 'Contains your allergen: ' + conflicts.join(', ');
+                    mine.classList.remove('d-none');
+                }
+            } else if (!known) {
+                card.classList.add('is-unsafe', 'allergen-unknown');
+            }
+        });
+    }
+
+    // Hide / show the unsafe dishes (the card's grid column is hidden, so no gaps are left)
+    function applyAllergenHide() {
+        document.querySelectorAll('.md-menu-card.is-unsafe').forEach(function (card) {
+            var column = card.closest('[class*="col-"]') || card;
+            column.classList.toggle('md-allergen-hidden', hideUnsafe);
+        });
+    }
+
+    if (hideSwitch) {
+        hideSwitch.addEventListener('change', function () {
+            hideUnsafe = hideSwitch.checked;
+            applyAllergenHide();
+            applyFilter();
+        });
+    }
+
+    // Ask before adding a dish that has the customer's allergen (or has no allergen info at all)
+    function confirmAllergen(button) {
+        var card = button.closest('.md-menu-card');
+        if (!card) return true;
+        if (card.dataset.conflicts) {
+            return window.confirm('This dish contains ' + card.dataset.conflicts.split(',').join(', ') +
+                ', which you listed as an allergy.\n\nAdd it to your order anyway?');
+        }
+        if (card.classList.contains('allergen-unknown')) {
+            return window.confirm('Allergen information for this dish is not available, and you listed allergies. ' +
+                'Please check with our staff.\n\nAdd it to your order anyway?');
+        }
+        return true;
+    }
+
+    // Tag chips (All + category tabs): a dish must have every chip that is switched on
+    var chipBar = document.getElementById('tagChips');
+    if (chipBar) {
+        chipBar.addEventListener('click', function (event) {
+            var chip = event.target.closest('[data-tag]');
+            var clear = event.target.closest('[data-clear-tags]');
+            if (!chip && !clear) return;
+
+            if (clear) {
+                chipBar.querySelectorAll('[data-tag]').forEach(function (c) {
+                    c.classList.remove('active');
+                    c.setAttribute('aria-pressed', 'false');
+                });
+            } else {
+                var on = !chip.classList.contains('active');
+                chip.classList.toggle('active', on);
+                chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+            }
+
+            selectedTags = Array.prototype.map.call(chipBar.querySelectorAll('[data-tag].active'), function (c) { return c.dataset.tag; });
+            chipBar.querySelector('[data-clear-tags]').classList.toggle('d-none', selectedTags.length === 0);
+            applyFilter();
+        });
+    }
+
+    applyAllergenHide();
+    applyFilter();      // sets the panel / chip visibility and the count text for the starting tab
 
     // ---------- Chatbot panel ----------
     var toggle = document.getElementById('chatToggle');

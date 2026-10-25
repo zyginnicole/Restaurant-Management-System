@@ -14,9 +14,9 @@ namespace RestaurantManagementSystem.Pages.Customer
     //              method) and becomes Completed.
     //  - /Customer/Payment?orderId=... works with any order of the bill.
     //  - Card number / CVC inputs have no name="" so they are never posted or saved.
+    //  - Which methods are offered comes from Admin > Settings > Billing & payments (cashless only).
     public class PaymentModel : PageModel
     {
-        private static readonly string[] AllowedMethods = { "Card", "Online Banking", "E-Wallet" };
         private static readonly string[] OpenStatuses = { "Order placed", "Preparing", "Served" };
 
         private readonly ApplicationDbContext _context;
@@ -41,6 +41,17 @@ namespace RestaurantManagementSystem.Pages.Customer
         public decimal Total { get; set; }                          // = sum of the orders' totalAmount
         public decimal ServiceChargePct { get; set; } = 10m;
         public decimal SstPct { get; set; } = 6m;
+
+        // Payment methods the admin has switched on (Admin > Settings > Billing & payments)
+        public bool AcceptCard { get; set; } = true;
+        public bool AcceptFpx { get; set; } = true;
+        public bool AcceptEwallet { get; set; }
+
+        // The method that is ticked when the page opens: the first one that is switched on
+        public string DefaultMethod =>
+            AcceptCard ? "Card" :
+            AcceptFpx ? "Online Banking" :
+            AcceptEwallet ? "E-Wallet" : string.Empty;
 
         public class BillLine
         {
@@ -78,9 +89,16 @@ namespace RestaurantManagementSystem.Pages.Customer
             IActionResult? problem = await PrepareAsync(orderId, custId.Value);
             if (problem != null) return problem;
 
-            if (string.IsNullOrEmpty(paymentMethod) || !AllowedMethods.Contains(paymentMethod))
+            if (string.IsNullOrEmpty(paymentMethod))
             {
                 ModelState.AddModelError(string.Empty, "Please choose a payment method.");
+                return Page();
+            }
+
+            // Checked on the server too, so a method the admin switched off cannot be posted by hand
+            if (!IsMethodOn(paymentMethod))
+            {
+                ModelState.AddModelError(string.Empty, "This payment method is not available. Please choose another one.");
                 return Page();
             }
 
@@ -127,6 +145,18 @@ namespace RestaurantManagementSystem.Pages.Customer
             return HttpContext.Session.IsSignedInAs(UserRoles.Customer)
                 ? HttpContext.Session.GetUserId()
                 : null;
+        }
+
+        // True when the admin has this method switched on (names match the Payment model)
+        private bool IsMethodOn(string method)
+        {
+            return method switch
+            {
+                "Card" => AcceptCard,
+                "Online Banking" => AcceptFpx,
+                "E-Wallet" => AcceptEwallet,
+                _ => false
+            };
         }
 
         // Finds the customer's order + the bill it belongs to. Returns a redirect / NotFound when it cannot be paid.
@@ -178,9 +208,14 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         private async Task FillAsync(Order order)
         {
-            var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
-            ServiceChargePct = settings?.serviceChargePct ?? 10m;
-            SstPct = settings?.sstPct ?? 6m;
+            var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync()
+                           ?? new SystemSetting();
+            ServiceChargePct = settings.serviceChargePct;
+            SstPct = settings.sstPct;
+
+            AcceptCard = settings.acceptCard;
+            AcceptFpx = settings.acceptFpx;
+            AcceptEwallet = settings.acceptEwallet;
 
             CustomerName = order.Customer?.custName ?? string.Empty;
             TableNumber = order.DiningTable?.tableNumber;

@@ -1,15 +1,75 @@
 ﻿using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
 
 namespace RestaurantManagementSystem.Services
 {
-    // Chooses the dishes shown as "Popular" and "Recommended for you" on the customer menu.
-    // Only dishes that are Available and in a Visible category are ever returned.
+    // The four lists the customer menu can show. An empty list = hide that section.
+    public class MenuRecommendations
+    {
+        public List<Menu> OrderedBefore { get; set; } = new();       // dishes this customer has ordered
+        public List<Menu> Signature { get; set; } = new();           // admin-ticked signature dishes
+        public List<Menu> TopSellers { get; set; } = new();          // most ordered by everyone
+        public List<Menu> ForYourPreference { get; set; } = new();   // dish tags match the customer's preferences
+
+        // One list for the dashboard hero carousel, in the same order as the Menu page:
+        // Order again -> Based on your preferences -> Popular -> Signature. No dish appears twice; at most `max` slides.
+        public List<HeroSlide> ToHeroSlides(int max = 6)
+        {
+            var slides = new List<HeroSlide>();
+            var seen = new HashSet<int>();
+
+            void Add(IEnumerable<Menu> dishes, string label)
+            {
+                foreach (var d in dishes)
+                {
+                    if (slides.Count >= max) return;
+                    if (!seen.Add(d.menuID)) continue;
+                    slides.Add(new HeroSlide
+                    {
+                        Name = d.menuName,
+                        Price = d.menuPrice,
+                        Label = label,
+                        Category = d.MenuCategory?.categoryName ?? "",
+                        ImageUrl = d.menuImageUrl
+                    });
+                }
+            }
+
+            Add(OrderedBefore, "Order again");
+            Add(ForYourPreference, "Based on your preferences");
+            Add(TopSellers, "Popular selection");
+            Add(Signature, "Signature dish");
+            return slides;
+        }
+    }
+
+    // One slide of the dashboard hero carousel
+    public class HeroSlide
+    {
+        public string Name { get; set; } = "";
+        public decimal Price { get; set; }
+        public string Label { get; set; } = "";       // e.g. "Based on your preferences"
+        public string Category { get; set; } = "";    // e.g. "Mains"
+        public string? ImageUrl { get; set; }
+    }
+
+    // Every customer is signed in, so there is no guest path.
+    //
+    // Each section follows its own rule, so a dish can appear in more than one section.
+    // Display order (empty list = section hidden):
+    //   Order again -> Based on your preferences -> Popular dishes -> Signature Dishes
+    //
+    //   New customer, no preference      -> Popular (once there are Completed orders) + Signature
+    //   New customer, has preference     -> Preferences + Popular + Signature
+    //   Ordered before (any preference)  -> Order again + (Preferences if set) + Popular + Signature
+    //
+    // Allergies are a hard filter on every list.
     public class RecommendationService
     {
-        private const int RecentDays = 30;   // "popular" looks at the last 30 days first
+        private const int RecentDays = 30;   // top sellers look at the last 30 days first
 
         private readonly ApplicationDbContext _db;
 
@@ -18,64 +78,69 @@ namespace RestaurantManagementSystem.Services
             _db = db;
         }
 
-        // =====================================================================
-        //  POPULAR: the most ordered dishes
-        // =====================================================================
-        public async Task<List<Menu>> GetPopularAsync(int take = 3)
+        public async Task<MenuRecommendations> GetForCustomerAsync(int custID, int take = 3)
         {
-            var dishes = await GetEligibleDishesAsync();
-            return await PopularFromAsync(dishes, take);
-        }
+            var customer = await _db.Customers.AsNoTracking()
+                .Where(c => c.custID == custID)
+                .Select(c => new { c.DietaryPref, c.Allergies })
+                .FirstOrDefaultAsync();
 
-        // =====================================================================
-        //  RECOMMENDED FOR ONE CUSTOMER
-        //  custID = null (guest) or no order history -> popular dishes
-        // =====================================================================
-        public async Task<List<Menu>> GetRecommendedAsync(int? custID, int take = 3)
-        {
-            var dishes = await GetEligibleDishesAsync();
-            var result = new List<Menu>();
+            var prefs = MenuVocabulary.Parse(customer?.DietaryPref);
+            var allergies = MenuVocabulary.Parse(customer?.Allergies);
 
-            if (custID.HasValue)
+            // Available + visible category + safe for this customer's allergies
+            var dishes = (await GetEligibleDishesAsync())
+                .Where(d => IsSafe(d, allergies))
+                .ToList();
+
+            var mine = await QuantityByDishAsync(o => true, custID);        // this customer's orders
+            var overall = await QuantityByDishAsync(o => true, null);       // everyone's orders
+            var since = DateTimeOffset.Now.AddDays(-RecentDays);
+            var recent = await QuantityByDishAsync(o => o.orderDateTime >= since, null);
+
+            var result = new MenuRecommendations();
+
+            // 1. Ordered before: most ordered by this customer first
+            result.OrderedBefore = dishes
+                .Where(d => mine.ContainsKey(d.menuID))
+                .OrderByDescending(d => mine[d.menuID])
+                .ThenBy(d => d.menuName)
+                .Take(take)
+                .ToList();
+
+            // 2. Preference: dishes whose tags match, most matching tags first
+            //    (skips dishes the customer already ordered - those are in "Order again")
+            if (prefs.Count > 0)
             {
-                // quantity of each dish this customer has ordered (cancelled orders ignored)
-                var mine = await QuantityByDishAsync(o => true, custID);
-
-                if (mine.Count > 0)
-                {
-                    var overall = await QuantityByDishAsync(o => true, null);
-
-                    // how much this customer orders from each category
-                    var ids = mine.Keys.ToList();
-                    var ordered = await _db.Menus.AsNoTracking()
-                        .Where(m => ids.Contains(m.menuID))
-                        .Select(m => new { m.menuID, m.categoryID })
-                        .ToListAsync();
-
-                    var categoryWeight = ordered
-                        .GroupBy(m => m.categoryID)
-                        .ToDictionary(g => g.Key, g => g.Sum(m => mine[m.menuID]));
-
-                    // dishes not tried yet: favourite categories first, then the most popular overall
-                    result = dishes
-                        .Where(d => !mine.ContainsKey(d.menuID))
-                        .OrderByDescending(d => categoryWeight.GetValueOrDefault(d.categoryID))
-                        .ThenByDescending(d => overall.GetValueOrDefault(d.menuID))
-                        .ThenBy(d => d.menuName)
-                        .Take(take)
-                        .ToList();
-                }
+                result.ForYourPreference = dishes
+                    .Where(d => !mine.ContainsKey(d.menuID))
+                    .Select(d => new { Dish = d, Score = MenuVocabulary.Parse(d.menuTags).Count(t => prefs.Contains(t)) })
+                    .Where(x => x.Score > 0)
+                    .OrderByDescending(x => x.Score)
+                    .ThenByDescending(x => overall.GetValueOrDefault(x.Dish.menuID))
+                    .ThenBy(x => x.Dish.menuName)
+                    .Take(take)
+                    .Select(x => x.Dish)
+                    .ToList();
             }
 
-            // not enough picks (guest, new customer, or they have tried most dishes): top up with popular dishes
-            if (result.Count < take)
-            {
-                foreach (var dish in await PopularFromAsync(dishes, take + result.Count))
-                {
-                    if (result.Count >= take) break;
-                    if (result.All(r => r.menuID != dish.menuID)) result.Add(dish);
-                }
-            }
+            // 3. Popular: last 30 days first, then all time (Completed orders only).
+            //    Dishes nobody has ordered are not popular, so with 0 Completed orders this list is empty and the section is hidden.
+            //    Always the real top sellers: a dish may also appear in another section.
+            result.TopSellers = dishes
+                .Where(d => overall.ContainsKey(d.menuID))
+                .OrderByDescending(d => recent.GetValueOrDefault(d.menuID))
+                .ThenByDescending(d => overall[d.menuID])
+                .ThenBy(d => d.menuName)
+                .Take(take)
+                .ToList();
+
+            // 4. Signature: always the admin's own picks
+            result.Signature = dishes
+                .Where(d => d.isSignature)
+                .OrderBy(d => d.menuName)
+                .Take(take)
+                .ToList();
 
             return result;
         }
@@ -83,6 +148,15 @@ namespace RestaurantManagementSystem.Services
         // =====================================================================
         //  Helpers
         // =====================================================================
+
+        // A dish is safe if it lists none of the customer's allergens.
+        // If the customer has allergies and the dish's allergens were never filled in, we treat it as NOT safe.
+        private static bool IsSafe(Menu dish, HashSet<string> allergies)
+        {
+            if (allergies.Count == 0) return true;
+            if (string.IsNullOrWhiteSpace(dish.menuAllergens)) return false;
+            return !MenuVocabulary.Parse(dish.menuAllergens).Overlaps(allergies);
+        }
 
         // Dishes that can be shown: Available, and in a category the admin has set to Visible
         private async Task<List<Menu>> GetEligibleDishesAsync()
@@ -95,37 +169,12 @@ namespace RestaurantManagementSystem.Services
                 .ToListAsync();
         }
 
-        // Most ordered first: last 30 days, then all time, then (if there are no orders yet) menu order
-        private async Task<List<Menu>> PopularFromAsync(List<Menu> dishes, int take)
-        {
-            var since = DateTimeOffset.Now.AddDays(-RecentDays);
-            var recent = await QuantityByDishAsync(o => o.orderDateTime >= since, null);
-            var allTime = await QuantityByDishAsync(o => true, null);
-
-            var popular = dishes
-                .Where(d => allTime.ContainsKey(d.menuID))
-                .OrderByDescending(d => recent.GetValueOrDefault(d.menuID))
-                .ThenByDescending(d => allTime[d.menuID])
-                .ThenBy(d => d.menuName)
-                .Take(take)
-                .ToList();
-
-            // no (or not enough) order history yet: fill with the available dishes in menu order
-            foreach (var dish in dishes)
-            {
-                if (popular.Count >= take) break;
-                if (popular.All(p => p.menuID != dish.menuID)) popular.Add(dish);
-            }
-
-            return popular;
-        }
-
-        // menuID -> total quantity ordered. Cancelled orders never count.
+        // menuID -> total quantity ordered. Only Completed orders count.
         // custID = null counts every customer.
         private async Task<Dictionary<int, int>> QuantityByDishAsync(Expression<Func<Order, bool>> filter, int? custID)
         {
             var orders = _db.Orders.AsNoTracking()
-                .Where(o => o.orderStatus != "Cancelled")
+                .Where(o => o.orderStatus == "Completed")
                 .Where(filter);
 
             if (custID.HasValue)

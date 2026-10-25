@@ -33,6 +33,10 @@ namespace RestaurantManagementSystem.Pages.Admin
             if (S.minPartySize > S.maxPartySize)
                 ModelState.AddModelError("S.maxPartySize", "Maximum party size must be at least the minimum.");
 
+            // Cashless system: customers must always have a way to pay
+            if (!S.acceptCard && !S.acceptFpx && !S.acceptEwallet)
+                ModelState.AddModelError("S.acceptCard", "At least one payment method must stay on.");
+
             if (!ModelState.IsValid)
             {
                 // Stay on the page so nothing the admin typed is lost
