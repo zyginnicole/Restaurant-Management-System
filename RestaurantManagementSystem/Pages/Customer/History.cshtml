@@ -8,7 +8,8 @@
     Layout = "_CustomerLayout";
 }
 
-@* Example data from the design. Only finished activity is shown here:
+@* Orders and Payments come from HistoryModel (the database); Reservations is still the example design.
+   Only finished activity is shown here:
    Reservation – Completed green · Cancelled, No-show, Declined grey (Reservation.reservationStatus, stored exactly so)
    Order       – Completed green · Cancelled grey
    Payment     – Paid green · Refunded grey · Failed red
@@ -73,7 +74,9 @@
             @* Not rated yet → Rate button opens the pop-up below *@
             <div class="md-history-side">
                 <button type="button" class="btn btn-md-dark md-btn-sm" data-bs-toggle="modal" data-bs-target="#ratePopup"
-                        data-code="R-0038" data-date="15 Aug 2026" data-order="79">Rate this visit</button>
+                        data-code="R-0038" data-date="15 Aug 2026" data-order="79">
+                    Rate this visit
+                </button>
             </div>
             @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
             <template data-detail>
@@ -273,115 +276,99 @@
             </select>
             <select class="form-select md-input" data-filter="year" aria-label="Filter by year">
                 <option value="">All years</option>
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
+                @foreach (var year in Model.OrderYears)
+                {
+                    <option value="@year">@year</option>
+                }
             </select>
             <span class="md-card-meta"><span data-count>0</span> orders</span>
         </div>
     </div>
     <ul class="md-res-list">
-        <li class="md-res-item md-history-item md-history-click is-completed" data-status="Completed" data-month="8" data-year="2026" data-kind="Order" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">ORD-0079</span>
-                    <span class="md-badge md-badge-completed">Completed</span>
-                </div>
-                <span class="md-res-item-info">Dine-in · R-0038 · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-12 · 7 items</span>
-                <span class="md-res-item-note">15 Aug 2026, 20:12</span>
-            </div>
-            <div class="md-history-side"><span class="md-history-amount">RM 573.67</span></div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                <dl class="md-detail-list mb-3">
-                    <dt>Order type</dt><dd>Dine-in · R-0038 · T-12</dd>
-                    <dt>Placed</dt><dd>15 Aug 2026, 20:12</dd>
-                    <dt>Completed</dt><dd>15 Aug 2026, 21:40</dd>
-                </dl>
-                <ul class="md-order-items">
-                    <li><span>2× Oyster Selection</span><span>RM 136.00</span></li>
-                    <li><span>1× Wagyu Beef Tenderloin<small class="md-item-note">Medium rare</small></span><span>RM 168.00</span></li>
-                    <li><span>1× Duck à l'Orange</span><span>RM 92.00</span></li>
-                    <li><span>3× Mille-Feuille</span><span>RM 96.00</span></li>
-                </ul>
-                <dl class="md-sum mb-0">
-                    <div><dt>Subtotal</dt><dd>RM 492.00</dd></div>
-                    <div><dt>Service charge 10%</dt><dd>RM 49.20</dd></div>
-                    <div><dt>SST 6%</dt><dd>RM 32.47</dd></div>
-                    <div class="md-sum-total"><dt>Total paid</dt><dd>RM 573.67</dd></div>
-                </dl>
-            </template>
-        </li>
-        <li class="md-res-item md-history-item is-cancelled" data-status="Cancelled" data-month="7" data-year="2026">
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">ORD-0071</span>
-                    <span class="md-badge md-badge-cancelled">Cancelled</span>
-                </div>
-                <span class="md-res-item-info">Takeaway · 2 items</span>
-                <span class="md-res-item-note">28 Jul 2026, 18:05 · cancelled before preparing · refunded</span>
-            </div>
-            <div class="md-history-side"><span class="md-history-amount is-struck">RM 140.98</span></div>
-        </li>
-        <li class="md-res-item md-history-item md-history-click is-completed" data-status="Completed" data-month="7" data-year="2026" data-kind="Order" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">ORD-0064</span>
-                    <span class="md-badge md-badge-completed">Completed</span>
-                </div>
-                <span class="md-res-item-info">Dine-in · R-0028 · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-03 · 4 items</span>
-                <span class="md-res-item-note">3 Jul 2026, 19:08</span>
-            </div>
-            <div class="md-history-side"><span class="md-history-amount">RM 297.33</span></div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                <dl class="md-detail-list mb-3">
-                    <dt>Order type</dt><dd>Dine-in · R-0028 · T-03</dd>
-                    <dt>Placed</dt><dd>3 Jul 2026, 19:08</dd>
-                    <dt>Completed</dt><dd>3 Jul 2026, 21:02</dd>
-                </dl>
-                <ul class="md-order-items">
-                    <li><span>1× Caviar &amp; Soft Egg</span><span>RM 85.00</span></li>
-                    <li><span>1× Pan-Seared Sea Bass</span><span>RM 98.00</span></li>
-                    <li><span>2× Valrhona Chocolate Fondant</span><span>RM 72.00</span></li>
-                </ul>
-                <dl class="md-sum mb-0">
-                    <div><dt>Subtotal</dt><dd>RM 255.00</dd></div>
-                    <div><dt>Service charge 10%</dt><dd>RM 25.50</dd></div>
-                    <div><dt>SST 6%</dt><dd>RM 16.83</dd></div>
-                    <div class="md-sum-total"><dt>Total paid</dt><dd>RM 297.33</dd></div>
-                </dl>
-            </template>
-        </li>
-        <li class="md-res-item md-history-item md-history-click is-completed" data-status="Completed" data-month="12" data-year="2025" data-kind="Order" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">ORD-0031</span>
-                    <span class="md-badge md-badge-completed">Completed</span>
-                </div>
-                <span class="md-res-item-info">Dine-in · R-0012 · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-20 · 14 items</span>
-                <span class="md-res-item-note">20 Dec 2025, 19:41</span>
-            </div>
-            <div class="md-history-side"><span class="md-history-amount">RM 1,352.56</span></div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                <dl class="md-detail-list mb-3">
-                    <dt>Order type</dt><dd>Dine-in · R-0012 · T-20</dd>
-                    <dt>Placed</dt><dd>20 Dec 2025, 19:41</dd>
-                    <dt>Completed</dt><dd>20 Dec 2025, 22:15</dd>
-                </dl>
-                <ul class="md-order-items">
-                    <li><span>6× Duck à l'Orange</span><span>RM 552.00</span></li>
-                    <li><span>4× Mille-Feuille</span><span>RM 128.00</span></li>
-                    <li><span>4× Château Margaux 2018 (glass)</span><span>RM 480.00</span></li>
-                </ul>
-                <dl class="md-sum mb-0">
-                    <div><dt>Subtotal</dt><dd>RM 1,160.00</dd></div>
-                    <div><dt>Service charge 10%</dt><dd>RM 116.00</dd></div>
-                    <div><dt>SST 6%</dt><dd>RM 76.56</dd></div>
-                    <div class="md-sum-total"><dt>Total paid</dt><dd>RM 1,352.56</dd></div>
-                </dl>
-            </template>
-        </li>
+        @foreach (var o in Model.Orders)
+        {
+            string unit = o.ItemCount == 1 ? "item" : "items";
+            if (o.Status == "Completed")
+            {
+                <li class="md-res-item md-history-item md-history-click is-completed" data-status="Completed" data-month="@o.Placed.Month" data-year="@o.Placed.Year" data-kind="Order" tabindex="0" role="button" aria-haspopup="dialog">
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">@o.Code</span>
+                            <span class="md-badge md-badge-completed">Completed</span>
+                        </div>
+                        <span class="md-res-item-info">
+                            @if (o.IsDineIn)
+                            {
+                                @:Dine-in@(o.ReservationCode != null ? " · " + o.ReservationCode : "") · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@o.Table · @o.ItemCount @unit
+                            }
+                            else
+                            {
+                                @:Takeaway · @o.ItemCount @unit
+                            }
+                        </span>
+                        <span class="md-res-item-note">@o.Placed.ToString("d MMM yyyy, HH:mm")</span>
+                    </div>
+                    <div class="md-history-side"><span class="md-history-amount">RM @o.Total.ToString("N2")</span></div>
+                    @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
+                    <template data-detail>
+                        <dl class="md-detail-list mb-3">
+                            <dt>Order type</dt>
+                            <dd>@o.TypeText</dd>
+                            <dt>Placed</dt>
+                            <dd>@o.Placed.ToString("d MMM yyyy, HH:mm")</dd>
+                            @if (o.PaidAt != null)
+                            {
+                                <dt>Paid</dt>
+                                <dd>@o.PaidAt.Value.ToString("d MMM yyyy, HH:mm")</dd>
+                            }
+                        </dl>
+                        <ul class="md-order-items">
+                            @foreach (var line in o.Lines)
+                            {
+                                <li>
+                                    <span>
+                                        @line.Quantity&times; @line.Name
+                                        @if (!string.IsNullOrEmpty(line.Note))
+                                        {
+                                            <small class="md-item-note">@line.Note</small>
+                                        }
+                                        @if (!string.IsNullOrEmpty(line.PromoCode) && line.Discount > 0)
+                                        {
+                                            <small class="md-item-note">Promo @line.PromoCode &minus;RM @line.Discount.ToString("N2")</small>
+                                        }
+                                    </span>
+                                    <span>RM @line.LineTotal.ToString("N2")</span>
+                                </li>
+                            }
+                        </ul>
+                        <dl class="md-sum mb-0">
+                            <div><dt>Subtotal</dt><dd>RM @o.Subtotal.ToString("N2")</dd></div>
+                            @if (o.IsDineIn)
+                            {
+                                <div><dt>Service charge @Model.ServiceChargePct.ToString("0.##")%</dt><dd>RM @o.ServiceCharge.ToString("N2")</dd></div>
+                            }
+                            <div><dt>SST @Model.SstPct.ToString("0.##")%</dt><dd>RM @o.Sst.ToString("N2")</dd></div>
+                            <div class="md-sum-total"><dt>Total paid</dt><dd>RM @o.Total.ToString("N2")</dd></div>
+                        </dl>
+                    </template>
+                </li>
+            }
+            else
+            {
+                @* Cancelled: grey, not clickable *@
+                <li class="md-res-item md-history-item is-cancelled" data-status="Cancelled" data-month="@o.Placed.Month" data-year="@o.Placed.Year">
+                    <div class="md-res-item-main">
+                        <div class="md-res-item-top">
+                            <span class="md-res-code">@o.Code</span>
+                            <span class="md-badge md-badge-cancelled">Cancelled</span>
+                        </div>
+                        <span class="md-res-item-info">@(o.IsDineIn ? "Dine-in" : "Takeaway") · @o.ItemCount @unit</span>
+                        <span class="md-res-item-note">@o.Placed.ToString("d MMM yyyy, HH:mm") · cancelled@(o.Refunded ? " · refunded" : "")</span>
+                    </div>
+                    <div class="md-history-side"><span class="md-history-amount is-struck">RM @o.Total.ToString("N2")</span></div>
+                </li>
+            }
+        }
     </ul>
     <p class="md-history-empty d-none" data-empty>No orders match these filters.</p>
 </section>
@@ -415,120 +402,59 @@
             </select>
             <select class="form-select md-input" data-filter="year" aria-label="Filter by year">
                 <option value="">All years</option>
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
+                @foreach (var year in Model.PaymentYears)
+                {
+                    <option value="@year">@year</option>
+                }
             </select>
             <span class="md-card-meta"><span data-count>0</span> payments</span>
         </div>
     </div>
     <ul class="md-res-list">
-        <li class="md-res-item md-history-item md-history-click is-paid" data-status="Paid" data-month="8" data-year="2026" data-kind="Payment" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">RCP-0079</span>
-                    <span class="md-badge md-badge-paid">Paid</span>
+        @foreach (var p in Model.Payments)
+        {
+            string css = p.Status == "Paid" ? "is-paid" : p.Status == "Refunded" ? "is-refunded" : "is-failed";
+            string badge = p.Status == "Paid" ? "md-badge-paid" : p.Status == "Refunded" ? "md-badge-refunded" : "md-badge-failed";
+            <li class="md-res-item md-history-item md-history-click @css" data-status="@p.Status" data-month="@p.Date.Month" data-year="@p.Date.Year" data-kind="Payment" tabindex="0" role="button" aria-haspopup="dialog">
+                <div class="md-res-item-main">
+                    <div class="md-res-item-top">
+                        <span class="md-res-code">@p.Code</span>
+                        <span class="md-badge @badge">@p.Status</span>
+                    </div>
+                    <span class="md-res-item-info">@p.OrderCodes · @p.Method</span>
+                    <span class="md-res-item-note">@p.Date.ToString("d MMM yyyy, HH:mm")@(p.Status == "Refunded" ? " · refunded" : "")</span>
                 </div>
-                <span class="md-res-item-info">ORD-0079 · Card · Visa •••• 4821</span>
-                <span class="md-res-item-note">15 Aug 2026, 21:40</span>
-            </div>
-            <div class="md-history-side"><span class="md-history-amount">RM 573.67</span></div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                <dl class="md-detail-list">
-                    <dt>Receipt no.</dt><dd>RCP-0079</dd>
-                    <dt>Order</dt><dd>ORD-0079 · Dine-in</dd>
-                    <dt>Method</dt><dd>Card · Visa •••• 4821</dd>
-                    <dt>Date</dt><dd>15 Aug 2026, 21:40</dd>
-                    <dt>Amount</dt><dd>RM 573.67</dd>
-                </dl>
-            </template>
-        </li>
-        <li class="md-res-item md-history-item md-history-click is-refunded" data-status="Refunded" data-month="7" data-year="2026" data-kind="Payment" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">RCP-0071</span>
-                    <span class="md-badge md-badge-refunded">Refunded</span>
-                </div>
-                <span class="md-res-item-info">ORD-0071 · E-Wallet · Touch 'n Go</span>
-                <span class="md-res-item-note">Paid 28 Jul, 18:05 · refunded 28 Jul, 18:20</span>
-            </div>
-            <div class="md-history-side"><span class="md-history-amount">RM 140.98</span></div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                <dl class="md-detail-list">
-                    <dt>Receipt no.</dt><dd>RCP-0071</dd>
-                    <dt>Order</dt><dd>ORD-0071 · Takeaway (cancelled)</dd>
-                    <dt>Method</dt><dd>E-Wallet · Touch 'n Go</dd>
-                    <dt>Paid</dt><dd>28 Jul 2026, 18:05</dd>
-                    <dt>Refunded</dt><dd>28 Jul 2026, 18:20 · back to your e-wallet</dd>
-                    <dt>Amount</dt><dd>RM 140.98</dd>
-                </dl>
-            </template>
-        </li>
-        <li class="md-res-item md-history-item md-history-click is-failed" data-status="Failed" data-month="7" data-year="2026" data-kind="Payment" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">ORD-0071</span>
-                    <span class="md-badge md-badge-failed">Failed</span>
-                </div>
-                <span class="md-res-item-info">Online Banking · Maybank2u</span>
-                <span class="md-res-item-note">28 Jul 2026, 18:02 · payment declined, paid again by e-wallet</span>
-            </div>
-            <div class="md-history-side"><span class="md-history-amount is-struck">RM 140.98</span></div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                <dl class="md-detail-list">
-                    <dt>Order</dt><dd>ORD-0071 · Takeaway</dd>
-                    <dt>Method</dt><dd>Online Banking · Maybank2u</dd>
-                    <dt>Date</dt><dd>28 Jul 2026, 18:02</dd>
-                    <dt>Reason</dt><dd>Declined by the bank – nothing was charged</dd>
-                    <dt>Next</dt><dd>Paid again by e-wallet (RCP-0071)</dd>
-                    <dt>Amount</dt><dd>RM 140.98</dd>
-                </dl>
-            </template>
-        </li>
-        <li class="md-res-item md-history-item md-history-click is-paid" data-status="Paid" data-month="7" data-year="2026" data-kind="Payment" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">RCP-0064</span>
-                    <span class="md-badge md-badge-paid">Paid</span>
-                </div>
-                <span class="md-res-item-info">ORD-0064 · Cash at the table</span>
-                <span class="md-res-item-note">3 Jul 2026, 21:02</span>
-            </div>
-            <div class="md-history-side"><span class="md-history-amount">RM 297.33</span></div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                <dl class="md-detail-list">
-                    <dt>Receipt no.</dt><dd>RCP-0064</dd>
-                    <dt>Order</dt><dd>ORD-0064 · Dine-in</dd>
-                    <dt>Method</dt><dd>Cash at the table</dd>
-                    <dt>Date</dt><dd>3 Jul 2026, 21:02</dd>
-                    <dt>Amount</dt><dd>RM 297.33</dd>
-                </dl>
-            </template>
-        </li>
-        <li class="md-res-item md-history-item md-history-click is-paid" data-status="Paid" data-month="12" data-year="2025" data-kind="Payment" tabindex="0" role="button" aria-haspopup="dialog">
-            <div class="md-res-item-main">
-                <div class="md-res-item-top">
-                    <span class="md-res-code">RCP-0031</span>
-                    <span class="md-badge md-badge-paid">Paid</span>
-                </div>
-                <span class="md-res-item-info">ORD-0031 · Card · Mastercard •••• 1107</span>
-                <span class="md-res-item-note">20 Dec 2025, 22:15</span>
-            </div>
-            <div class="md-history-side"><span class="md-history-amount">RM 1,352.56</span></div>
-            @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
-            <template data-detail>
-                <dl class="md-detail-list">
-                    <dt>Receipt no.</dt><dd>RCP-0031</dd>
-                    <dt>Order</dt><dd>ORD-0031 · Dine-in</dd>
-                    <dt>Method</dt><dd>Card · Mastercard •••• 1107</dd>
-                    <dt>Date</dt><dd>20 Dec 2025, 22:15</dd>
-                    <dt>Amount</dt><dd>RM 1,352.56</dd>
-                </dl>
-            </template>
-        </li>
+                <div class="md-history-side"><span class="md-history-amount@(p.Status == "Failed" ? " is-struck" : "")">RM @p.Amount.ToString("N2")</span></div>
+                @* Pop-up details (copied into #historyDetailPopup when the row is clicked) *@
+                <template data-detail>
+                    <dl class="md-detail-list">
+                        @if (p.Status != "Failed")
+                        {
+                            <dt>Receipt no.</dt>
+                            <dd>@p.Code</dd>
+                        }
+                        <dt>@(p.OrderCodes.Contains(',') ? "Orders" : "Order")</dt>
+                        <dd>@p.OrderCodes · @p.TypeText</dd>
+                        <dt>Method</dt>
+                        <dd>@p.Method</dd>
+                        <dt>@(p.Status == "Refunded" ? "Paid" : "Date")</dt>
+                        <dd>@p.Date.ToString("d MMM yyyy, HH:mm")</dd>
+                        @if (p.Status == "Refunded")
+                        {
+                            <dt>Refunded</dt>
+                            <dd>Back to your payment method</dd>
+                        }
+                        @if (p.Status == "Failed")
+                        {
+                            <dt>Reason</dt>
+                            <dd>The payment could not be completed – nothing was charged</dd>
+                        }
+                        <dt>Amount</dt>
+                        <dd>RM @p.Amount.ToString("N2")</dd>
+                    </dl>
+                </template>
+            </li>
+        }
     </ul>
     <p class="md-history-empty d-none" data-empty>No payments match these filters.</p>
 </section>
