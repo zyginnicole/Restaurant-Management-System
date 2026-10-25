@@ -14,6 +14,17 @@ namespace RestaurantManagementSystem.Services
 
         //Even with auto-confirm on, parties this big (or bookings with a special request) wait for staff approval
         public const int LargePartySize = 9;
+
+        //A table with guests still at it (Seated past their dining time, or tableStatus Occupied) is treated as busy
+        //until this many minutes from now, so it isn't given to a new booking while they are still there.
+        public const int SeatedReleaseMinutes = 15;
+
+        //Staff must answer a Pending request at least this many minutes before the booking time;
+        //after that it can't be confirmed and is declined automatically (CloseOverdueAsync).
+        public const int PendingDeadlineMinutes = 15;
+
+        //Last moment staff can confirm a Pending request
+        public static DateTime PendingDeadline(Reservation booking) => booking.reservationDateTime.AddMinutes(-PendingDeadlineMinutes);
         private readonly ApplicationDbContext _db;
         private readonly SettingsService _settings;
 
@@ -102,6 +113,22 @@ namespace RestaurantManagementSystem.Services
                 .Select(r => r.tableID)
                 .ToListAsync();
 
+            //Guests still at a table (even past their dining time) keep it until shortly after now
+            var releaseAt = DateTime.Now.AddMinutes(SeatedReleaseMinutes);
+            if (start < releaseAt)
+            {
+                busyTableIds.AddRange(await _db.Reservations.AsNoTracking()
+                    .Where(r => r.reservationStatus == ReservationStatus.Seated && r.reservationDateTime <= start
+                             && r.reservationDateTime >= DateTime.Today   // a Seated booking from an earlier day isn't at the table any more
+                             && (ignoreReservationId == null || r.reservationID != ignoreReservationId))
+                    .Select(r => r.tableID)
+                    .ToListAsync());
+                busyTableIds.AddRange(await _db.DiningTables.AsNoTracking()
+                    .Where(t => t.tableStatus == "Occupied")
+                    .Select(t => t.tableID)
+                    .ToListAsync());
+            }
+
             //Tables that can take the party: active area, not under maintenance, enough seats, not busy.
             //tableStatus (Available / Occupied / Reserved) only describes RIGHT NOW, so it is not used
             //for future times - only "Maintenance" is excluded.
@@ -162,8 +189,10 @@ namespace RestaurantManagementSystem.Services
                          && r.reservationDateTime < to
                          && tableIds.Contains(r.tableID)
                          && (ignoreReservationId == null || r.reservationID != ignoreReservationId))
-                .Select(r => new { r.tableID, r.reservationDateTime })
+                .Select(r => new { r.tableID, r.reservationDateTime, r.reservationStatus })
                 .ToListAsync();
+            var occupied = await OccupiedNowAsync(ignoreReservationId);
+            var releaseAt = DateTime.Now.AddMinutes(SeatedReleaseMinutes);
 
             var available = new List<DateTime>();
             foreach (var slot in slots)
@@ -171,17 +200,82 @@ namespace RestaurantManagementSystem.Services
                 // Customer rules (party size, notice, window). Slot/blocked/past are already handled by SlotHelper.
                 if (CheckBasicRules(settings, slot, partySize, byStaff: false) != null) continue;
 
-                // Tables busy at this slot = bookings starting less than diningMinutes before or after it
+                // Tables busy at this slot = bookings starting less than diningMinutes before or after it,
+                // plus tables with guests still at them (until shortly after now)
                 var busy = bookings
                     .Where(b => b.reservationDateTime > slot - hold && b.reservationDateTime < slot + hold)
                     .Select(b => b.tableID)
                     .ToHashSet();
+                if (slot < releaseAt) busy.UnionWith(occupied);
 
                 // At least one suitable table is free → the customer can pick this time
                 if (tableIds.Any(id => !busy.Contains(id)))
                     available.Add(slot);
             }
             return available;
+        }
+
+        //Tables with guests at them right now: today's Seated booking, or tableStatus Occupied (e.g. set by an order)
+        private async Task<HashSet<int>> OccupiedNowAsync(int? ignoreReservationId = null)
+        {
+            var seated = await _db.Reservations.AsNoTracking()
+                .Where(r => r.reservationStatus == ReservationStatus.Seated && r.reservationDateTime >= DateTime.Today
+                         && (ignoreReservationId == null || r.reservationID != ignoreReservationId))
+                .Select(r => r.tableID)
+                .ToListAsync();
+            var occupied = await _db.DiningTables.AsNoTracking()
+                .Where(t => t.tableStatus == "Occupied")
+                .Select(t => t.tableID)
+                .ToListAsync();
+            return seated.Concat(occupied).ToHashSet();
+        }
+
+        public async Task<bool> IsOccupiedNowAsync(int tableId) => (await OccupiedNowAsync()).Contains(tableId);
+
+        //3b. Times staff can offer on a date: the day's opening-hours slots (admin-blocked slots included –
+        //staff may override them), not already passed.
+        public async Task<List<DateTime>> GetStaffSlotsAsync(DateTime date)
+        {
+            var restaurant = await _db.Restaurants.AsNoTracking().OrderBy(r => r.restaurantID).FirstOrDefaultAsync();
+            if (restaurant == null) return new List<DateTime>();
+
+            var day = date.Date;
+            var hour = await _db.OperatingHours.AsNoTracking()
+                .FirstOrDefaultAsync(h => h.restaurantID == restaurant.restaurantID && h.dayOfWeek == day.DayOfWeek);
+            return SlotHelper.Generate(hour, restaurant.slotIntervalMinutes, restaurant.lastSeatingMinutes)
+                .Select(t => day + t)
+                .Where(s => s > DateTime.Now)
+                .ToList();
+        }
+
+        //3c. Staff time choices for ONE table: the staff slots where that table is free for this party
+        //(same busy rules as GetFreeTablesAsync). ignoreReservationId: the booking being edited.
+        public async Task<List<DateTime>> GetFreeTimesForTableAsync(DateTime date, int partySize, int tableId, int? ignoreReservationId = null)
+        {
+            var table = await _db.DiningTables.AsNoTracking().Include(t => t.DiningArea).FirstOrDefaultAsync(t => t.tableID == tableId);
+            if (table == null || table.tableStatus == "Maintenance" || table.DiningArea?.areaActive != true || table.tableCapacity < partySize)
+                return new List<DateTime>();
+
+            var settings = await _settings.GetAsync();
+            var hold = TimeSpan.FromMinutes(settings.diningMinutes);
+            var day = date.Date;
+            var from = day - hold;
+            var to = day.AddDays(1) + hold;
+            var starts = await _db.Reservations.AsNoTracking()
+                .Where(r => r.tableID == tableId
+                         && ReservationStatus.Active.Contains(r.reservationStatus)
+                         && r.reservationDateTime > from && r.reservationDateTime < to
+                         && (ignoreReservationId == null || r.reservationID != ignoreReservationId))
+                .Select(r => r.reservationDateTime)
+                .ToListAsync();
+            var occupiedNow = (await OccupiedNowAsync(ignoreReservationId)).Contains(tableId);
+            var releaseAt = DateTime.Now.AddMinutes(SeatedReleaseMinutes);
+
+            return (await GetStaffSlotsAsync(day))
+                .Where(slot => CheckBasicRules(settings, slot, partySize, byStaff: true) == null
+                            && !starts.Any(s => s > slot - hold && s < slot + hold)
+                            && !(occupiedNow && slot < releaseAt))
+                .ToList();
         }
 
         //4. Create a booking. Returns (new booking, null) when saved, or (null, error message).
@@ -326,6 +420,47 @@ namespace RestaurantManagementSystem.Services
             return null;
         }
 
+        // ======================= Overdue bookings =======================
+
+        //Bookings that can't still be waiting are closed automatically
+        //(ReservationCleanupService runs this when the app starts and every minute):
+        //  Pending   → Declined   when nobody confirmed it by 15 minutes before the booking time (any day)
+        //  Confirmed → No-show    from an earlier day (the guests were never seated)
+        //  Seated    → Completed  from an earlier day (the visit happened; the table is freed if no one else is seated there today)
+        //Returns how many bookings were closed.
+        public async Task<int> CloseOverdueAsync()
+        {
+            var today = DateTime.Today;
+            var pendingCutoff = DateTime.Now.AddMinutes(PendingDeadlineMinutes);   // bookings starting before this are past the deadline
+            var overdue = await _db.Reservations
+                .Include(r => r.DiningTable)
+                .Where(r => (r.reservationStatus == ReservationStatus.Pending && r.reservationDateTime <= pendingCutoff)
+                         || (r.reservationDateTime < today && ReservationStatus.Active.Contains(r.reservationStatus)))
+                .ToListAsync();
+            if (overdue.Count == 0) return 0;
+
+            var seatedTodayTableIds = await _db.Reservations.AsNoTracking()
+                .Where(r => r.reservationStatus == ReservationStatus.Seated && r.reservationDateTime >= today)
+                .Select(r => r.tableID)
+                .ToListAsync();
+
+            foreach (var r in overdue)
+            {
+                if (r.reservationStatus == ReservationStatus.Pending)
+                    r.reservationStatus = ReservationStatus.Declined;
+                else if (r.reservationStatus == ReservationStatus.Confirmed)
+                    r.reservationStatus = ReservationStatus.NoShow;
+                else
+                {
+                    r.reservationStatus = ReservationStatus.Completed;
+                    if (r.DiningTable is { tableStatus: "Occupied" } table && !seatedTodayTableIds.Contains(table.tableID))
+                        table.tableStatus = "Available";
+                }
+            }
+            await _db.SaveChangesAsync();
+            return overdue.Count;
+        }
+
         // ======================= Staff =======================
 
         //"R-0041"
@@ -358,11 +493,15 @@ namespace RestaurantManagementSystem.Services
             return (booking, null);
         }
 
-        //10. Pending → Confirmed (staffID = who approved it)
+        //10. Pending → Confirmed (staffID = who approved it). Only until 15 minutes before the booking time.
         public async Task<string?> ConfirmAsync(int reservationId, int? staffId)
         {
             var (booking, error) = await FindForStaffAsync(reservationId, ReservationStatus.Pending);
             if (booking == null) return error;
+
+            if (DateTime.Now > PendingDeadline(booking))
+                return $"{Code(booking)} starts in less than {PendingDeadlineMinutes} minutes, so it can't be confirmed any more. " +
+                       "Decline it, or book the guest again on Book reservations.";
 
             booking.reservationStatus = ReservationStatus.Confirmed;
             booking.staffID = staffId ?? booking.staffID;
@@ -403,12 +542,12 @@ namespace RestaurantManagementSystem.Services
             return null;
         }
 
-        //Someone is at this table right now: another Seated booking, or tableStatus Occupied (e.g. set by an order)
+        //Someone is at this table right now: another of today's Seated bookings, or tableStatus Occupied
         private async Task<bool> IsTableOccupiedAsync(DiningTable table, int? ignoreReservationId = null)
         {
             if (table.tableStatus == "Occupied") return true;
             return await _db.Reservations.AnyAsync(r => r.tableID == table.tableID
-                && r.reservationStatus == ReservationStatus.Seated
+                && r.reservationStatus == ReservationStatus.Seated && r.reservationDateTime >= DateTime.Today
                 && (ignoreReservationId == null || r.reservationID != ignoreReservationId));
         }
 

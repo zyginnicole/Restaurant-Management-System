@@ -88,6 +88,62 @@
         if (popupEl.classList.contains('show') && !submitting && changes().length > 0) { e.preventDefault(); e.returnValue = ''; }
     });
 
+    // ---------- Only free times and tables (asked from the server: /Staff/Reservations?handler=Availability) ----------
+    // Time list = free times for the chosen table on the chosen date. Table list = tables free at the chosen time
+    // (busy ones are marked and can't be picked). The booking itself never counts as busy.
+    var dateInput = document.getElementById('detailDate');
+    var guestsSelect = document.getElementById('detailGuests');
+    var opened = { id: '', date: '', time: '', table: '' };   // the booking as it was opened
+    var lookup = 0;   // only the latest answer is used
+
+    Array.prototype.forEach.call(tableSelect.options, function (o) { o.dataset.label = o.text; });
+
+    function setTimes(times) {
+        var current = timeInput.value;
+        // The booking's own time stays selectable while its date and table are unchanged
+        if (dateInput.value === opened.date && tableSelect.value === opened.table && opened.time && times.indexOf(opened.time) === -1) {
+            times = times.concat([opened.time]).sort();
+        }
+        timeInput.innerHTML = '';
+        if (times.indexOf(current) === -1) timeInput.add(new Option(times.length ? 'Choose a time' : 'No free time on this table', ''));
+        times.forEach(function (t) { timeInput.add(new Option(t, t)); });
+        timeInput.value = times.indexOf(current) !== -1 ? current : '';
+    }
+
+    function setTables(free) {
+        Array.prototype.forEach.call(tableSelect.options, function (o) {
+            var isFree = free.indexOf(+o.value) !== -1 || o.value === opened.table && dateInput.value === opened.date && timeInput.value === opened.time;
+            var outOfService = o.dataset.state !== 'free';
+            o.disabled = outOfService || (!isFree && o.value !== tableSelect.value);
+            o.text = o.dataset.label + (!outOfService && !isFree ? ' · busy at this time' : '');
+        });
+        tableSelect.dispatchEvent(new Event('md-refresh'));   // update the custom dropdown (md-select.js)
+    }
+
+    // what: 'times', 'tables' or 'both'
+    function refreshAvailability(what) {
+        if (part('fields').disabled || !dateInput.value) return;
+        var ticket = ++lookup;
+        var query = new URLSearchParams({
+            date: dateInput.value, time: timeInput.value || '', partySize: guestsSelect.value,
+            tableId: tableSelect.value, ignoreId: opened.id
+        });
+        fetch('/Staff/Reservations?handler=Availability&' + query.toString(), { headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (a) {
+                if (!a || ticket !== lookup) return;
+                if (what !== 'tables') setTimes(a.times);
+                if (what !== 'times') setTables(a.freeTables);
+                updateSaveButton();
+            })
+            .catch(function () { /* the server still checks on Save */ });
+    }
+
+    dateInput.addEventListener('change', function () { refreshAvailability('both'); });
+    guestsSelect.addEventListener('change', function () { refreshAvailability('both'); });
+    timeInput.addEventListener('change', function () { refreshAvailability('tables'); });
+    tableSelect.addEventListener('change', function () { refreshAvailability('times'); });
+
     function openDetail(row) {
         // Seated bookings are read-only too: they become Completed by themselves when the order is paid (Billing)
         var d = row.dataset, status = d.status, seated = status === 'Seated', readOnly = seated || ended.indexOf(status) !== -1;
@@ -99,16 +155,21 @@
         part('id').value = d.id || d.code;   // reservationID posted to the handlers
         part('booked').textContent = d.booked || '';
 
-        if (d.date) document.getElementById('detailDate').value = d.date;
+        if (d.date) dateInput.value = d.date;
+        guestsSelect.value = d.guests;
+        // Time: the booking's own time first; the free times are filled in by refreshAvailability below
+        timeInput.innerHTML = '';
+        timeInput.add(new Option(d.time, d.time));
         timeInput.value = d.time;
-        document.getElementById('detailGuests').value = d.guests;
-        // Table: every table except out-of-service ones (the booking's own table always); the server checks it is free
+        // Table: the booking's own table; busy tables are marked by refreshAvailability
         var tableValue = d.tableId || d.table;
         Array.prototype.forEach.call(tableSelect.options, function (o) {
+            o.text = o.dataset.label;
             o.disabled = o.value !== tableValue && o.dataset.state !== 'free';
         });
         tableSelect.value = tableValue;
         tableSelect.dispatchEvent(new Event('md-refresh'));   // update the custom dropdown (md-select.js)
+        opened = { id: d.id || '', date: dateInput.value, time: d.time, table: tableValue };
         document.getElementById('detailRequest').value = d.request || '';
         part('free').textContent = d.free || '';
 
@@ -123,6 +184,10 @@
         popupEl.querySelectorAll('[data-for]').forEach(function (group) {
             group.classList.toggle('d-none', group.dataset.for !== status);
         });
+        // Seat guests / No-show only for today's bookings (data-today="false" on other days)
+        popupEl.querySelectorAll('[data-today-only]').forEach(function (b) {
+            b.classList.toggle('d-none', d.today === 'false');
+        });
         // Buttons that open a confirm pop-up carry this booking's values (read by confirm-popup.js)
         popupEl.querySelectorAll('[data-open-popup]').forEach(function (b) {
             b.dataset.id = d.id || d.code; b.dataset.code = d.code; b.dataset.details = d.details; b.dataset.table = d.table;
@@ -131,6 +196,7 @@
         submitting = false;
         remember();   // starting values for "Discard changes?"
         updateSaveButton();
+        refreshAvailability('both');
         popup.show();
     }
 

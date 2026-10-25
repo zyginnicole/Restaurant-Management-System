@@ -249,7 +249,7 @@
                                 }
                                 else if (status == ReservationStatus.Pending)
                                 {
-                                    @:Waiting for our team to confirm.
+                                    @:Waiting for our team to confirm, at the latest by @ReservationService.PendingDeadline(r).ToString("HH:mm", inv).
                                 }
                                 else if (canCancel)
                                 {
@@ -287,7 +287,7 @@
                                 }
                                 <div><dt>Booked on</dt><dd>@r.reservationCreateAt.ToString("d MMM yyyy, HH:mm", inv)</dd></div>
                                 <div class="is-wide"><dt>Special request</dt><dd>@(r.specialRequest ?? "None")</dd></div>
-                                <div class="is-wide"><dt>Status</dt><dd>@(seated ? "Seated – your visit is in progress" : status == ReservationStatus.Pending ? "Waiting for our team to confirm" : "Confirmed")</dd></div>
+                                <div class="is-wide"><dt>Status</dt><dd>@(seated ? "Seated – your visit is in progress" : status == ReservationStatus.Pending ? "Waiting for our team to confirm, at the latest by " + ReservationService.PendingDeadline(r).ToString("HH:mm 'on' d MMMM", inv) : "Confirmed")</dd></div>
                             </dl>
                             @* Past the edit / cancel deadline (cancelWindowHours): no Edit or Cancel button (no footer), this note instead *@
                             @if (!seated && !canCancel)

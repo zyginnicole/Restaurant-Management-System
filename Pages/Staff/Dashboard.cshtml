@@ -154,7 +154,7 @@
                     var area = r.DiningTable?.DiningArea?.areaName;
                     var ended = endedStatuses.Contains(r.reservationStatus);
                     <li class="md-guest md-row-link @key" data-id="@r.reservationID" data-code="@code" data-name="@name" data-guests="@r.partySize"
-                        data-date="@r.reservationDateTime.ToString("yyyy-MM-dd", inv)" data-time="@time" data-table="@tableNo" data-table-id="@r.tableID"
+                        data-date="@r.reservationDateTime.ToString("yyyy-MM-dd", inv)" data-time="@time" data-table="@tableNo" data-table-id="@r.tableID" data-today="true"
                         data-status="@r.reservationStatus" data-walkin="false" data-booked="@StaffReservationText.Booked(r)"
                         data-request="@(ended ? "" : r.specialRequest)" data-details="@name · @time · @r.partySize guests · @tableNo @area"
                         data-free="@(ended ? "" : StaffReservationText.NextOnTable(r, Model.Today, Model.Settings.diningMinutes))">
@@ -249,22 +249,35 @@
 
 @section Scripts {
     <script>
-        // Filter tabs: show only the rows whose class matches the chosen status
+        // Filter tabs: show only the rows whose class matches the chosen status.
+        // The chosen tab survives the automatic refresh (sessionStorage).
         document.querySelectorAll('.md-filter-tabs').forEach(function (tabs) {
             var list = document.getElementById(tabs.dataset.filterList);
+            var storeKey = 'staffDashTab:' + tabs.dataset.filterList;
+            function choose(button) {
+                tabs.querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b === button); });
+                list.querySelectorAll(':scope > li').forEach(function (row) {
+                    var show = button.dataset.filter === 'all' || row.classList.contains(button.dataset.filter);
+                    row.classList.toggle('d-none', !show);
+                });
+            }
             tabs.querySelectorAll('button').forEach(function (button) {
                 button.addEventListener('click', function () {
-                    tabs.querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b === button); });
-                    list.querySelectorAll(':scope > li').forEach(function (row) {
-                        var show = button.dataset.filter === 'all' || row.classList.contains(button.dataset.filter);
-                        row.classList.toggle('d-none', !show);
-                    });
+                    choose(button);
+                    try { sessionStorage.setItem(storeKey, button.dataset.filter); } catch (e) { }
                 });
             });
+            try {
+                var saved = sessionStorage.getItem(storeKey);
+                var savedButton = saved && tabs.querySelector('button[data-filter="' + saved + '"]');
+                if (savedButton) choose(savedButton);
+            } catch (e) { }
         });
     </script>
     @* Table dropdowns open their list below (data-md-select) *@
     <script src="~/js/md-select.js" asp-append-version="true"></script>
     @* Reservation details pop-up (opens from an Upcoming guests row, or ?view=R-0043) *@
     <script src="~/js/staff-reservation-popup.js" asp-append-version="true"></script>
+    @* Reloads every minute while no pop-up is open and nothing is being typed *@
+    <script src="~/js/staff-auto-refresh.js" asp-append-version="true"></script>
 }

@@ -38,6 +38,8 @@ builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<ReservationService>();
+// Closes unanswered Pending requests (15 min before the booking) and earlier days' open bookings (on start, then every minute)
+builder.Services.AddHostedService<ReservationCleanupService>();
 builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddScoped<DemoAccountSeeder>();
 

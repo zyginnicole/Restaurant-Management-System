@@ -49,9 +49,9 @@
                             <input class="form-control md-input" id="detailDate" name="reservationDate" type="date" required />
                         </div>
                         <div class="col-sm-4">
-                            @* Staff can pick any time (15-minute steps); opening hours / slots are not enforced for staff *@
+                            @* Only the free times for the chosen table (Availability lookup, staff-reservation-popup.js) *@
                             <label class="md-label" for="detailTime">Time</label>
-                            <input class="form-control md-input" id="detailTime" name="reservationTime" type="time" step="900" required />
+                            <select class="form-select md-input" id="detailTime" name="reservationTime" required></select>
                         </div>
                         <div class="col-sm-4">
                             <label class="md-label" for="detailGuests">Guests</label>
@@ -64,7 +64,8 @@
                         </div>
                     </div>
 
-                    @* Changing the table (Pending / Confirmed only). The server checks it is free and big enough on Save. *@
+                    @* Changing the table (Pending / Confirmed only). Tables busy at the chosen time are marked and can't be picked;
+                       the server checks again on Save. *@
                     <div class="mb-3">
                         <label class="md-label" for="detailTable">Table</label>
                         <select class="form-select md-input" id="detailTable" name="tableId" data-md-select>
@@ -93,8 +94,9 @@
                 </div>
                 <div class="md-edit-actions" data-for="Confirmed">
                     <button type="button" class="btn md-btn-round md-btn-cancel" data-open-popup="cancelBookingPopup">Cancel booking</button>
-                    <button type="button" class="btn md-btn-round md-btn-outline" data-open-popup="noShowPopup">No-show</button>
-                    <button type="submit" class="btn md-btn-round md-btn-green" asp-page="/Staff/Reservations" asp-page-handler="Seat">Seat guests</button>
+                    @* data-today-only: shown only for today's bookings (arrival tracking) *@
+                    <button type="button" class="btn md-btn-round md-btn-outline" data-open-popup="noShowPopup" data-today-only>No-show</button>
+                    <button type="submit" class="btn md-btn-round md-btn-green" asp-page="/Staff/Reservations" asp-page-handler="Seat" data-today-only>Seat guests</button>
                 </div>
                 @* Dark until something is changed, then solid green (staff-reservation-popup.js) *@
                 <button type="submit" class="btn md-btn-round btn-md-dark" data-detail="save">Save changes</button>

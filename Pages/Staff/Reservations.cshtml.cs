@@ -40,7 +40,11 @@ namespace RestaurantManagementSystem.Pages.Staff
         public List<FloorTable> Floor { get; set; } = new();          // every table, state right now
 
         // One floor tile. State: free · seated · reserved (Info = time of the next booking today) · unavailable
-        public record FloorTable(DiningTable Table, string State, string Info, Reservation? Booking);
+        // Bookings = today's Pending / Confirmed / Seated bookings on the table (the list in the table pop-up)
+        public record FloorTable(DiningTable Table, string State, string Info, Reservation? Booking)
+        {
+            public List<Reservation> Bookings { get; init; } = new();
+        }
 
         public async Task OnGetAsync(DateTime? date)
         {
@@ -55,7 +59,12 @@ namespace RestaurantManagementSystem.Pages.Staff
                 .Include(t => t.DiningArea)
                 .OrderBy(t => t.tableNumber)
                 .ToListAsync();
-            Floor = tables.Select(t => FloorState(t, today)).ToList();
+            Floor = tables.Select(t => FloorState(t, today) with
+            {
+                Bookings = today.Where(r => r.tableID == t.tableID && ReservationStatus.Active.Contains(r.reservationStatus))
+                                .OrderBy(r => r.reservationDateTime)
+                                .ToList()
+            }).ToList();
         }
 
         private FloorTable FloorState(DiningTable t, List<Reservation> today)
@@ -77,6 +86,39 @@ namespace RestaurantManagementSystem.Pages.Staff
             return next != null
                 ? new FloorTable(t, "reserved", next.reservationDateTime.ToString("HH:mm"), next)
                 : new FloorTable(t, "free", "Free", null);
+        }
+
+        // ---- Availability (JSON) for the details pop-up and Book reservations ----
+        // /Staff/Reservations?handler=Availability&date=2026-10-25&time=19:00&partySize=4&tableId=3&ignoreId=12
+        //   freeTables = tables free at that date + time for the party (ignoring the booking being edited)
+        //   times      = free times for tableId on that date (only these are offered in the time list)
+        //   seatNow    = tableId can take the party right now (today only); seatNowReason explains why not
+        public async Task<IActionResult> OnGetAvailabilityAsync(DateTime date, string? time, int partySize, int? tableId, int? ignoreId)
+        {
+            partySize = Math.Max(partySize, 1);
+            var freeTables = new List<int>();
+            if (TimeSpan.TryParse(time, out var t))
+                freeTables = (await _reservations.GetFreeTablesAsync(date.Date + t, partySize, ignoreReservationId: ignoreId))
+                    .Select(x => x.tableID).ToList();
+
+            var times = new List<string>();
+            bool seatNow = false;
+            string? seatNowReason = null;
+            if (tableId != null)
+            {
+                times = (await _reservations.GetFreeTimesForTableAsync(date, partySize, tableId.Value, ignoreId))
+                    .Select(s => s.ToString("HH:mm")).ToList();
+
+                if (date.Date != DateTime.Today)
+                    seatNowReason = "Seat now is only for today.";
+                else if (await _reservations.IsOccupiedNowAsync(tableId.Value))
+                    seatNowReason = "This table is occupied right now.";
+                else if (!(await _reservations.GetFreeTablesAsync(DateTime.Now, partySize, ignoreReservationId: ignoreId)).Any(x => x.tableID == tableId))
+                    seatNowReason = "This table is too small or has a booking soon, so it can't be used now.";
+                else
+                    seatNow = true;
+            }
+            return new JsonResult(new { freeTables, times, seatNow, seatNowReason });
         }
 
         // ---- Actions (reservationId = Reservation.reservationID) ----

@@ -28,13 +28,14 @@
                     <span class="md-card-label">Booking</span>
                 </div>
                 <div class="md-card-body">
-                    @* Seat now (today only): the guests are at the door – the booking starts now and is Seated straight away *@
+                    @* Seat now (today only): the guests are at the door – the booking starts now and is Seated straight away.
+                       Switched off and locked when the chosen table can't take the party right now (Availability lookup). *@
                     @if (isToday)
                     {
                         <div class="md-switch-row mb-3">
                             <div>
                                 <label class="md-switch-title" for="seatNow">Seat now</label>
-                                <span class="md-hint d-block mt-0">The guests are here. The booking starts now and the table is marked occupied.</span>
+                                <span class="md-hint d-block mt-0" id="seatNowHint">The guests are here. The booking starts now and the table is marked occupied.</span>
                             </div>
                             <div class="form-check form-switch m-0">
                                 <input class="form-check-input md-switch" type="checkbox" role="switch" id="seatNow" name="seatNow" value="true" checked="@Model.SeatNow" />
@@ -50,8 +51,11 @@
                                    min="@DateTime.Today.ToString("yyyy-MM-dd", inv)" max="@DateTime.Today.AddDays(settings.bookingWindowDays).ToString("yyyy-MM-dd", inv)" value="@dateValue" />
                         </div>
                         <div class="col-sm-6">
+                            @* Only the free times for the chosen table and party (filled by the script from the Availability lookup) *@
                             <label class="md-label" for="reservationTime">Time</label>
-                            <input class="form-control md-input" id="reservationTime" name="reservationTime" type="time" step="900" value="@Model.Time" required />
+                            <select class="form-select md-input" id="reservationTime" name="reservationTime" data-wanted="@Model.Time" required>
+                                <option value="">Loading times…</option>
+                            </select>
                         </div>
                     </div>
 
@@ -79,6 +83,11 @@
                         <div class="col-12 mt-2">
                             <p class="md-hint mb-0" id="tableInfo"></p>
                             <p class="md-note-box md-note-box-danger mt-2 mb-0 d-none" id="tableTooSmall"></p>
+                            @* Booking failed (OnPost): every error shows here, above Guest details, with the on-screen table warning *@
+                            @if (Model.ErrorMessage != null)
+                            {
+                                <p class="md-note-box md-note-box-danger mt-2 mb-0" id="bookingError" role="alert">@Model.ErrorMessage</p>
+                            }
                         </div>
                     </div>
                 </div>
@@ -123,11 +132,6 @@
                         A booking made by staff is confirmed straight away and holds the table for @settings.diningMinutes minutes.
                         The email links it to the guest's account. A guest without an account registers with the same email to see this booking and order from the table.
                     </p>
-
-                    @if (Model.ErrorMessage != null)
-                    {
-                        <p class="md-note-box md-note-box-danger mt-3 mb-0" role="alert">@Model.ErrorMessage</p>
-                    }
                 </div>
                 <div class="md-card-footer md-walkin-foot">
                     <button type="submit" class="btn btn-md-dark" id="bookButton"><i class="bi bi-calendar-check me-2"></i><span id="bookLabel">Book here</span></button>
@@ -148,10 +152,10 @@
             var size = document.getElementById('partySize');
             var seatNow = document.getElementById('seatNow');   // only today
             var book = document.getElementById('bookButton');
-            var stay = @settings.diningMinutes;   // minutes a booking holds the table (Admin > Settings)
-
-            function minutes(hhmm) { var p = hhmm.split(':'); return +p[0] * 60 + +p[1]; }
-            function nowHHmm() { var d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+            var seatHint = document.getElementById('seatNowHint');
+            var seatHintText = seatHint ? seatHint.textContent : '';
+            var warning = document.getElementById('tableTooSmall');
+            var lookup = 0;   // only the latest answer is used
 
             // Date: reload so the table list shows that day's bookings (keeps the chosen table)
             date.addEventListener('change', function () {
@@ -160,36 +164,73 @@
                 window.location.search = '?date=' + date.value + (option ? '&table=' + encodeURIComponent(option.dataset.no) : '');
             });
 
-            // Table info + clash / size warning for the chosen time and table (the server checks again on Book)
-            function apply() {
+            // Seat now on → no time needed, button says "Seat now"
+            function applySeatNow() {
                 var seated = seatNow && seatNow.checked;
                 time.disabled = seated;
                 document.getElementById('bookLabel').textContent = seated ? 'Seat now' : 'Book here';
+                updateButton();
+            }
 
+            // Book is possible when Seat now is on, or a free time is chosen
+            function updateButton() {
+                var seated = seatNow && seatNow.checked;
+                book.disabled = !seated && !time.value;
+            }
+
+            // Ask the server what this table can do: free times on the date, and whether it can be used right now
+            function refresh() {
                 var option = table.options[table.selectedIndex];
                 if (!option) return;
                 var seats = +option.dataset.seats, guests = +size.value;
-                var start = minutes(seated ? nowHHmm() : (time.value || '00:00'));
                 var busy = option.dataset.busy ? option.dataset.busy.split(' ') : [];
-                var clash = busy.find(function (w) {
-                    var p = w.split('-');
-                    return start < minutes(p[1]) && minutes(p[0]) < start + stay;
-                });
-
                 document.getElementById('tableInfo').textContent = option.dataset.no + ' seats ' + seats + ' · ' +
                     (busy.length ? 'booked ' + busy.join(', ').replace(/-/g, '–') + ' on this day.' : 'no bookings on this day.');
 
-                var problem = guests > seats ? option.dataset.no + ' seats only ' + seats + '. Choose a bigger table for ' + guests + ' guests.'
-                    : clash ? option.dataset.no + ' is booked ' + clash.replace('-', '–') + '. Choose another time or table.' : '';
-                var warning = document.getElementById('tableTooSmall');
-                warning.textContent = problem;
-                warning.classList.toggle('d-none', !problem);
-                book.disabled = !!problem;
+                var ticket = ++lookup;
+                var query = new URLSearchParams({ date: date.value, partySize: guests, tableId: option.value });
+                fetch('/Staff/Reservations?handler=Availability&' + query.toString(), { headers: { 'Accept': 'application/json' } })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (a) {
+                        if (!a || ticket !== lookup) return;
+
+                        // Time list: only free times (keep the chosen one if it is still free)
+                        var wanted = time.value || time.dataset.wanted;
+                        time.innerHTML = '';
+                        time.add(new Option(a.times.length ? 'Choose a time' : 'No free time on this table', ''));
+                        a.times.forEach(function (t) { time.add(new Option(t, t)); });
+                        time.value = a.times.indexOf(wanted) !== -1 ? wanted : (a.times[0] || '');
+                        time.dataset.wanted = '';
+
+                        // Seat now: only when this table can take the party right now – otherwise off and locked
+                        if (seatNow) {
+                            seatNow.disabled = !a.seatNow;
+                            if (!a.seatNow) seatNow.checked = false;
+                            seatHint.textContent = a.seatNow ? seatHintText : 'Not available: ' + a.seatNowReason;
+                        }
+
+                        var problem = guests > seats ? option.dataset.no + ' seats only ' + seats + '. Choose a bigger table for ' + guests + ' guests.'
+                            : !a.times.length && !a.seatNow ? option.dataset.no + ' has no free time on this day. Choose another table or date.' : '';
+                        warning.textContent = problem;
+                        warning.classList.toggle('d-none', !problem);
+                        applySeatNow();
+                    })
+                    .catch(function () { updateButton(); });   // the server still checks on Book
             }
 
-            [time, table, size].forEach(function (el) { el.addEventListener('change', apply); });
-            if (seatNow) seatNow.addEventListener('change', apply);
-            apply();
+            [table, size].forEach(function (el) { el.addEventListener('change', refresh); });
+            time.addEventListener('change', updateButton);
+            if (seatNow) seatNow.addEventListener('change', applySeatNow);
+            applySeatNow();
+            refresh();
+
+            // The server's error (e.g. "T-02 is occupied") is out of date once the booking is changed
+            var bookingError = document.getElementById('bookingError');
+            if (bookingError) {
+                [time, table, size, seatNow].forEach(function (el) {
+                    if (el) el.addEventListener('change', function () { bookingError.classList.add('d-none'); });
+                });
+            }
 
             // Find existing guest: fills name, email and phone
             var find = document.getElementById('findGuest');
