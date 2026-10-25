@@ -396,6 +396,10 @@
             f.status.addEventListener('change', applyFilters);
             f.search.addEventListener('input', applyFilters);
 
+            // ?q=R-0021 (e.g. from the Dashboard's Recent activity): fill the search box so only that booking shows
+            var wanted = new URLSearchParams(location.search).get('q');
+            if (wanted) { f.search.value = wanted; applyFilters(); }
+
             // ---------- Reservation details pop-up (read-only) ----------
             var detail = new bootstrap.Modal(document.getElementById('resDetailPopup'));
             function openDetail(code) {

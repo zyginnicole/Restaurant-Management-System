@@ -10,7 +10,8 @@ namespace RestaurantManagementSystem.Pages.Admin
     //  - Reservations (connected): OnGet(DateTime? from, DateTime? to) – Reservations between the two dates
     //    (default today → +4 days) with Customer + DiningTable (+ area) + Staff (ReservationService.GetBetweenAsync).
     //    Changing From / To reloads the page; status and search are filtered on screen.
-    //    Clicking a row opens the details pop-up (?view=R-0041 opens it straight away).
+    //    Clicking a row opens the details pop-up (?view=R-0041 opens it straight away);
+    //    ?q=R-0041 fills the search box so only that booking is listed (Dashboard Recent activity links use both).
     // Still example data (orders / payments feature – leader):
     //  - Orders: today's Orders with Customer, Reservation (+ DiningTable), OrderItems count, totalAmount.
     //    Type = Dine-in when reservationID != null, else Takeaway. Statuses as agreed for the Staff pages:

@@ -1927,7 +1927,9 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
 .md-list-row.is-placed    { box-shadow: inset 3px 0 0 #e6b800; }
 .md-list-row.is-preparing { box-shadow: inset 3px 0 0 #e8701a; }
 .md-list-row.is-completed { box-shadow: inset 3px 0 0 #3f9b72; }
-.md-list-row.is-cancelled { box-shadow: inset 3px 0 0 #c9c5bc; }
+.md-list-row.is-cancelled,
+.md-list-row.is-noshow,
+.md-list-row.is-declined  { box-shadow: inset 3px 0 0 #c9c5bc; }
 
 .md-list-time {
     flex: 0 0 3.2rem;
@@ -2084,6 +2086,10 @@ button.md-signout { display: block; width: 100%; text-align: left; background: t
 .md-stack .is-cancelled, .md-legend .is-cancelled { background: #c9c5bc; }
 .md-stack .is-confirmed, .md-legend .is-confirmed { background: #5165ad; }
 .md-stack .is-pending,   .md-legend .is-pending   { background: var(--md-danger); }
+/* Admin Dashboard "Reservations by status" shows every status: Seated yellow, No-show / Declined darker greys */
+.md-stack .is-seated,    .md-legend .is-seated    { background: #e6b800; }
+.md-stack .is-noshow,    .md-legend .is-noshow    { background: #a39e94; }
+.md-stack .is-declined,  .md-legend .is-declined  { background: #8a857c; }
 /* =========================================================
    Error page
    ========================================================= */
