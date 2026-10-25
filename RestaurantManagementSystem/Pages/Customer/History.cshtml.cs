@@ -3,27 +3,38 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Helpers;
+using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
     // History: the signed-in customer's past reservations, orders and payments, and rating a visit.
-    //  - Orders tab:   the customer's Completed and Cancelled orders, newest first.
-    //  - Payments tab: the customer's payments (Paid, Refunded, Failed). Dine-in orders paid together on one
-    //                  table bill are ONE row (same receipt no. as on the receipt page).
-    //  - Reservations tab and "Rate this visit" are still the static design – backend notes:
-    //      "Rate this visit" shows only for a Completed visit whose order has no Feedback row yet
-    //      (one rating per visit); a rated visit shows its stars instead.
-    //      OnPostRate (fields: orderId, rating 1–5, comment): save a Feedback row
-    //      (custID from Session, feedbackDate = now). The "What stood out?" chips are added to the comment
-    //      text, because Feedback has no separate field for them.
+    //  - Reservations tab (connected): finished bookings – Completed, Cancelled, No-show, Declined – newest first,
+    //    with the visit's order + payment and the Feedback rating if there is one (ReservationService.GetHistoryForCustomerAsync).
+    //  - Orders tab (connected): the customer's Completed and Cancelled orders, newest first.
+    //  - Payments tab (connected): the customer's payments (Paid, Refunded, Failed). Dine-in orders paid together on
+    //    one table bill are ONE row (same receipt no. as on the receipt page).
+    //  - "Rate this visit" shows only for a Completed visit whose order has no Feedback row yet
+    //    (one rating per visit); a rated visit shows its stars instead.
+    //  - OnPostRate (fields: orderId, rating 1–5, comment): not saved yet (feedback feature) –
+    //    backend: save a Feedback row (custID from Session, feedbackDate = now). The "What stood out?" chips
+    //    are added to the comment text, because Feedback has no separate field for them.
     public class HistoryModel : PageModel
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ApplicationDbContext _db;
+        private readonly ReservationService _reservations;
+        private readonly SettingsService _settings;
 
-        public HistoryModel(ApplicationDbContext context)
+        public HistoryModel(ApplicationDbContext db, ReservationService reservations, SettingsService settings)
         {
-            _context = context;
+            _db = db;
+            _reservations = reservations;
+            _settings = settings;
         }
+
+        public List<Reservation> PastReservations { get; set; } = new();
+        public Dictionary<int, Feedback> FeedbackByOrder { get; set; } = new();   // orderID → the customer's rating
+        public int DiningMinutes { get; set; } = 120;
 
         // ---------- What the Orders and Payments tabs show ----------
         public List<OrderHistoryRow> Orders { get; set; } = new();
@@ -73,38 +84,39 @@ namespace RestaurantManagementSystem.Pages.Customer
             public decimal Amount { get; set; }
         }
 
-        public async Task<IActionResult> OnGetAsync()
+        public async Task OnGetAsync()
         {
-            int? custId = CurrentCustomerId();
-            if (custId == null) return RedirectToPage("/Customer/Login");
+            var custId = HttpContext.Session.GetUserId();
+            if (custId == null) return;
 
-            var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
-            ServiceChargePct = settings?.serviceChargePct ?? 10m;
-            SstPct = settings?.sstPct ?? 6m;
+            var settings = await _settings.GetAsync();
+            DiningMinutes = settings.diningMinutes;
+            ServiceChargePct = settings.serviceChargePct;      // labels in the order pop-up
+            SstPct = settings.sstPct;
+            PastReservations = await _reservations.GetHistoryForCustomerAsync(custId.Value);
 
+            // Ratings for the orders of these visits (one Feedback per order)
+            var orderIds = PastReservations.SelectMany(r => r.Orders).Select(o => o.orderID).ToList();
+            var feedback = await _db.Feedbacks.AsNoTracking()
+                .Where(f => f.custID == custId.Value && orderIds.Contains(f.orderID))
+                .ToListAsync();
+            FeedbackByOrder = feedback.GroupBy(f => f.orderID)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(f => f.feedbackDate).First());
+
+            // Orders and Payments tabs
             await LoadOrdersAsync(custId.Value);
             await LoadPaymentsAsync(custId.Value);
-
             OrderYears = YearsOf(Orders.Select(o => o.Placed.Year));
             PaymentYears = YearsOf(Payments.Select(p => p.Date.Year));
-
-            return Page();
         }
 
-        // UI flow only (no saving yet) – backend: save the Feedback first, then redirect.
+        // UI flow only (no saving yet) – feedback feature: save the Feedback first, then redirect.
         public IActionResult OnPostRate()
         {
             return RedirectToPage();
         }
 
-        // ---------- helpers ----------
-
-        private int? CurrentCustomerId()
-        {
-            return HttpContext.Session.IsSignedInAs(UserRoles.Customer)
-                ? HttpContext.Session.GetUserId()
-                : null;
-        }
+        // ---------- helpers for the Orders and Payments tabs ----------
 
         private static List<int> YearsOf(IEnumerable<int> years)
         {
@@ -116,7 +128,7 @@ namespace RestaurantManagementSystem.Pages.Customer
         // Completed and Cancelled orders, newest first
         private async Task LoadOrdersAsync(int custId)
         {
-            var orders = await _context.Orders.AsNoTracking()
+            var orders = await _db.Orders.AsNoTracking()
                 .Include(o => o.DiningTable)
                 .Include(o => o.Payment)
                 .Include(o => o.OrderItems).ThenInclude(oi => oi.Menu)
@@ -173,7 +185,7 @@ namespace RestaurantManagementSystem.Pages.Customer
         // Paid / Refunded / Failed payments, newest first (Pending = not paid yet, so not history)
         private async Task LoadPaymentsAsync(int custId)
         {
-            var payments = await _context.Payments.AsNoTracking()
+            var payments = await _db.Payments.AsNoTracking()
                 .Include(p => p.Order)
                 .Where(p => p.Order != null && p.Order.custID == custId && p.paymentStatus != "Pending")
                 .OrderByDescending(p => p.paymentDate)

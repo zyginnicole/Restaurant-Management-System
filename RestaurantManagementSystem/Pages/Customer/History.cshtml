@@ -38,7 +38,7 @@
    Order       – Completed green · Cancelled grey
    Payment     – Paid green · Refunded grey · Failed red
    Upcoming reservations and open orders stay on the Reservations and Orders pages.
-   The Reservations tab reads the database; the Orders and Payments tabs are still example data (orders / payments feature). *@
+   All three tabs read the database (Reservations: ReservationService; Orders and Payments: HistoryModel). *@
 
 <nav class="md-tabs md-page-tabs" aria-label="History sections" id="historyTabs">
     <button type="button" class="active" data-tab="reservations" aria-controls="tab-reservations">Reservations</button>
@@ -119,7 +119,9 @@
                         else if (order != null)
                         {
                             <button type="button" class="btn btn-md-dark md-btn-sm" data-bs-toggle="modal" data-bs-target="#ratePopup"
-                                    data-code="@code" data-date="@start.ToString("d MMM yyyy", inv)" data-order="@order.orderID">Rate this visit</button>
+                                    data-code="@code" data-date="@start.ToString("d MMM yyyy", inv)" data-order="@order.orderID">
+                                Rate this visit
+                            </button>
                         }
                         else
                         {
@@ -149,7 +151,8 @@
                         @* Order | Your rating side by side, Special request underneath; label above value *@
                         <dl class="md-detail-grid">
                             <div><dt>Order</dt><dd>@orderText</dd></div>
-                            <div><dt>Your rating</dt><dd>
+                            <div>
+                                <dt>Your rating</dt><dd>
                                 @if (rating != null)
                                 {
                                     @Stars(rating.rating)
@@ -159,42 +162,43 @@
                                 {
                                     @:Not rated yet
                                 }
-                            </dd></div>
-                            <div class="is-wide"><dt>Special request</dt><dd>@(r.specialRequest ?? "None")</dd></div>
-                        </dl>
-                    </template>
-                </li>
-            }
-            else
-            {
-                // Cancelled / No-show / Declined: grey, not clickable. Staff set → done by the restaurant.
-                var note = status switch
-                {
-                    ReservationStatus.Cancelled => r.Staff != null ? "Cancelled by the restaurant" : "Cancelled by you",
-                    ReservationStatus.NoShow => "Marked as no-show · the table was released",
-                    _ => "Declined by the restaurant"
-                };
-                <li class="md-res-item md-history-item is-@css" data-status="@status" data-month="@start.Month" data-year="@start.Year">
-                    <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
-                        <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
-                        <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
-                    </div>
-                    <div class="md-res-item-main">
-                        <div class="md-res-item-top">
-                            <span class="md-res-code">@code</span>
-                            <span class="md-badge md-badge-@css">@status</span>
+                            </dd>
                         </div>
-                        <span class="md-res-item-info">@start.ToString("d MMM yyyy · HH:mm", inv) · @guests</span>
-                        <span class="md-res-item-note">@note</span>
-                    </div>
-                    <div class="md-history-side"><span class="md-res-item-note">—</span></div>
-                </li>
-            }
+                        <div class="is-wide"><dt>Special request</dt><dd>@(r.specialRequest ?? "None")</dd></div>
+                    </dl>
+                </template>
+            </li>
         }
-    </ul>
-    <p class="md-history-empty @(Model.PastReservations.Count == 0 ? "" : "d-none")" data-empty>
-        @(Model.PastReservations.Count == 0 ? "No past reservations yet." : "No reservations match these filters.")
-    </p>
+            else
+        {
+            // Cancelled / No-show / Declined: grey, not clickable. Staff set → done by the restaurant.
+            var note = status switch
+            {
+                ReservationStatus.Cancelled => r.Staff != null ? "Cancelled by the restaurant" : "Cancelled by you",
+                ReservationStatus.NoShow => "Marked as no-show · the table was released",
+                _ => "Declined by the restaurant"
+            };
+            <li class="md-res-item md-history-item is-@css" data-status="@status" data-month="@start.Month" data-year="@start.Year">
+                <div class="md-date-tile md-date-tile-sm" aria-hidden="true">
+                    <span class="md-date-tile-month">@start.ToString("MMM", inv)</span>
+                    <span class="md-date-tile-day">@start.ToString("dd", inv)</span>
+                </div>
+                <div class="md-res-item-main">
+                    <div class="md-res-item-top">
+                        <span class="md-res-code">@code</span>
+                        <span class="md-badge md-badge-@css">@status</span>
+                    </div>
+                    <span class="md-res-item-info">@start.ToString("d MMM yyyy · HH:mm", inv) · @guests</span>
+                    <span class="md-res-item-note">@note</span>
+                </div>
+                <div class="md-history-side"><span class="md-res-item-note">—</span></div>
+            </li>
+        }
+    }
+</ul>
+<p class="md-history-empty @(Model.PastReservations.Count == 0 ? "" : "d-none")" data-empty>
+    @(Model.PastReservations.Count == 0 ? "No past reservations yet." : "No reservations match these filters.")
+</p>
 </section>
 
 @* ---------- Orders ---------- *@

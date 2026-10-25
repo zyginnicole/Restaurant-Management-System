@@ -8,6 +8,12 @@
 <h1>Welcome back</h1>
 <p class="md-auth-subtitle">Sign in to your member account</p>
 
+@* Green message after a password reset (set by ResetPassword) *@
+@if (TempData["LoginMessage"] is string loginMessage)
+{
+    <div class="md-alert-success mb-4" role="status">@loginMessage</div>
+}
+
 @* Error message from the PageModel: wrong details, attempts left, or account locked *@
 @if (!string.IsNullOrEmpty(Model.ErrorMessage))
 {
@@ -36,7 +42,7 @@
             <input class="form-check-input" id="rememberMe" name="rememberMe" type="checkbox" value="true" />
             <label class="form-check-label" for="rememberMe">Remember me</label>
         </div>
-        <a href="#" class="small">Forgot password?</a>
+        <a asp-page="/Customer/ForgotPassword" class="small">Forgot password?</a>
     </div>
 
     <button type="submit" class="btn btn-md-dark w-100">Sign in</button>

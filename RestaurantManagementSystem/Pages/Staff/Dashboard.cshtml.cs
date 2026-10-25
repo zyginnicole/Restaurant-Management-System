@@ -1,63 +1,53 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
+using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Staff
 {
-    // Staff dashboard. Only the "Kitchen & service" panel (Active orders) reads real data so far;
-    // the stat cards and the Upcoming guests panel are still the static design.
+    // Staff dashboard: today's reservations (connected) and active orders (still example data – orders feature).
+    // Clicking a reservation opens the shared details pop-up; its actions post to /Staff/Reservations and come back here.
     public class DashboardModel : PageModel
     {
-        // Open orders only, same statuses as the Active tab on the Orders page.
-        // The array order is also the list order: what needs staff first.
-        private static readonly string[] OpenStatuses = { "Order placed", "Preparing", "Served" };
+        private readonly ApplicationDbContext _db;
+        private readonly ReservationService _reservations;
+        private readonly SettingsService _settings;
 
-        private readonly ApplicationDbContext _context;
-
-        public DashboardModel(ApplicationDbContext context)
+        public DashboardModel(ApplicationDbContext db, ReservationService reservations, SettingsService settings)
         {
-            _context = context;
+            _db = db;
+            _reservations = reservations;
+            _settings = settings;
         }
 
-        // Kitchen & service: Order placed → Preparing → Served, newest first within each status
-        public List<ActiveOrderRow> ActiveOrders { get; set; } = new();
+        // Statuses shown on the dashboard (Cancelled, Declined and No-show are only on the Reservations page)
+        public static readonly string[] Shown =
+            { ReservationStatus.Pending, ReservationStatus.Confirmed, ReservationStatus.Seated, ReservationStatus.Completed };
 
-        public class ActiveOrderRow
-        {
-            public string Code { get; set; } = string.Empty;        // "ORD-0085" (link: /Staff/Orders?view=ORD-0085)
-            public string? Table { get; set; }                      // "T-09"; null for takeaway
-            public string Name { get; set; } = string.Empty;        // customer / guest name
-            public string Status { get; set; } = string.Empty;      // Order placed / Preparing / Served
-            public int ItemCount { get; set; }                      // total quantity of dishes
-            public decimal Total { get; set; }                      // amount paid, or due (same figure as the Orders page)
-        }
+        public SystemSetting Settings { get; set; } = new();
+        public List<Reservation> Today { get; set; } = new();     // every booking today (for the "next on this table" text)
+        public List<Reservation> Guests { get; set; } = new();    // the ones shown, earliest first
+        public string StaffName { get; set; } = "";
+        public int TablesOccupied { get; set; }
+        public int TablesTotal { get; set; }
 
         public async Task OnGetAsync()
         {
-            var openStatuses = OpenStatuses;
+            Settings = await _settings.GetAsync();
+            StaffName = HttpContext.Session.GetUserName() ?? "";
 
-            var orders = await _context.Orders.AsNoTracking()
-                .Include(o => o.Customer)
-                .Include(o => o.DiningTable)
-                .Include(o => o.Payment)
-                .Include(o => o.OrderItems)
-                .Where(o => openStatuses.Contains(o.orderStatus))
-                .OrderByDescending(o => o.orderDateTime)
-                .ToListAsync();
+            Today = await _reservations.GetDayAsync(DateTime.Today);
+            Guests = Today.Where(r => Shown.Contains(r.reservationStatus))
+                          .OrderBy(r => r.reservationDateTime)
+                          .ToList();
 
-            // OrderBy is stable, so newest stays first inside each status
-            ActiveOrders = orders
-                .OrderBy(o => Array.IndexOf(OpenStatuses, o.orderStatus))
-                .Select(o => new ActiveOrderRow
-                {
-                    Code = "ORD-" + o.orderID.ToString("0000"),
-                    Table = o.DiningTable?.tableNumber,
-                    Name = o.Customer?.custName ?? "Guest",
-                    Status = o.orderStatus,
-                    ItemCount = o.OrderItems.Sum(oi => oi.quantity),
-                    Total = o.Payment != null && o.Payment.paymentStatus == "Paid" ? o.Payment.paymentAmount : o.totalAmount
-                })
-                .ToList();
+            // Tables in use right now: a Seated booking, or tableStatus Occupied (e.g. a walk-in order). Out-of-service tables don't count.
+            var tables = await _db.DiningTables.AsNoTracking().Where(t => t.tableStatus != "Maintenance").ToListAsync();
+            var seatedTableIds = Today.Where(r => r.reservationStatus == ReservationStatus.Seated).Select(r => r.tableID).ToHashSet();
+            TablesTotal = tables.Count;
+            TablesOccupied = tables.Count(t => t.tableStatus == "Occupied" || seatedTableIds.Contains(t.tableID));
         }
     }
 }

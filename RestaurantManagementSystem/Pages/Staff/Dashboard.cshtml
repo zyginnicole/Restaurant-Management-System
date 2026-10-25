@@ -181,43 +181,65 @@
                 <a class="md-circle-btn stretched-link" href="/Staff/Orders" aria-label="All orders"><i class="bi bi-chevron-right"></i></a>
             </div>
 
-            @{
-                var activeOrders = Model.ActiveOrders;
-                // CSS class for an order status: "Order placed" → is-placed, "Preparing" → is-preparing …
-                string OrderClass(string status) => status == "Order placed" ? "is-placed" : "is-" + status.ToLower();
-                string TableTag(string? table) => table == null ? "TA" : (table.Length > 2 ? table[2..] : table);
-            }
-
-            @* Filter tabs by order status (counts come from the open orders in the database) *@
+            @* Filter tabs by order status (counts replace the old summary strip) *@
             <nav class="md-tabs md-filter-tabs" aria-label="Order status" data-filter-list="orderList">
-                <button type="button" class="active" data-filter="all">All <small>@activeOrders.Count</small></button>
-                <button type="button" data-filter="is-placed">Order placed <small>@activeOrders.Count(o => o.Status == "Order placed")</small></button>
-                <button type="button" data-filter="is-preparing">Preparing <small>@activeOrders.Count(o => o.Status == "Preparing")</small></button>
-                <button type="button" data-filter="is-served">Served <small>@activeOrders.Count(o => o.Status == "Served")</small></button>
+                <button type="button" class="active" data-filter="all">All <small>4</small></button>
+                <button type="button" data-filter="is-placed">Order placed <small>1</small></button>
+                <button type="button" data-filter="is-preparing">Preparing <small>2</small></button>
+                <button type="button" data-filter="is-served">Served <small>1</small></button>
             </nav>
 
-            @* Newest action first: Order placed → Preparing → Served (sorted by DashboardModel).
+            @* Newest action first: Order placed → Preparing → Served.
                Colours: Order placed yellow · Preparing orange · Served blue.
                Completed and Cancelled orders are NOT shown here (only open orders:
                orderStatus is "Order placed", "Preparing" or "Served").
                Each row is a link (stretched-link) to the Orders page with that order shown (?view=ORD-0085). *@
             <ul class="md-order-list" id="orderList">
-                @foreach (var o in activeOrders)
-                {
-                    <li class="md-order md-row-link @OrderClass(o.Status)">
-                        <span class="md-table-badge">@TableTag(o.Table)</span>
-                        <div class="md-order-main">
-                            <a class="stretched-link md-guest-name" href="/Staff/Orders?view=@o.Code">@o.Name</a>
-                            <span class="md-guest-meta">@o.Code · @o.ItemCount @(o.ItemCount == 1 ? "item" : "items")@(o.Table == null ? " · takeaway" : "")</span>
-                        </div>
-                        <div class="md-order-side">
-                            <span class="md-pill @OrderClass(o.Status)">@o.Status</span>
-                            <span class="md-order-amount">RM @o.Total.ToString("N2")</span>
-                        </div>
-                    </li>
-                }
+                <li class="md-order md-row-link is-placed">
+                    <span class="md-table-badge">03</span>
+                    <div class="md-order-main">
+                        <a class="stretched-link md-guest-name" href="/Staff/Orders?view=ORD-0085">Daniel Tan</a>
+                        <span class="md-guest-meta">ORD-0085 · 2 items</span>
+                    </div>
+                    <div class="md-order-side">
+                        <span class="md-pill is-placed">Order placed</span>
+                        <span class="md-order-amount">RM 134.00</span>
+                    </div>
+                </li>
+                <li class="md-order md-row-link is-preparing">
+                    <span class="md-table-badge">12</span>
+                    <div class="md-order-main">
+                        <a class="stretched-link md-guest-name" href="/Staff/Orders?view=ORD-0082">Eleanor Whitmore</a>
+                        <span class="md-guest-meta">ORD-0082 · 8 items</span>
+                    </div>
+                    <div class="md-order-side">
+                        <span class="md-pill is-preparing">Preparing</span>
+                        <span class="md-order-amount">RM 676.00</span>
+                    </div>
+                </li>
+                <li class="md-order md-row-link is-preparing">
+                    <span class="md-table-badge">06</span>
+                    <div class="md-order-main">
+                        <a class="stretched-link md-guest-name" href="/Staff/Orders?view=ORD-0081">Marcus Delacroix</a>
+                        <span class="md-guest-meta">ORD-0081 · 5 items</span>
+                    </div>
+                    <div class="md-order-side">
+                        <span class="md-pill is-preparing">Preparing</span>
+                        <span class="md-order-amount">RM 387.00</span>
+                    </div>
+                </li>
+                <li class="md-order md-row-link is-served">
+                    <span class="md-table-badge">09</span>
+                    <div class="md-order-main">
+                        <a class="stretched-link md-guest-name" href="/Staff/Orders?view=ORD-0083">Thomas Ashford</a>
+                        <span class="md-guest-meta">ORD-0083 · 4 items</span>
+                    </div>
+                    <div class="md-order-side">
+                        <span class="md-pill is-served">Served</span>
+                        <span class="md-order-amount">RM 374.00</span>
+                    </div>
+                </li>
             </ul>
-            <p class="md-notice-empty @(activeOrders.Count > 0 ? "d-none" : "")">No active orders right now.</p>
         </section>
     </div>
 </div>

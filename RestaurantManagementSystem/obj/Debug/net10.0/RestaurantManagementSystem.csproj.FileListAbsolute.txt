@@ -167,7 +167,6 @@ C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem
 C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\compressed\2sio44u8xv-{0}-8c527vs6qj-8c527vs6qj.gz
 C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\compressed\hduk8qkijq-{0}-ro0oyncasj-ro0oyncasj.gz
 C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\compressed\1kz79hhhio-{0}-5tof1we8wf-5tof1we8wf.gz
-C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\compressed\26hhywyfja-{0}-mr6yij8kyl-mr6yij8kyl.gz
 C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\staticwebassets.build.json
 C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\staticwebassets.build.json.cache
 C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\staticwebassets.development.json
@@ -180,3 +179,5 @@ C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem
 C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\RestaurantManagementSystem.pdb
 C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\RestaurantManagementSystem.genruntimeconfig.cache
 C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\ref\RestaurantManagementSystem.dll
+C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\compressed\l0g57e117g-{0}-06hl8buc01-06hl8buc01.gz
+C:\Users\User\source\repos\RestaurantManagementSystem\RestaurantManagementSystem\obj\Debug\net10.0\compressed\26hhywyfja-{0}-rjp8m41b8n-rjp8m41b8n.gz

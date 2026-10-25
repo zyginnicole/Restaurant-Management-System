@@ -1,5 +1,6 @@
 @page
 @model RestaurantManagementSystem.Pages.Staff.ProfileModel
+@using RestaurantManagementSystem.Helpers
 @{
     ViewData["Title"] = "My profile";
     ViewData["Module"] = "Staff";
@@ -9,20 +10,15 @@
     ViewData["Subtitle"] = "Manage your personal information";
     Layout = "_DashboardLayout";
 
-    // ---------- Example data – later from the signed-in Staff (see ProfileModel) ----------
-    var staffCode = "STF-0042";            // staffID 42
-    var shift = "Evening service";         // no field yet (ask the leader)
-    var since = "Jan 2025";                // staffCreateAt
-    var staffName = "Sophie Clarke";
-    var staffPhone = "+60 12-345 6789";
-    var staffEmail = "sophie.clarke@maisondoree.com";
-    var staffPosition = "Senior Waiter";
+    // Values come from the signed-in staff member (see ProfileModel)
     var systemRole = "Staff";              // always Staff here (admins are in the Admin table)
-
-    string initials = string.Concat(staffName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0]));
+    string initials = NameFormatter.GetInitials(Model.DisplayName);
 
     // Open the Change password pop-up again when OnPostPassword returns Page() with errors
     var reopenPassword = Request.Query["handler"] == "Password" && !ViewData.ModelState.IsValid;
+
+    // Stay in Edit mode when OnPostProfile returns Page() with errors
+    var reopenEdit = Request.Query["handler"] == "Profile" && !ViewData.ModelState.IsValid;
 }
 
 @* Message after saving the profile or the password (TempData["StaffMessage"]) *@
@@ -31,75 +27,89 @@
     <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
 }
 
+@* Errors from saving the profile (the password pop-up shows its own errors) *@
+@if (reopenEdit)
+{
+    <div class="md-alert-danger md-section" role="alert">
+        <strong>Please fix the following:</strong>
+        <ul class="mb-0 mt-1 ps-3">
+            @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <li>@error.ErrorMessage</li>
+            }
+        </ul>
+    </div>
+}
+
 @* Personal information is read-only until Edit is clicked; the same button then turns into Save changes (green)
    and posts to OnPostProfile. Work details are always read-only and are not posted (no name attribute). *@
-<form method="post" asp-page-handler="Profile" id="profileForm">
-<fieldset id="profileFields" class="md-profile-fields" disabled>
-<div class="row md-grid md-section">
-    @* ---------- Personal information ---------- *@
-    <div class="col-lg-7">
-        <section class="md-card h-100">
-            <div class="md-card-header">
-                <span class="md-card-label">Personal information</span>
-                <span class="md-card-meta">Staff since @since</span>
+<form method="post" asp-page-handler="Profile" id="profileForm" data-start-editing="@(reopenEdit ? "true" : "false")">
+    <fieldset id="profileFields" class="md-profile-fields" disabled>
+        <div class="row md-grid md-section">
+            @* ---------- Personal information ---------- *@
+            <div class="col-lg-7">
+                <section class="md-card h-100">
+                    <div class="md-card-header">
+                        <span class="md-card-label">Personal information</span>
+                        <span class="md-card-meta">Staff since @Model.StaffSince</span>
+                    </div>
+                    <div class="md-card-body">
+                        <div class="md-guest-id">
+                            <span class="md-avatar">@initials</span>
+                            <div>
+                                <div class="md-guest-name">@Model.DisplayName</div>
+                                <span class="md-guest-meta">Staff ID @Model.StaffCode</span>
+                            </div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="md-label" for="Staff_staffName">Full name</label>
+                                <input class="form-control md-input" id="Staff_staffName" name="Staff.staffName" type="text" maxlength="100" autocomplete="name" required value="@Model.Input.staffName" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="md-label" for="Staff_staffPhone">Phone</label>
+                                <input class="form-control md-input" id="Staff_staffPhone" name="Staff.staffPhone" type="tel" maxlength="11" inputmode="numeric" autocomplete="tel" placeholder="0123456789" required value="@Model.Input.staffPhone" />
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
-            <div class="md-card-body">
-                <div class="md-guest-id">
-                    <span class="md-avatar">@initials</span>
-                    <div>
-                        <div class="md-guest-name">@staffName</div>
-                        <span class="md-guest-meta">Staff ID @staffCode · @shift</span>
-                    </div>
-                </div>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="md-label" for="Staff_staffName">Full name</label>
-                        <input class="form-control md-input" id="Staff_staffName" name="Staff.staffName" type="text" maxlength="100" autocomplete="name" required value="@staffName" />
-                    </div>
-                    <div class="col-md-6">
-                        <label class="md-label" for="Staff_staffPhone">Phone</label>
-                        <input class="form-control md-input" id="Staff_staffPhone" name="Staff.staffPhone" type="tel" maxlength="20" autocomplete="tel" placeholder="+60 1X-XXX XXXX" required value="@staffPhone" />
-                    </div>
-                </div>
-            </div>
-        </section>
-    </div>
 
-    @* ---------- Work details (read-only, managed by an administrator) ---------- *@
-    <div class="col-lg-5">
-        <section class="md-card h-100">
-            <div class="md-card-header">
-                <span class="md-card-label">Work details</span>
-                <span class="md-card-meta"><i class="bi bi-lock me-1"></i>Read-only</span>
-            </div>
-            <div class="md-card-body">
-                <div class="mb-3">
-                    <label class="md-label" for="workEmail">Work email</label>
-                    <input class="form-control md-input md-input-locked" id="workEmail" type="email" readonly tabindex="-1" value="@staffEmail" />
-                </div>
-                <div class="row g-3 mb-3">
-                    <div class="col-sm-6">
-                        @* Staff.staffPosition *@
-                        <label class="md-label" for="jobTitle">Job title</label>
-                        <input class="form-control md-input md-input-locked" id="jobTitle" type="text" readonly tabindex="-1" value="@staffPosition" />
+            @* ---------- Work details (read-only, managed by an administrator) ---------- *@
+            <div class="col-lg-5">
+                <section class="md-card h-100">
+                    <div class="md-card-header">
+                        <span class="md-card-label">Work details</span>
+                        <span class="md-card-meta"><i class="bi bi-lock me-1"></i>Read-only</span>
                     </div>
-                    <div class="col-sm-6">
-                        <label class="md-label" for="systemRole">System role</label>
-                        <input class="form-control md-input md-input-locked" id="systemRole" type="text" readonly tabindex="-1" value="@systemRole" />
+                    <div class="md-card-body">
+                        <div class="mb-3">
+                            <label class="md-label" for="workEmail">Work email</label>
+                            <input class="form-control md-input md-input-locked" id="workEmail" type="email" readonly tabindex="-1" value="@Model.StaffEmail" />
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6">
+                                @* Staff.staffPosition *@
+                                <label class="md-label" for="jobTitle">Job title</label>
+                                <input class="form-control md-input md-input-locked" id="jobTitle" type="text" readonly tabindex="-1" value="@Model.JobTitle" />
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="md-label" for="systemRole">System role</label>
+                                <input class="form-control md-input md-input-locked" id="systemRole" type="text" readonly tabindex="-1" value="@systemRole" />
+                            </div>
+                        </div>
+                        <p class="md-hint mb-0">Email, job title and system role are managed by an administrator.</p>
                     </div>
-                </div>
-                <p class="md-hint mb-0">Email, job title and system role are managed by an administrator.</p>
+                </section>
             </div>
-        </section>
-    </div>
-</div>
-</fieldset>
+        </div>
+    </fieldset>
 
-@* Change password (opens the pop-up below) + Edit → Save changes, under the cards *@
-<div class="md-profile-actions md-section">
-    <button type="button" class="btn btn-md-dark" id="changePasswordButton" data-bs-toggle="modal" data-bs-target="#changePasswordPopup"><i class="bi bi-key me-2"></i>Change password</button>
-    <button type="button" class="btn btn-md-dark" id="profileEditButton"><i class="bi bi-pencil me-2"></i>Edit</button>
-</div>
+    @* Change password (opens the pop-up below) + Edit → Save changes, under the cards *@
+    <div class="md-profile-actions md-section">
+        <button type="button" class="btn btn-md-dark" id="changePasswordButton" data-bs-toggle="modal" data-bs-target="#changePasswordPopup"><i class="bi bi-key me-2"></i>Change password</button>
+        <button type="button" class="btn btn-md-dark" id="profileEditButton"><i class="bi bi-pencil me-2"></i>Edit</button>
+    </div>
 </form>
 
 @* ---------- Change password pop-up ----------
@@ -132,7 +142,7 @@
                         <input class="form-control md-input pe-5" id="newPassword" name="newPassword" type="password" autocomplete="new-password" required />
                         <button type="button" class="md-eye-btn" data-toggle-password="newPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye"></i></button>
                     </div>
-                    <p class="md-hint mt-2 mb-0">At least 8 characters, with an uppercase letter, a lowercase letter, a number and a symbol (@@ $ ! % * ? &amp;).</p>
+                    <p class="md-hint mt-2 mb-0">@Model.PasswordHint</p>
                 </div>
                 <div>
                     <label class="md-label" for="confirmPassword">Confirm new password</label>
@@ -174,6 +184,9 @@
                 setTimeout(function () { button.type = 'submit'; }, 0);
                 document.getElementById('Staff_staffName').focus();
             });
+
+            // After a failed save, open Edit mode again so the user can fix the fields
+            if (document.getElementById('profileForm').dataset.startEditing === 'true') button.click();
         })();
     </script>
 }
