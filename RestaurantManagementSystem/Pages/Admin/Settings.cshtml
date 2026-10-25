@@ -50,8 +50,10 @@
                         <textarea asp-for="S.address" class="form-control a-input" rows="2" aria-label="Address"></textarea>
                     </div>
                     <div class="a-setting">
-                        <div><div class="a-setting-label">Time zone</div></div>
-                        <select asp-for="S.timeZone" class="form-select a-input" aria-label="Time zone"><option>(GMT+8) Kuala Lumpur, Penang</option><option>(GMT+8) Singapore</option></select>
+                        @* Read-only: the system's time rules run on Malaysia time (server clock, GMT+8) – see ReservationService *@
+                        <div><div class="a-setting-label">Time zone</div><div class="a-setting-hint">All bookings and schedules use Malaysia time</div></div>
+                        @* Not clickable or focusable (pointer-events / tabindex); readonly so the value is still saved with the form *@
+                        <input asp-for="S.timeZone" value="(GMT+8) Kuala Lumpur, Penang" class="form-control a-input" readonly tabindex="-1" style="pointer-events: none;" aria-label="Time zone" />
                     </div>
                 </section>
             </div>
