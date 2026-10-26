@@ -1,31 +1,63 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Admin
 {
-    // Admin Reports: two tabs, each with its own GET form (choices stay in the address bar).
-    // Static UI for now – backend notes (existing model fields only):
-    //
-    //  Statistic report – ?tab=statistic&period=monthly&from=2026-01&to=2026-09   (or period=yearly&from=2024&to=2026)
-    //    period: monthly (From/To = months, default) · yearly (From/To = years)
-    //    KPI cards for the range, each compared with the previous range of the same length:
-    //      Revenue          sum of Paid Payment.paymentAmount (mini bars = revenue per month / year)
-    //      Reservations     count of Reservations; bar = Completed / Cancelled / other
-    //      Registered       all Customers; "new in range" = custCreateAt inside the range (mini bars per month / year)
-    //      Average rating   Feedback.rating average + share of 5 / 4 / 3 / 2 / 1 stars
-    //    Then the same sections as the Dashboard's Sales & trends tab, for the range:
-    //      revenue by month / year (chart) · peak dining hours (Reservations by start hour)
-    //      · top 5 menu items (OrderItem quantity and quantity × unitPrice) · table utilization by area
-    //      · reservations by status
-    //    "Download PDF" saves the whole report in the browser (pdf-download.js).
-    //
-    //  Sales report – ?tab=sales&period=daily&from=2026-09-01&to=2026-09-15
-    //    period: daily (one row per day, default) · monthly (one row per month)
-    //    Orders (not Cancelled) with a Paid Payment, grouped by orderDateTime: orders, covers (Reservation.partySize;
-    //    takeaway = 0), net sales = subtotal, service charge 10% (dine-in), SST 6%, total. CSV / PDF in the browser.
+
     public class ReportsModel : PageModel
     {
-        public void OnGet()
+
+        private readonly ReportService _reports;
+        private readonly ExportService _exports;
+
+        //holds the date range filter chosen by the user
+        public DateRange SelectedRange { get; private set; } = ReportService.GetRange("month", null, null);
+
+        public SalesReport Sales { get; private set; } = new();
+
+        public ReportsModel(ReportService reports, ExportService exports) { _reports = reports; _exports = exports; }
+
+
+        public async Task OnGetAsync(
+            string? range = "month",
+            DateTime? from = null,
+            DateTime? to = null,
+            string? period = "daily")
         {
+            SelectedRange = ReportService.GetRange(range, from, to);
+
+            var monthly = period?.Equals(
+                "monthly",
+                StringComparison.OrdinalIgnoreCase) == true;
+
+            Sales = await _reports.GetSalesReportAsync(
+                SelectedRange,
+                monthly);
+        }
+
+        //runs automatically whenever a user opens or navigates to the reports page
+        public async Task<IActionResult> OnGetExportAsync(string format = "csv", string? range = "month", DateTime? from = null, DateTime? to = null)
+        {
+            //converts input parameters into a standardized date range object
+            var selected = ReportService.GetRange(range, from, to);
+            //fetches overall KPI summary numbers from the database
+            var rows = await _reports.GetDailyRowsAsync(selected);
+            //fetches daily breakdown records from the database for the data
+            var name = $"MaisonDoree-report-{selected.Start:yyyyMMdd}-{selected.End.AddDays(-1):yyyyMMdd}";
+            
+            
+            return format.Trim().ToLowerInvariant() switch
+            {
+                //returns CSV byte data with text/csv header
+                "csv" => File(_exports.ToCsv(rows), "text/csv", name + ".csv"),
+                //returns excel spreadsheet file
+                "xlsx" or "excel" => File(_exports.ToExcel(rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx"),
+                "pdf" => File(_exports.ToPdf(rows, $"Maison Dorée report · {selected.Label}"), "application/pdf", name + ".pdf"),
+
+                //if user enters an invalid format, return an error message
+                _ => BadRequest(new { error = "format must be csv, xlsx or pdf" })
+            };
         }
     }
 }

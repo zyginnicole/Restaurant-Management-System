@@ -3,8 +3,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace RestaurantManagementSystem.Model
 {
-    // Personal notification for ONE customer, e.g. "Your order ORD-0088 is being prepared".
-    // Broadcast messages (closures, promotions) stay in the Announcement table.
+    //Each notification is a single row in the NotificationLogs table.
+    //Each is linked to a single customer via custID.
     [Table("Notifications")]
     public class Notification
     {
@@ -30,6 +30,7 @@ namespace RestaurantManagementSystem.Model
         [MaxLength(1000)]
         public string notificationMessage { get; set; } = string.Empty;
 
+        //Page the customer can open from the notification
         [MaxLength(200)]
         public string? linkUrl { get; set; }                            // page opened on click, e.g. "/Customer/Orders"
 

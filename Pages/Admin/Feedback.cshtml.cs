@@ -5,79 +5,104 @@ using RestaurantManagementSystem.Data;
 namespace RestaurantManagementSystem.Pages.Admin
 {
     // Admin Feedback: ratings and comments from completed dining experiences (read-only).
-    //  - OnGet(string? period): Feedback (+ Customer, Order) for ?period=week (since Monday) · month (default) · all,
-    //    newest first (feedbackDate). Customers save them on History → "Rate this visit".
+    // Static UI for now – backend notes:
+    //  - OnGet(string? period): Feedback (+ Customer, Order → Reservation) for ?period=week · month (default) · all,
+    //    newest first (feedbackDate).
     //    Stat cards: average rating · number of reviews · low ratings (rating <= 2).
     //    Rating distribution: share of 5 / 4 / 3 / 2 / 1-star feedback in the period.
     //  - Visit = the Order the feedback is for (Feedback.orderID) and its Reservation, if dine-in.
     //  - Clicking a row shows the full comment and the customer's phone / email, so the admin can contact them.
-    //  - "Low ratings" is filtered on screen; Export CSV is done in the browser.
+    //  - Only existing model fields are used. "Low ratings" is filtered on screen; Export CSV is done in the browser.
     public class FeedbackModel : PageModel
     {
-        private readonly ApplicationDbContext _db;
+        private readonly ApplicationDbContext _context;
 
-        public FeedbackModel(ApplicationDbContext db)
+        public string Period { get; private set; } = "month";
+        public string PeriodText => Period switch
         {
-            _db = db;
-        }
+            "week" => "this week",
+            "all" => "all time",
+            _ => "this month"
+        };
 
-        public string Period { get; set; } = "month";
-        public List<FeedbackRow> Items { get; set; } = new();
-        public double? Average { get; set; }                      // null = no reviews in the period
-        public List<(int Stars, int Percent)> Distribution { get; set; } = new();
+        public double AverageRating { get; private set; }
+        public int ReviewCount { get; private set; }
+        public int LowRatingCount { get; private set; }
+        public List<DistributionItem> Distribution { get; private set; } = new();
+        public List<FeedbackItem> Items { get; private set; } = new();
 
-        public class FeedbackRow
-        {
-            public DateTimeOffset Date { get; set; }
-            public string Name { get; set; } = string.Empty;
-            public string Phone { get; set; } = string.Empty;
-            public string Email { get; set; } = string.Empty;
-            public string Order { get; set; } = string.Empty;     // "ORD-0080"
-            public string? Res { get; set; }                      // "R-0036" (dine-in) or null (takeaway)
-            public int Rating { get; set; }
-            public string? Comment { get; set; }
-        }
+        public FeedbackModel(ApplicationDbContext context) => _context = context;
 
         public async Task OnGetAsync(string? period)
         {
-            Period = period is "week" or "all" ? period : "month";
+            Period = period is "week" or "month" or "all" ? period : "month";
 
-            var today = DateTime.Today;
-            DateTime? since = Period switch
-            {
-                "week" => today.AddDays(-(((int)today.DayOfWeek + 6) % 7)),   // Monday of this week
-                "month" => new DateTime(today.Year, today.Month, 1),
-                _ => null
-            };
-
-            var query = _db.Feedbacks.AsNoTracking()
+            var query = _context.Feedbacks
+                .AsNoTracking()
                 .Include(f => f.Customer)
                 .Include(f => f.Order)
+                    .ThenInclude(o => o!.Reservation)
                 .AsQueryable();
-            if (since != null)
+
+            if (Period == "week")
+                query = query.Where(f => f.feedbackDate >= DateTimeOffset.Now.AddDays(-7));
+            else if (Period == "month")
             {
-                var from = new DateTimeOffset(since.Value);
-                query = query.Where(f => f.feedbackDate >= from);
+                var now = DateTimeOffset.Now;
+                var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, now.Offset);
+                query = query.Where(f => f.feedbackDate >= monthStart);
             }
 
             var feedback = await query.OrderByDescending(f => f.feedbackDate).ToListAsync();
 
-            Items = feedback.Select(f => new FeedbackRow
-            {
-                Date = f.feedbackDate,
-                Name = f.Customer?.custName ?? "Customer",
-                Phone = f.Customer?.custPhone ?? "",
-                Email = f.Customer?.custEmail ?? "",
-                Order = "ORD-" + f.orderID.ToString("0000"),
-                Res = f.Order?.reservationID is int r ? "R-" + r.ToString("0000") : null,
-                Rating = f.rating,
-                Comment = f.comment
-            }).ToList();
+            ReviewCount = feedback.Count;
+            LowRatingCount = feedback.Count(f => f.rating <= 2);
+            AverageRating = ReviewCount == 0 ? 0 : Math.Round(feedback.Average(f => f.rating), 1);
 
-            Average = Items.Count > 0 ? Math.Round(Items.Average(i => i.Rating), 1) : null;
-            Distribution = Enumerable.Range(1, 5).Reverse()
-                .Select(s => (s, Items.Count == 0 ? 0 : (int)Math.Round(100.0 * Items.Count(i => i.Rating == s) / Items.Count)))
+            Distribution = Enumerable.Range(1, 5)
+                .OrderByDescending(x => x)
+                .Select(stars =>
+                {
+                    var count = feedback.Count(f => f.rating == stars);
+                    return new DistributionItem
+                    {
+                        Stars = stars,
+                        Count = count,
+                        Percent = ReviewCount == 0 ? 0 : (int)Math.Round(count * 100.0 / ReviewCount)
+                    };
+                })
                 .ToList();
+
+            Items = feedback.Select(f => new FeedbackItem
+            {
+                Date = f.feedbackDate.ToLocalTime().ToString("dd MMM yyyy"),
+                Customer = f.Customer?.custName ?? "Unknown customer",
+                Phone = f.Customer?.custPhone ?? "Not provided",
+                Email = f.Customer?.custEmail ?? "Not provided",
+                Order = $"ORD-{f.orderID:0000}",
+                Reservation = f.Order?.Reservation == null ? null : $"R-{f.Order.Reservation.reservationID:0000}",
+                Rating = f.rating,
+                Comment = f.comment ?? string.Empty
+            }).ToList();
+        }
+
+        public class DistributionItem
+        {
+            public int Stars { get; set; }
+            public int Count { get; set; }
+            public int Percent { get; set; }
+        }
+
+        public class FeedbackItem
+        {
+            public string Date { get; set; } = string.Empty;
+            public string Customer { get; set; } = string.Empty;
+            public string Phone { get; set; } = string.Empty;
+            public string Email { get; set; } = string.Empty;
+            public string Order { get; set; } = string.Empty;
+            public string? Reservation { get; set; }
+            public int Rating { get; set; }
+            public string Comment { get; set; } = string.Empty;
         }
     }
 }

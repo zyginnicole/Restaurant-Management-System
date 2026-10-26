@@ -1,32 +1,48 @@
-// Opens the shared notification pop-up (_NotificationPopup) when a notification is clicked.
-// Each clickable item needs class "md-notice-btn" and these data-* values:
-//   data-type, data-title, data-message, data-time, and optionally data-link + data-link-text.
 (function () {
     var popupElement = document.getElementById('notificationPopup');
     if (!popupElement) return;
 
     var popup = new bootstrap.Modal(popupElement);
 
-    document.querySelectorAll('.md-notice-btn').forEach(function (item) {
-        item.addEventListener('click', function () {
-            document.getElementById('notificationPopupType').textContent = item.dataset.type || 'Notification';
-            document.getElementById('notificationPopupTitle').textContent = item.dataset.title || '';
-            document.getElementById('notificationPopupMessage').textContent = item.dataset.message || '';
-            document.getElementById('notificationPopupTime').textContent = item.dataset.time || '';
+    function antiforgeryToken() {
+        var input = document.querySelector('input[name="__RequestVerificationToken"]');
+        return input ? input.value : '';
+    }
+
+    document.querySelectorAll('.md-notice-btn').forEach(function (button) {
+        button.addEventListener('click', async function () {
+            var notice = button.closest('.md-notice');
+            var notificationId = button.dataset.id;
+
+            document.getElementById('notificationPopupType').textContent = button.dataset.type || 'Notification';
+            document.getElementById('notificationPopupTitle').textContent = button.dataset.title || '';
+            document.getElementById('notificationPopupMessage').textContent = button.dataset.message || '';
+            document.getElementById('notificationPopupTime').textContent = button.dataset.time || '';
 
             // Action button in the footer; the footer is hidden when there is no link (close with ×)
             var link = document.getElementById('notificationPopupLink');
             var footer = document.getElementById('notificationPopupFooter');
-            if (item.dataset.link) {
-                link.href = item.dataset.link;
-                link.textContent = item.dataset.linkText || 'View';
+            if (button.dataset.link) {
+                link.href = button.dataset.link;
+                link.textContent = button.dataset.linkText || 'View';
             }
-            if (footer) footer.classList.toggle('d-none', !item.dataset.link);
-
-            // Mark as read on screen. Saving the "read" status is for the team to add later.
-            var notice = item.closest('.md-notice');
+            if (footer) footer.classList.toggle('d-none', !button.dataset.link);
             if (notice) notice.classList.remove('unread');
 
+            if (notificationId) {
+                try {
+                    await fetch('?handler=Read', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'RequestVerificationToken': antiforgeryToken()
+                        },
+                        body: new URLSearchParams({ notificationId: notificationId })
+                    });
+                } catch (error) {
+                    console.error('Could not mark notification as read.', error);
+                }
+            }
             popup.show();
         });
     });
