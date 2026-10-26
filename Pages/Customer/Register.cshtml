@@ -1,5 +1,6 @@
 @page
 @model RestaurantManagementSystem.Pages.Customer.RegisterModel
+@using RestaurantManagementSystem.Helpers
 @{
     ViewData["Title"] = "Create account";
     Layout = "_CustomerAuthLayout";
@@ -50,17 +51,37 @@
     </div>
 
     <div class="mb-3">
-        <label class="md-label" asp-for="Customer.DietaryPref">Dining preferences</label>
-        <select class="form-select md-input" asp-for="Customer.DietaryPref">
-            <option value="None">None</option>
-            <option value="Vegetarian">Vegetarian</option>
-            <option value="Vegan">Vegan</option>
-            <option value="Halal">Halal</option>
-            <option value="Gluten-free">Gluten-free</option>
-            <option value="Nut allergy">Nut allergy</option>
-            <option value="Seafood allergy">Seafood allergy</option>
-            <option value="Other">Other</option>
-        </select>
+        <label class="md-label" asp-for="Customer.custBirthday">Birthday (optional)</label>
+        <input class="form-control md-input" asp-for="Customer.custBirthday" type="date" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+        <div class="form-text">Used for birthday offers.</div>
+        <span class="text-danger small" asp-validation-for="Customer.custBirthday"></span>
+    </div>
+
+    <div class="mb-3">
+        <span class="md-label">Dining preferences (optional)</span>
+        <div class="d-flex flex-wrap gap-3">
+            @foreach (var tag in MenuVocabulary.Tags)
+            {
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="pref_@(tag.Replace(" ", ""))" name="SelectedPrefs" value="@tag" checked="@Model.SelectedPrefs.Contains(tag)" />
+                    <label class="form-check-label" for="pref_@(tag.Replace(" ", ""))">@tag</label>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <span class="md-label">Allergies (optional)</span>
+        <div class="d-flex flex-wrap gap-3">
+            @foreach (var allergen in MenuVocabulary.Allergens)
+            {
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="allergy_@(allergen.Replace(" ", ""))" name="SelectedAllergies" value="@allergen" checked="@Model.SelectedAllergies.Contains(allergen)" />
+                    <label class="form-check-label" for="allergy_@(allergen.Replace(" ", ""))">@allergen</label>
+                </div>
+            }
+        </div>
+        <p class="md-hint">We hide dishes that list these allergens from your recommendations. Please still tell our staff about any allergy.</p>
     </div>
 
     <div class="mb-3">

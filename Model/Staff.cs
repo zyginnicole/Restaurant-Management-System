@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace RestaurantManagementSystem.Model
 {
     [Table("Staff")]
-    public class Staff
+    public class Staff : ILockable
     {
         [Key] // Sets this as the Primary Key
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)] // Enforces Auto-Increment
@@ -30,6 +30,10 @@ namespace RestaurantManagementSystem.Model
         public bool staffActive { get; set; } = true;
 
         public DateTimeOffset staffCreateAt { get; set; } = DateTimeOffset.Now;
+
+        // Lockout: wrong passwords in a row (limit from Admin > Settings > Security)
+        public int FailedLoginAttempts { get; set; } = 0;
+        public DateTimeOffset? LockoutEnd { get; set; }
 
         // Navigation (one staff handles many reservations / orders)
         public ICollection<Reservation> Reservations { get; set; } = new List<Reservation>();

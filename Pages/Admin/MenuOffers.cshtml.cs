@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
 
 // If Visual Studio generated a different namespace line in your own file, keep yours.
@@ -53,7 +54,11 @@ namespace RestaurantManagementSystem.Pages.Admin
                 Price = m.menuPrice,
                 Avail = m.isAvailable,
                 Image = ImageFile(m.menuImageUrl),
-                Desc = m.menuDescription ?? ""
+                Desc = m.menuDescription ?? "",
+                Sig = m.isSignature,
+                TagList = MenuVocabulary.Parse(m.menuTags).ToArray(),
+                AllergenList = MenuVocabulary.Parse(m.menuAllergens).ToArray(),
+                AllergensSet = !string.IsNullOrWhiteSpace(m.menuAllergens)
             }).ToList();
 
             var promotions = await _db.Promotions
@@ -72,6 +77,8 @@ namespace RestaurantManagementSystem.Pages.Admin
                     Unit = DaysText(p),
                     Dates = DateText(p.validFrom, p.validUntil),
                     Status = StatusOf(p),
+                    Availability = AvailabilityText(p),
+                    Rules = PromotionRules.RulesSummary(p),
                     Dishes = p.Menus.Select(m => m.menuName).ToArray(),
                     Edit = new
                     {
@@ -88,6 +95,14 @@ namespace RestaurantManagementSystem.Pages.Admin
                         from = p.validFrom?.ToString("yyyy-MM-dd") ?? "",
                         until = p.validUntil?.ToString("yyyy-MM-dd") ?? "",
                         active = p.promoActive,
+                        startTime = p.startTime?.ToString(@"hh\:mm") ?? "",
+                        endTime = p.endTime?.ToString(@"hh\:mm") ?? "",
+                        orderType = p.orderType == PromotionRules.DineIn || p.orderType == PromotionRules.Takeaway ? p.orderType : PromotionRules.Any,
+                        minSpend = p.minSpend,
+                        perCustomer = p.maxUsesPerCustomer,
+                        yearly = p.limitResetsYearly,
+                        totalUses = p.maxTotalUses,
+                        birthday = p.birthdayOnly,
                         dishIds = p.Menus.Select(m => m.menuID).ToArray()
                     }
                 }).ToList();
@@ -97,7 +112,8 @@ namespace RestaurantManagementSystem.Pages.Admin
         //  DISHES: add / edit, delete, sold-out switch
         // =====================================================================
         public async Task<IActionResult> OnPostSaveDishAsync(int? id, string? name, int categoryId, decimal price,
-            string? description, bool available, IFormFile? image)
+            string? description, bool available, IFormFile? image,
+            bool signature, string[]? tags, string[]? allergens, bool noAllergens)
         {
             name = name?.Trim();
             if (string.IsNullOrWhiteSpace(name) || price <= 0)
@@ -122,6 +138,16 @@ namespace RestaurantManagementSystem.Pages.Admin
             dish.menuPrice = price;
             dish.menuDescription = description?.Trim() ?? "";
             dish.isAvailable = available;
+            dish.isSignature = signature;
+
+            var tagList = (tags ?? Array.Empty<string>()).Where(x => MenuVocabulary.Tags.Contains(x)).ToList();
+            dish.menuTags = tagList.Count == 0 ? null : MenuVocabulary.Join(tagList);
+
+            // allergens ticked -> those; "No common allergens" ticked -> "None"; neither -> null (unknown, hidden from customers with allergies)
+            var allergenList = (allergens ?? Array.Empty<string>()).Where(x => MenuVocabulary.Allergens.Contains(x)).ToList();
+            dish.menuAllergens = allergenList.Count > 0 ? MenuVocabulary.Join(allergenList)
+                               : noAllergens ? "None"
+                               : null;
 
             // Optional photo: saved into wwwroot/images/menu
             if (image != null && image.Length > 0)
@@ -177,7 +203,9 @@ namespace RestaurantManagementSystem.Pages.Admin
         public async Task<IActionResult> OnPostSavePromoAsync(int? id, string? title, string? code, string? label,
             string? description, string? discountType, decimal? discountValue, bool autoApply,
             DayOfWeek startDay, DayOfWeek endDay, DateTime? validFrom, DateTime? validUntil,
-            bool active, int[]? dishIds)
+            bool active, int[]? dishIds,
+            TimeSpan? startTime, TimeSpan? endTime, string? orderType, decimal? minSpend,
+            int? maxUsesPerCustomer, bool limitResetsYearly, int? maxTotalUses, bool birthdayOnly)
         {
             title = title?.Trim();
             code = code?.Trim().ToUpperInvariant();
@@ -204,6 +232,24 @@ namespace RestaurantManagementSystem.Pages.Admin
 
             if (validFrom.HasValue && validUntil.HasValue && validUntil < validFrom)
                 return Fail("\"Valid until\" must be on or after \"Valid from\".", "promos");
+
+            // Time of day: both or neither. An end earlier than the start means "past midnight".
+            if (startTime.HasValue != endTime.HasValue)
+                return Fail("Please fill in both the start time and the end time, or leave both empty.", "promos");
+            if (startTime.HasValue && startTime == endTime)
+                return Fail("The start time and end time can't be the same.", "promos");
+
+            if (minSpend.HasValue && minSpend <= 0)
+                return Fail("Minimum spend must be above 0, or leave it empty.", "promos");
+            if (maxUsesPerCustomer.HasValue && maxUsesPerCustomer < 1)
+                return Fail("Uses per customer must be at least 1, or leave it empty.", "promos");
+            if (maxTotalUses.HasValue && maxTotalUses < 1)
+                return Fail("Total uses must be at least 1, or leave it empty.", "promos");
+
+            string orderKind = orderType == PromotionRules.DineIn || orderType == PromotionRules.Takeaway
+                ? orderType!
+                : PromotionRules.Any;
+            if (!maxUsesPerCustomer.HasValue) limitResetsYearly = false;   // nothing to reset
 
             var thisId = id ?? 0;
             if (await _db.Promotions.AnyAsync(p => p.promoCode == code && p.promoID != thisId))
@@ -238,6 +284,14 @@ namespace RestaurantManagementSystem.Pages.Admin
             promo.validFrom = validFrom;
             promo.validUntil = validUntil;
             promo.promoActive = active;
+            promo.startTime = startTime;
+            promo.endTime = endTime;
+            promo.orderType = orderKind;
+            promo.minSpend = minSpend;
+            promo.birthdayOnly = birthdayOnly;
+            promo.maxUsesPerCustomer = maxUsesPerCustomer;
+            promo.limitResetsYearly = limitResetsYearly;
+            promo.maxTotalUses = maxTotalUses;
 
             // This promotion's own dishes
             var ids = dishIds ?? Array.Empty<int>();
@@ -247,7 +301,7 @@ namespace RestaurantManagementSystem.Pages.Admin
 
             await _db.SaveChangesAsync();
             TempData["Toast"] = id.HasValue ? "Promotion updated" : "Promotion added";
-            return RedirectToPage(null, null, new { tab = "promos"});
+            return RedirectToPage(null, null, new { tab = "promos" });
         }
 
         public async Task<IActionResult> OnPostDeletePromoAsync(int id)
@@ -269,7 +323,7 @@ namespace RestaurantManagementSystem.Pages.Admin
         private IActionResult Fail(string message, string tab = "items")
         {
             TempData["Toast"] = message;
-            return RedirectToPage(null, null, new {tab});
+            return RedirectToPage(null, null, new { tab });
         }
 
         // Looks at the existing dishes to see how image paths are stored
@@ -293,10 +347,15 @@ namespace RestaurantManagementSystem.Pages.Admin
             _ => "Complimentary"
         };
 
-        private static string DaysText(Promotion p) =>
-            p.startDay == DayOfWeek.Monday && p.endDay == DayOfWeek.Sunday
-                ? "Every day"
-                : p.startDay.ToString().Substring(0, 3) + " – " + p.endDay.ToString().Substring(0, 3);
+        private static string DaysText(Promotion p) => PromotionRules.DaysText(p);
+
+        // "Valid right now" / "Not valid right now · Available Fri – Sun" (only for promotions that are Active by date)
+        private static string AvailabilityText(Promotion p)
+        {
+            if (StatusOf(p) != "Active") return "";
+            var why = PromotionRules.NotAvailableReason(p, DateTime.Now, null, checkBirthday: false);
+            return why == null ? "Valid right now" : "Not valid right now · " + why;
+        }
 
         private static string DateText(DateTime? start, DateTime? end)
         {
@@ -307,14 +366,7 @@ namespace RestaurantManagementSystem.Pages.Admin
         }
 
         // Badge text on the card: Inactive / Expired / Scheduled / Active
-        private static string StatusOf(Promotion p)
-        {
-            var today = DateTime.Today;
-            if (!p.promoActive) return "Inactive";
-            if (p.validUntil.HasValue && p.validUntil.Value.Date < today) return "Expired";
-            if (p.validFrom.HasValue && p.validFrom.Value.Date > today) return "Scheduled";
-            return "Active";
-        }
+        private static string StatusOf(Promotion p) => PromotionRules.StatusOf(p, DateTime.Now);
 
         // =====================================================================
         //  Simple classes the page loops over
@@ -335,6 +387,10 @@ namespace RestaurantManagementSystem.Pages.Admin
             public bool Avail { get; set; }
             public string Image { get; set; } = "";
             public string Desc { get; set; } = "";
+            public bool Sig { get; set; }
+            public string[] TagList { get; set; } = Array.Empty<string>();
+            public string[] AllergenList { get; set; } = Array.Empty<string>();
+            public bool AllergensSet { get; set; }          // false = admin has not filled in the allergens yet
 
             // Used by the Edit button to fill the form
             public string Json => JsonSerializer.Serialize(new
@@ -344,7 +400,11 @@ namespace RestaurantManagementSystem.Pages.Admin
                 catId = CatId,
                 price = Price,
                 desc = Desc,
-                avail = Avail
+                avail = Avail,
+                sig = Sig,
+                tags = TagList,
+                allergens = AllergenList,
+                noAllergens = AllergensSet && AllergenList.Length == 0
             });
         }
 
@@ -358,6 +418,8 @@ namespace RestaurantManagementSystem.Pages.Admin
             public string Unit { get; set; } = "";
             public string Dates { get; set; } = "";
             public string Status { get; set; } = "";
+            public string Availability { get; set; } = "";
+            public string[] Rules { get; set; } = Array.Empty<string>();
             public string[] Dishes { get; set; } = Array.Empty<string>();
             public object Edit { get; set; } = new { };
 

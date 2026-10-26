@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
 
 namespace RestaurantManagementSystem.Services
@@ -55,7 +56,8 @@ namespace RestaurantManagementSystem.Services
             customer.custName = input.custName.Trim();
             customer.custEmail = newEmail;
             customer.custPhone = input.custPhone.Trim();
-            customer.DietaryPref = input.DietaryPref;
+            customer.DietaryPref = MenuVocabulary.Join(input.Prefs.Where(x => MenuVocabulary.Tags.Contains(x)));
+            customer.Allergies = MenuVocabulary.Join(input.Allergies.Where(x => MenuVocabulary.Allergens.Contains(x)));
             customer.promoOptIn = input.promoOptIn;
 
             await _context.SaveChangesAsync();

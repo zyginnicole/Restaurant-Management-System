@@ -8,10 +8,6 @@ namespace RestaurantManagementSystem.Services
     // Property names match the form fields: Customer.custName, Customer.custEmail, ...
     public class CustomerProfileInput
     {
-        // Same list as the Register page's dropdown
-        public static readonly string[] DietaryOptions =
-            { "None", "Vegetarian", "Vegan", "Halal", "Gluten-free", "Nut allergy", "Seafood allergy", "Other" };
-
         [Required(ErrorMessage = "Full name is required.")]
         [MaxLength(100, ErrorMessage = "Full name cannot be longer than 100 characters.")]
         public string custName { get; set; } = string.Empty;
@@ -24,7 +20,9 @@ namespace RestaurantManagementSystem.Services
         [RegularExpression(@"^\d{10,11}$", ErrorMessage = "Phone number must be 10 to 11 digits (numbers only).")]
         public string custPhone { get; set; } = string.Empty;
 
-        public string DietaryPref { get; set; } = "None";
+        // Ticked boxes (names come from MenuVocabulary). The service joins them into Customer.DietaryPref / Customer.Allergies.
+        public List<string> Prefs { get; set; } = new();
+        public List<string> Allergies { get; set; } = new();
 
         public bool promoOptIn { get; set; }
     }

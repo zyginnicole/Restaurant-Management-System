@@ -6,10 +6,20 @@
     ViewData["Eyebrow"] = "Secure payment";
     ViewData["Heading"] = "Payment";
     Layout = "_CustomerLayout";
+
+    // Title of the details card for the method that is ticked when the page opens
+    var panelTitles = new Dictionary<string, string>
+    {
+        ["Card"] = "Card details",
+        ["Online Banking"] = "Online banking",
+        ["E-Wallet"] = "Scan to pay"
+    };
+    string initialTitle = panelTitles.TryGetValue(Model.DefaultMethod, out var firstTitle) ? firstTitle : "Payment details";
 }
 
 @* Order details come from PaymentModel. Takeaway = one order; dine-in = one bill for every order at the table.
-   paymentMethod values match the Payment model: Card, Online Banking, E-Wallet. (Cash is only taken by staff.) *@
+   paymentMethod values match the Payment model: Card, Online Banking, E-Wallet. The system is cashless.
+   Only the methods switched on in Admin > Settings > Billing & payments are shown. *@
 
 @* Message when the payment could not be completed / no method chosen *@
 @if (!ViewData.ModelState.IsValid)
@@ -31,82 +41,112 @@
                 <div class="md-card-header">
                     <span class="md-card-label">Payment method</span>
                 </div>
-                <div class="md-card-body md-pay-methods" role="radiogroup" aria-label="Payment method">
-                    <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Card" checked />
-                    <label class="md-pay-option" for="payCard">
-                        <i class="bi bi-credit-card" aria-hidden="true"></i>
-                        <span><b>Credit / debit card</b><small>Visa, Mastercard, Amex</small></span>
-                    </label>
+                @if (Model.DefaultMethod == string.Empty)
+                {
+                    <div class="md-card-body">
+                        <p class="mb-0">No payment method is available right now. Please contact the restaurant.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="md-card-body md-pay-methods" role="radiogroup" aria-label="Payment method">
+                        @if (Model.AcceptCard)
+                        {
+                            <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Card" checked="@(Model.DefaultMethod == "Card")" />
+                            <label class="md-pay-option" for="payCard">
+                                <i class="bi bi-credit-card" aria-hidden="true"></i>
+                                <span><b>Credit / debit card</b><small>Visa, Mastercard, Amex</small></span>
+                            </label>
+                        }
 
-                    <input type="radio" class="btn-check" name="paymentMethod" id="payBank" value="Online Banking" />
-                    <label class="md-pay-option" for="payBank">
-                        <i class="bi bi-bank" aria-hidden="true"></i>
-                        <span><b>FPX online banking</b><small>Maybank2u, CIMB Clicks and more</small></span>
-                    </label>
+                        @if (Model.AcceptFpx)
+                        {
+                            <input type="radio" class="btn-check" name="paymentMethod" id="payBank" value="Online Banking" checked="@(Model.DefaultMethod == "Online Banking")" />
+                            <label class="md-pay-option" for="payBank">
+                                <i class="bi bi-bank" aria-hidden="true"></i>
+                                <span><b>FPX online banking</b><small>Maybank2u, CIMB Clicks and more</small></span>
+                            </label>
+                        }
 
-                    <input type="radio" class="btn-check" name="paymentMethod" id="payWallet" value="E-Wallet" />
-                    <label class="md-pay-option" for="payWallet">
-                        <i class="bi bi-qr-code" aria-hidden="true"></i>
-                        <span><b>DuitNow QR / e-wallet</b><small>Touch 'n Go, GrabPay, Boost</small></span>
-                    </label>
-                </div>
+                        @if (Model.AcceptEwallet)
+                        {
+                            <input type="radio" class="btn-check" name="paymentMethod" id="payWallet" value="E-Wallet" checked="@(Model.DefaultMethod == "E-Wallet")" />
+                            <label class="md-pay-option" for="payWallet">
+                                <i class="bi bi-qr-code" aria-hidden="true"></i>
+                                <span><b>DuitNow QR / e-wallet</b><small>Touch 'n Go, GrabPay, Boost</small></span>
+                            </label>
+                        }
+                    </div>
+                }
             </section>
 
             @* ---------- Details for the chosen method (one panel shown at a time) ---------- *@
-            <section class="md-card">
-                <div class="md-card-header">
-                    <span class="md-card-label" data-pay-title>Card details</span>
-                </div>
-                <div class="md-card-body">
-                    @* Card: simulated – never stored (see PaymentModel) *@
-                    <div data-pay-panel="Card">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="md-label" for="cardName">Name on card</label>
-                                <input class="form-control md-input" id="cardName" name="cardName" autocomplete="cc-name" value="@Model.CustomerName" required />
-                                <div class="invalid-feedback">Enter the name on your card.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="md-label" for="cardNumber">Card number</label>
-                                <input class="form-control md-input" id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" required />
-                                <div class="invalid-feedback">Enter a valid card number.</div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="md-label" for="cardExpiry">Expiry</label>
-                                <input class="form-control md-input" id="cardExpiry" name="cardExpiry" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" maxlength="7" required />
-                                <div class="invalid-feedback">Enter a valid expiry date.</div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <label class="md-label" for="cardCvc">CVC</label>
-                                <input class="form-control md-input" id="cardCvc" name="cardCvc" inputmode="numeric" autocomplete="cc-csc" placeholder="3 digits" maxlength="4" required />
-                                <div class="invalid-feedback">Enter the 3 or 4 digit CVC.</div>
-                            </div>
-                        </div>
-                        <p class="md-hint mt-3 mb-0"><i class="bi bi-lock me-1"></i>Card details go straight to our payment provider over a secure connection. Maison Dorée never stores your card number.</p>
+            @if (Model.DefaultMethod != string.Empty)
+            {
+                <section class="md-card">
+                    <div class="md-card-header">
+                        <span class="md-card-label" data-pay-title>@initialTitle</span>
                     </div>
+                    <div class="md-card-body">
+                        @* Card: simulated – never stored (see PaymentModel) *@
+                        @if (Model.AcceptCard)
+                        {
+                            <div class="@(Model.DefaultMethod == "Card" ? "" : "d-none")" data-pay-panel="Card">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="md-label" for="cardName">Name on card</label>
+                                        <input class="form-control md-input" id="cardName" name="cardName" autocomplete="cc-name" value="@Model.CustomerName" required />
+                                        <div class="invalid-feedback">Enter the name on your card.</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="md-label" for="cardNumber">Card number</label>
+                                        <input class="form-control md-input" id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" required />
+                                        <div class="invalid-feedback">Enter a valid card number.</div>
+                                    </div>
+                                    <div class="col-6 col-md-3">
+                                        <label class="md-label" for="cardExpiry">Expiry</label>
+                                        <input class="form-control md-input" id="cardExpiry" name="cardExpiry" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" maxlength="7" required />
+                                        <div class="invalid-feedback">Enter a valid expiry date.</div>
+                                    </div>
+                                    <div class="col-6 col-md-3">
+                                        <label class="md-label" for="cardCvc">CVC</label>
+                                        <input class="form-control md-input" id="cardCvc" name="cardCvc" inputmode="numeric" autocomplete="cc-csc" placeholder="3 digits" maxlength="4" required />
+                                        <div class="invalid-feedback">Enter the 3 or 4 digit CVC.</div>
+                                    </div>
+                                </div>
+                                <p class="md-hint mt-3 mb-0"><i class="bi bi-lock me-1"></i>Card details go straight to our payment provider over a secure connection. Maison Dorée never stores your card number.</p>
+                            </div>
+                        }
 
-                    @* Online banking: choose a bank, then the bank's page opens *@
-                    <div class="d-none" data-pay-panel="Online Banking">
-                        <label class="md-label" for="bank">Your bank</label>
-                        <select class="form-select md-input" id="bank" name="bank">
-                            <option>Maybank2u</option>
-                            <option>CIMB Clicks</option>
-                            <option>Public Bank</option>
-                            <option>RHB Now</option>
-                            <option>Hong Leong Connect</option>
-                        </select>
-                        <p class="md-hint mt-3 mb-0">You'll be taken to your bank to approve the payment, then brought back here.</p>
-                    </div>
+                        @* Online banking: choose a bank, then the bank's page opens *@
+                        @if (Model.AcceptFpx)
+                        {
+                            <div class="@(Model.DefaultMethod == "Online Banking" ? "" : "d-none")" data-pay-panel="Online Banking">
+                                <label class="md-label" for="bank">Your bank</label>
+                                <select class="form-select md-input" id="bank" name="bank">
+                                    <option>Maybank2u</option>
+                                    <option>CIMB Clicks</option>
+                                    <option>Public Bank</option>
+                                    <option>RHB Now</option>
+                                    <option>Hong Leong Connect</option>
+                                </select>
+                                <p class="md-hint mt-3 mb-0">You'll be taken to your bank to approve the payment, then brought back here.</p>
+                            </div>
+                        }
 
-                    @* E-wallet: QR code to scan *@
-                    <div class="d-none" data-pay-panel="E-Wallet">
-                        <div class="md-qr">
-                            <span class="md-qr-box" aria-hidden="true"><i class="bi bi-qr-code"></i></span>
-                            <p class="mb-0">Scan with Touch 'n Go, GrabPay, Boost or any DuitNow QR app. The code is valid for 10 minutes.</p>
-                        </div>
+                        @* E-wallet: QR code to scan *@
+                        @if (Model.AcceptEwallet)
+                        {
+                            <div class="@(Model.DefaultMethod == "E-Wallet" ? "" : "d-none")" data-pay-panel="E-Wallet">
+                                <div class="md-qr">
+                                    <span class="md-qr-box" aria-hidden="true"><i class="bi bi-qr-code"></i></span>
+                                    <p class="mb-0">Scan with Touch 'n Go, GrabPay, Boost or any DuitNow QR app. The code is valid for 10 minutes.</p>
+                                </div>
+                            </div>
+                        }
                     </div>
-                </div>
-            </section>
+                </section>
+            }
         </div>
 
         @* ---------- Order summary ---------- *@
@@ -134,7 +174,7 @@
                         <div><dt>SST @Model.SstPct.ToString("0.##")%</dt><dd>RM @Model.Sst.ToString("N2")</dd></div>
                         <div class="md-sum-total"><dt>Total</dt><dd>RM @Model.Total.ToString("N2")</dd></div>
                     </dl>
-                    <button type="submit" class="btn btn-md-green w-100 mb-2" id="payButton">Pay RM @Model.Total.ToString("N2")</button>
+                    <button type="submit" class="btn btn-md-green w-100 mb-2" id="payButton" disabled="@(Model.DefaultMethod == string.Empty)">Pay RM @Model.Total.ToString("N2")</button>
                     <a class="btn btn-md-outline w-100" href="@(Model.IsDineIn ? "/Customer/Orders" : "/Customer/Checkout")">@(Model.IsDineIn ? "Back to orders" : "Back to checkout")</a>
                 </div>
             </section>
@@ -157,7 +197,12 @@
             });
 
             // ---------- Card fields are required: Pay stays locked until every field is valid ----------
+            // The card panel is missing when cards are switched off, and so are all payment methods
+            // when none is accepted (the server already disables the Pay button then).
             var payButton = document.getElementById('payButton');
+            var hasCardPanel = !!document.getElementById('cardNumber');
+            var hasMethods = !!document.querySelector('input[name="paymentMethod"]');
+
             var cardFields = {
                 cardName: function (v) { return v.trim().length >= 2; },
                 cardNumber: function (v) {
@@ -187,28 +232,33 @@
             }
 
             function refreshPay() {
-                var isCard = cardIsMethod();
+                if (!hasMethods) return;                                   // nothing to validate, button stays disabled
+                var isCard = hasCardPanel && cardIsMethod();
                 var allValid = true;
-                Object.keys(cardFields).forEach(function (id) {
-                    var input = document.getElementById(id);
-                    input.required = isCard;                               // hidden panels must not block the other methods
-                    var ok = cardFields[id](input.value);
-                    if (!ok) allValid = false;
-                    input.classList.toggle('is-invalid', isCard && !!touched[id] && !ok);
-                });
+                if (hasCardPanel) {
+                    Object.keys(cardFields).forEach(function (id) {
+                        var input = document.getElementById(id);
+                        input.required = isCard;                           // hidden panels must not block the other methods
+                        var ok = cardFields[id](input.value);
+                        if (!ok) allValid = false;
+                        input.classList.toggle('is-invalid', isCard && !!touched[id] && !ok);
+                    });
+                }
                 payButton.disabled = isCard && !allValid;
             }
 
-            Object.keys(cardFields).forEach(function (id) {
-                var input = document.getElementById(id);
-                input.addEventListener('input', refreshPay);
-                input.addEventListener('blur', function () { touched[id] = true; refreshPay(); });
-            });
+            if (hasCardPanel) {
+                Object.keys(cardFields).forEach(function (id) {
+                    var input = document.getElementById(id);
+                    input.addEventListener('input', refreshPay);
+                    input.addEventListener('blur', function () { touched[id] = true; refreshPay(); });
+                });
+            }
             document.querySelectorAll('input[name="paymentMethod"]').forEach(function (radio) {
                 radio.addEventListener('change', refreshPay);
             });
             document.getElementById('paymentForm').addEventListener('submit', function (e) {
-                if (cardIsMethod()) {
+                if (hasCardPanel && cardIsMethod()) {
                     Object.keys(cardFields).forEach(function (id) { touched[id] = true; });
                     refreshPay();
                     if (payButton.disabled) e.preventDefault();
@@ -216,14 +266,20 @@
             });
 
             // Card number in groups of 4: 1234 5678 9012 3456
-            document.getElementById('cardNumber').addEventListener('input', function () {
-                this.value = this.value.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ');
-            });
+            var cardNumber = document.getElementById('cardNumber');
+            if (cardNumber) {
+                cardNumber.addEventListener('input', function () {
+                    this.value = this.value.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ');
+                });
+            }
             // Expiry as MM / YY
-            document.getElementById('cardExpiry').addEventListener('input', function () {
-                var d = this.value.replace(/\D/g, '').slice(0, 4);
-                this.value = d.length > 2 ? d.slice(0, 2) + ' / ' + d.slice(2) : d;
-            });
+            var cardExpiry = document.getElementById('cardExpiry');
+            if (cardExpiry) {
+                cardExpiry.addEventListener('input', function () {
+                    var d = this.value.replace(/\D/g, '').slice(0, 4);
+                    this.value = d.length > 2 ? d.slice(0, 2) + ' / ' + d.slice(2) : d;
+                });
+            }
 
             refreshPay();
         })();

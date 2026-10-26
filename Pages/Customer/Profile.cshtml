@@ -8,13 +8,8 @@
     Layout = "_CustomerLayout";
 
     // Values come from the signed-in Customer (ProfileModel.Input), or what they typed after a failed save
-    var dietary = Model.Input.DietaryPref;
-    var dietaryOptions = RestaurantManagementSystem.Services.CustomerProfileInput.DietaryOptions;
 
-    // TODO: seatingPref and kitchenNotes are not in the Customer table yet (waiting for the leader's migration),
-    // so these two are shown but not saved for now.
-    var seating = "No preference";                                               // Customer.seatingPref
-    var seatingOptions = new[] { "No preference", "Indoor", "Outdoor", "VIP" };  // same as the booking's dining areas
+    // TODO: kitchenNotes is not in the Customer table yet, so it is shown but not saved for now.
     string? kitchenNotes = null;                                                 // Customer.kitchenNotes
 
     // Open the Change password pop-up again when OnPostPassword returns Page() with errors
@@ -96,28 +91,32 @@
                         <span class="md-card-label">Dining preferences</span>
                     </div>
                     <div class="md-card-body">
-                        @* Customer.DietaryPref – same list as the Register page *@
+                        @* Customer.Prefs (dish tags) and Customer.Allergies, same lists as the Register page *@
                         <div class="mb-3">
-                            <label class="md-label" for="Customer_DietaryPref">Dietary preference</label>
-                            <select class="form-select md-input" id="Customer_DietaryPref" name="Customer.DietaryPref">
-                                @foreach (var option in dietaryOptions)
+                            <span class="md-label">Dietary preferences</span>
+                            <div class="d-flex flex-wrap gap-3">
+                                @foreach (var tag in RestaurantManagementSystem.Helpers.MenuVocabulary.Tags)
                                 {
-                                    <option value="@option" selected="@(option == dietary)">@option</option>
-                                }
-                            </select>
-                        </div>
-
-                        @* Customer.seatingPref – pick one (max 30 characters). Shown so staff can prepare the visit. *@
-                        <div class="mb-3">
-                            <span class="md-label" id="seatingLabel">Seating preference</span>
-                            <div class="md-chips md-chips-ink mt-0" role="radiogroup" aria-labelledby="seatingLabel" data-chip-group>
-                                @foreach (var option in seatingOptions)
-                                {
-                                    bool on = option == seating;
-                                    <button type="button" class="md-chip @(on ? "active" : "")" role="radio" data-chip="@option" aria-checked="@(on ? "true" : "false")">@option</button>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="pref_@(tag.Replace(" ", ""))" name="Customer.Prefs" value="@tag" checked="@Model.Input.Prefs.Contains(tag)" />
+                                        <label class="form-check-label" for="pref_@(tag.Replace(" ", ""))">@tag</label>
+                                    </div>
                                 }
                             </div>
-                            <input type="hidden" name="Customer.seatingPref" value="@seating" data-chip-value />
+                        </div>
+
+                        <div class="mb-3">
+                            <span class="md-label">Allergies</span>
+                            <div class="d-flex flex-wrap gap-3">
+                                @foreach (var allergen in RestaurantManagementSystem.Helpers.MenuVocabulary.Allergens)
+                                {
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="allergy_@(allergen.Replace(" ", ""))" name="Customer.Allergies" value="@allergen" checked="@Model.Input.Allergies.Contains(allergen)" />
+                                        <label class="form-check-label" for="allergy_@(allergen.Replace(" ", ""))">@allergen</label>
+                                    </div>
+                                }
+                            </div>
+                            <p class="md-hint mt-2 mb-0">We hide dishes that list these allergens from your recommendations. Please still tell our staff about any allergy.</p>
                         </div>
 
                         @* Customer.kitchenNotes – optional, max 300 characters *@
@@ -217,20 +216,5 @@
             if (document.getElementById('profileForm').dataset.startEditing === 'true') button.click();
         })();
 
-        // Seating preference chips: pick one – the chosen value goes into Customer.seatingPref
-        document.querySelectorAll('[data-chip-group]').forEach(function (group) {
-            var hidden = group.parentElement.querySelector('[data-chip-value]');
-            var chips = group.querySelectorAll('.md-chip');
-            chips.forEach(function (chip) {
-                chip.addEventListener('click', function () {
-                    chips.forEach(function (c) {
-                        var on = c === chip;
-                        c.classList.toggle('active', on);
-                        c.setAttribute('aria-checked', on);
-                    });
-                    hidden.value = chip.dataset.chip;
-                });
-            });
-        });
     </script>
 }

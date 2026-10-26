@@ -19,7 +19,7 @@ namespace RestaurantManagementSystem.Model
         public decimal paymentAmount { get; set; }
 
         [Required]
-        public string paymentMethod { get; set; }          // Cash, Card, Online Banking, E-Wallet
+        public string paymentMethod { get; set; }          // Card, Online Banking, E-Wallet (cashless only)
 
         [Required]
         public string paymentStatus { get; set; } = "Pending"; // Pending, Paid, Failed, Refunded

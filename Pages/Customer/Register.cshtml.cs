@@ -37,6 +37,13 @@ namespace RestaurantManagementSystem.Pages.Customer
         [BindProperty]
         public bool PromoOptIn { get; set; }                          // optional, copied to Customer.promoOptIn
 
+        // Ticked boxes on the form. They are joined into Customer.DietaryPref / Customer.Allergies before saving.
+        [BindProperty]
+        public List<string> SelectedPrefs { get; set; } = new();
+
+        [BindProperty]
+        public List<string> SelectedAllergies { get; set; } = new();
+
         // Password rule sentence shown under the password box (built from Admin > Settings > Security)
         public string PasswordHint { get; set; } = string.Empty;
 
@@ -68,6 +75,15 @@ namespace RestaurantManagementSystem.Pages.Customer
                 ModelState.AddModelError(
                     "Customer.custPhone",
                     "Phone number must be 10 to 11 digits (numbers only).");
+            }
+
+            //check birthday (optional): not in the future, not before 1900
+            if (Customer.custBirthday.HasValue &&
+                (Customer.custBirthday.Value.Date > DateTime.Today || Customer.custBirthday.Value.Year < 1900))
+            {
+                ModelState.AddModelError(
+                    "Customer.custBirthday",
+                    "Please enter a valid birthday.");
             }
 
             //check both passwords match
@@ -120,6 +136,8 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             //save: the service trims the fields and hashes the password
             Customer.promoOptIn = PromoOptIn;
+            Customer.DietaryPref = MenuVocabulary.Join(SelectedPrefs.Where(x => MenuVocabulary.Tags.Contains(x)));
+            Customer.Allergies = MenuVocabulary.Join(SelectedAllergies.Where(x => MenuVocabulary.Allergens.Contains(x)));
             await _authService.RegisterCustomerAsync(Customer);
 
             //show the success pop-up (redirect to itself so refresh won't re-submit the form)

@@ -1,6 +1,15 @@
 ﻿@model RestaurantManagementSystem.Model.Menu
+@using RestaurantManagementSystem.Helpers
+@{
+    var tags = MenuVocabulary.Parse(Model.menuTags).ToList();
+    var allergens = MenuVocabulary.Parse(Model.menuAllergens).ToList();
+    bool allergensKnown = !string.IsNullOrWhiteSpace(Model.menuAllergens);   // null = admin has not filled it in yet
+}
 
-<article class="md-menu-card @(Model.isAvailable ? "" : "is-unavailable")">
+<article class="md-menu-card @(Model.isAvailable ? "" : "is-unavailable")"
+         data-tags="@string.Join(",", tags)"
+         data-allergens="@string.Join(",", allergens)"
+         data-allergens-known="@(allergensKnown ? "yes" : "no")">
     <div class="md-photo" style="background-image:url('@Model.menuImageUrl'); background-size:cover; background-position:center;">
         @if (Model.isAvailable)
         {
@@ -17,6 +26,48 @@
             <span class="md-price">RM @Model.menuPrice.ToString("0.00")</span>
         </div>
         <p>@Model.menuDescription</p>
+
+        @* Tags (first 3) *@
+        @if (tags.Count > 0)
+        {
+            <div class="md-menu-tags">
+                @foreach (var tag in tags.Take(3))
+                {
+                    <span class="md-badge md-badge-neutral md-tag">@tag</span>
+                }
+            </div>
+        }
+
+        @* Allergens: menu.js highlights the ones that match the signed-in customer's allergies *@
+        @if (!allergensKnown)
+        {
+            <div class="md-allergen-line is-unknown">
+                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                <span>Allergen info unavailable. Please ask staff.</span>
+            </div>
+        }
+        else if (allergens.Count > 0)
+        {
+            <div class="md-allergen-line">
+                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                <span>
+                    <strong class="md-allergen-mine d-none" data-allergen-mine></strong>
+                    Contains: @for (var i = 0; i < allergens.Count; i++)
+                    {
+                        <span data-allergen="@allergens[i]">@allergens[i]</span>
+                        @(i < allergens.Count - 1 ? ", " : "")
+                    }
+                </span>
+            </div>
+        }
+        else
+        {
+            <div class="md-allergen-line">
+                <i class="bi bi-check-circle" aria-hidden="true"></i>
+                <span>No common allergens</span>
+            </div>
+        }
+
         @if (Model.isAvailable)
         {
             <button type="button" class="btn btn-md-dark w-100 md-add-btn" data-price="@Model.menuPrice.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)">Add to order</button>

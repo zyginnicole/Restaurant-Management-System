@@ -171,11 +171,11 @@ namespace RestaurantManagementSystem.Pages.Staff
         }
 
         // ---------- Record payment ----------
-        // Fields: orderId (any order on the bill), paymentMethod ("Cash" / "Card" / "E-Wallet"),
-        // promotionId (optional), amountReceived (cash).
+        // Fields: orderId (any order on the bill), paymentMethod ("Card" / "FPX" / "E-Wallet"),
+        // promotionId (optional).
         // → one Payment per order on the bill (paymentAmount = that order's total, "Paid", same time),
         //   Order.orderStatus "Completed", DiningTable.tableStatus "Available". One SaveChanges.
-        public async Task<IActionResult> OnPostPayAsync(string orderId, string? paymentMethod, int? promotionId, decimal? amountReceived)
+        public async Task<IActionResult> OnPostPayAsync(string orderId, string? paymentMethod, int? promotionId)
         {
             int? staffId = CurrentStaffId();
             if (staffId == null) return RedirectToPage("/Staff/Login");
@@ -187,12 +187,12 @@ namespace RestaurantManagementSystem.Pages.Staff
             //1. payment method (Admin > Settings can switch methods off)
             bool methodOk = paymentMethod switch
             {
-                "Cash" => settings?.acceptCash ?? true,
                 "Card" => settings?.acceptCard ?? true,
+                "FPX" => settings?.acceptFpx ?? true,
                 "E-Wallet" => settings?.acceptEwallet ?? true,
                 _ => false
             };
-            if (!methodOk) return Done("Choose a payment method that is accepted (Cash, Card or E-Wallet).", orderId);
+            if (!methodOk) return Done("Choose a payment method that is accepted (Card, Online Banking or E-Wallet).", orderId);
 
             //2. the order and its bill
             var order = await _context.Orders.Include(o => o.Payment).FirstOrDefaultAsync(o => o.orderID == ParseId(orderId));
@@ -246,9 +246,6 @@ namespace RestaurantManagementSystem.Pages.Staff
             }
             decimal total = bill.Sum(o => o.totalAmount);
 
-            if (paymentMethod == "Cash" && (amountReceived ?? 0m) < total)
-                return Done($"The amount received is less than the total (RM {total:#,##0.00}).", code);
-
             //5. payments + orders + table: all saved together
             var paidAt = DateTimeOffset.Now;
             foreach (var o in bill)
@@ -285,9 +282,8 @@ namespace RestaurantManagementSystem.Pages.Staff
             await _context.SaveChangesAsync();
 
             string codes = string.Join(", ", bill.Select(o => OrderCode(o.orderID)));
-            string change = paymentMethod == "Cash" && amountReceived > total ? $" Change due: RM {(amountReceived.Value - total):#,##0.00}." : "";
             string tableText = isDineIn ? " The table is free again." : "";
-            return Done($"Payment for {codes} recorded ({paymentMethod}, RM {total:#,##0.00}). The order is completed.{tableText}{change}", code);
+            return Done($"Payment for {codes} recorded ({paymentMethod}, RM {total:#,##0.00}). The order is completed.{tableText}", code);
         }
 
         // Paid takeaway that is served (ready) → Completed once the guest has collected it

@@ -117,10 +117,10 @@
 
                 <section class="a-card">
                     <div class="a-card-head"><h2 class="a-card-title">Accepted payment methods</h2></div>
-                    <div class="a-setting"><div><div class="a-setting-label">Cash</div></div><input asp-for="S.acceptCash" class="a-switch" aria-label="Cash" /></div>
                     <div class="a-setting"><div><div class="a-setting-label">Credit / debit card</div></div><input asp-for="S.acceptCard" class="a-switch" aria-label="Credit or debit card" /></div>
                     <div class="a-setting"><div><div class="a-setting-label">Online banking (FPX)</div></div><input asp-for="S.acceptFpx" class="a-switch" aria-label="Online banking" /></div>
                     <div class="a-setting"><div><div class="a-setting-label">E-wallet</div><div class="a-setting-hint">Touch 'n Go, GrabPay</div></div><input asp-for="S.acceptEwallet" class="a-switch" aria-label="E-wallet" /></div>
+                    <div class="a-setting"><div><div class="a-setting-hint">Cashless only: at least one method must stay on</div></div></div>
                 </section>
             </div>
 
@@ -140,23 +140,19 @@
                 <section class="a-card">
                     <div class="a-card-head"><h2 class="a-card-title">Sign-in protection</h2></div>
                     <div class="a-setting">
-                        <div><div class="a-setting-label">Lock account after failed sign-ins</div><div class="a-setting-hint">The account stays locked until an administrator unlocks it</div></div>
+                        <div><div class="a-setting-label">Lock account after failed sign-ins</div><div class="a-setting-hint">The account is locked for 15 minutes after this many failed sign-ins</div></div>
                         <div class="input-group"><input asp-for="S.maxFailedLogins" type="number" class="form-control a-input" min="3" aria-label="Failed attempts" /><span class="input-group-text">attempts</span></div>
                     </div>
                     <div class="a-setting">
                         <div><div class="a-setting-label">Sign out when inactive</div></div>
-                        <div class="input-group"><input asp-for="S.idleTimeoutMinutes" type="number" class="form-control a-input" min="5" aria-label="Idle timeout in minutes" /><span class="input-group-text">minutes</span></div>
-                    </div>
-                    <div class="a-setting">
-                        <div><div class="a-setting-label">Require two-step verification for staff</div></div>
-                        <input asp-for="S.requireTwoStep" class="a-switch" aria-label="Require two-step verification" />
+                        <div class="input-group"><input asp-for="S.idleTimeoutMinutes" type="number" class="form-control a-input" min="5" max="480" aria-label="Idle timeout in minutes" /><span class="input-group-text">minutes</span></div>
                     </div>
                 </section>
             </div>
         </div>
 
         <div class="a-savebar">
-            <button type="reset" class="a-btn quiet" data-toast="Changes discarded">Discard</button>
+            <a id="discardLink" asp-page="/Admin/Settings" asp-route-tab="@Model.Tab" class="a-btn quiet">Discard</a>
             <button type="submit" class="a-btn solid">Save changes</button>
         </div>
     </form>
@@ -174,11 +170,13 @@
     <script>
         (function () {
             const field = document.getElementById('Tab');
+            const discard = document.getElementById('discardLink');
 
-            // Remember the open tab so it survives Save
+            // Remember the open tab so it survives Save (and Discard)
             document.querySelectorAll('.a-subnav [data-bs-target]').forEach(btn => {
                 btn.addEventListener('shown.bs.tab', () => {
                     field.value = btn.dataset.bsTarget.replace('#set-', '');
+                    discard.href = '?tab=' + encodeURIComponent(field.value);
                 });
             });
 

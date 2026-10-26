@@ -44,11 +44,6 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return SignOutAndGoToLogin();
             }
 
-            if (!CustomerProfileInput.DietaryOptions.Contains(input.DietaryPref))
-            {
-                ModelState.AddModelError("Customer.DietaryPref", "Please choose a dietary preference from the list.");
-            }
-
             if (ModelState.IsValid)
             {
                 string? error = await _profileService.UpdateCustomerProfileAsync(custId.Value, input);
@@ -129,7 +124,8 @@ namespace RestaurantManagementSystem.Pages.Customer
                     custName = customer.custName,
                     custEmail = customer.custEmail,
                     custPhone = customer.custPhone,
-                    DietaryPref = customer.DietaryPref,
+                    Prefs = MenuVocabulary.Parse(customer.DietaryPref).ToList(),
+                    Allergies = MenuVocabulary.Parse(customer.Allergies).ToList(),
                     promoOptIn = customer.promoOptIn
                 };
             }

@@ -55,21 +55,24 @@ builder.Services.AddScoped<DemoAccountSeeder>();
 
 var app = builder.Build();
 
-// Seed menu/restaurant data
+// ---------- Database setup: create/update DB, then seed ----------
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    DbSeeder.Seed(db);
-}
 
-// Development only: create the demo admin and staff accounts if they are missing
-if (app.Environment.IsDevelopment())
-{
-    using (IServiceScope scope = app.Services.CreateScope())
+    // 1. Create the database if missing and apply all pending migrations
+    db.Database.Migrate();
+
+    // 2. Development only: demo admin and staff accounts (must come BEFORE Seed,
+    //    because promotions need an existing Admin)
+    if (app.Environment.IsDevelopment())
     {
-        DemoAccountSeeder seeder = scope.ServiceProvider.GetRequiredService<DemoAccountSeeder>();
-        await seeder.SeedAsync();
+        var demoSeeder = scope.ServiceProvider.GetRequiredService<DemoAccountSeeder>();
+        await demoSeeder.SeedAsync();
     }
+
+    // 3. Menu, tables, restaurant, promotions (safe to run on every startup)
+    DbSeeder.Seed(db);
 }
 
 if (!app.Environment.IsDevelopment())

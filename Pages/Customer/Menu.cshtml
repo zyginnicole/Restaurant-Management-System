@@ -21,14 +21,18 @@
    One slide per active promotion. Values map to the Promotion model:
    promoTitle, promoDescription, promoLabel, promoCode, promoActive. *@
 @section TopBanner {
-    @if (Model.Promotions.Any())
+    @{
+        // The banner only shows promotions that can be used right now
+        var bannerPromos = Model.Promotions.Where(p => !Model.PromoUnavailable.ContainsKey(p.promoID)).ToList();
+    }
+    @if (bannerPromos.Any())
     {
         <div class="md-promo-strip" id="promoStrip" role="region" aria-label="Current promotions">
             <div id="promoCarousel" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="5000">
                 <div class="carousel-inner">
-                    @for (int i = 0; i < Model.Promotions.Count; i++)
+                    @for (int i = 0; i < bannerPromos.Count; i++)
                     {
-                        var promo = Model.Promotions[i];
+                        var promo = bannerPromos[i];
                         <div class="carousel-item @(i == 0 ? "active" : "")">
                             <button type="button" class="md-promo-slide" data-promo-target="promo-@promo.promoID">
                                 <span class="md-promo-label">Promotion</span>
@@ -56,8 +60,23 @@
 @* ---------- Tabs + search ---------- *@
 <style>
     /* Many categories: keep the tabs on one line and let them scroll sideways */
-    .md-menu-toolbar .md-tabs { display: flex; flex-wrap: nowrap; flex: 1 1 0; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
-    .md-menu-toolbar .md-tabs button { flex: 0 0 auto; white-space: nowrap; }
+    .md-menu-toolbar .md-tabs {
+        display: flex;
+        flex-wrap: nowrap;
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 6px;
+    }
+
+        .md-menu-toolbar .md-tabs button {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
 </style>
 <div class="md-menu-toolbar">
     <nav class="md-tabs" aria-label="Menu categories">
@@ -71,27 +90,61 @@
     </nav>
     <input class="form-control md-input md-search" id="menuSearch" type="search" placeholder="Search dishes" aria-label="Search dishes" />
 </div>
-<p class="md-menu-count" id="menuCount">Picked for you · 6 dishes</p>
+
+@* ---------- Allergen switch + tag chips ---------- *@
+@{
+    var tagChips = RestaurantManagementSystem.Helpers.MenuVocabulary.Tags
+        .Where(t => Model.MenuItems.Any(m => RestaurantManagementSystem.Helpers.MenuVocabulary.Parse(m.menuTags).Contains(t)))
+        .ToList();
+}
+<div class="md-filterbar" id="menuFilterBar">
+    @if (Model.CustomerAllergies.Any())
+    {
+        <div class="form-check form-switch md-allergen-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="hideAllergens" checked />
+            <label class="form-check-label" for="hideAllergens">Hide dishes with my allergens (@string.Join(", ", Model.CustomerAllergies))</label>
+        </div>
+    }
+    @if (tagChips.Any())
+    {
+        <div class="md-chips d-none" id="tagChips" role="group" aria-label="Filter by tag">
+            @foreach (var t in tagChips)
+            {
+                <button type="button" class="md-chip" data-tag="@t" aria-pressed="false">@t</button>
+            }
+            <button type="button" class="md-chip md-chip-clear d-none" data-clear-tags>Clear</button>
+        </div>
+    }
+    <p class="md-allergen-note">Allergen information is entered by the restaurant and may not be complete. Cross-contact can happen. Please tell our staff about any severe allergy.</p>
+</div>
 
 @* =====================================================
    Recommendations tab
    ===================================================== *@
 <div id="recommendationsPanel">
-    <h2 class="md-section-title">Based on your preferences</h2>
-    <div class="row md-grid md-section">
-        @foreach (var item in Model.RecommendedItems)
+    @{
+        var recSections = new (string Title, List<RestaurantManagementSystem.Model.Menu> Dishes)[]
         {
-            <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="item" /></div>
-        }
-    </div>
-
-    <h2 class="md-section-title">Popular selection</h2>
-    <div class="row md-grid">
-        @foreach (var item in Model.PopularItems)
-        {
-            <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="item" /></div>
-        }
-    </div>
+            ("Order again", Model.Recs.OrderedBefore),
+            ("Based on your preferences", Model.Recs.ForYourPreference),
+            ("Popular dishes", Model.Recs.TopSellers),
+            ("Signature Dishes", Model.Recs.Signature)
+        };
+    }
+    @foreach (var rec in recSections.Where(r => r.Dishes.Any()))
+    {
+        <h2 class="md-section-title">@rec.Title</h2>
+        <div class="row md-grid md-section">
+            @foreach (var item in rec.Dishes)
+            {
+                <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="item" /></div>
+            }
+        </div>
+    }
+    @if (!recSections.Any(r => r.Dishes.Any()))
+    {
+        <p class="md-empty">No recommendations yet. Browse the whole menu in the All tab.</p>
+    }
 </div>
 
 @* =====================================================
@@ -113,6 +166,14 @@
                     @if (promo.autoApply)
                     {
                         <span><i class="bi bi-magic"></i>Applied automatically</span>
+                    }
+                    @foreach (var rule in RestaurantManagementSystem.Helpers.PromotionRules.RulesSummary(promo))
+                    {
+                        <span><i class="bi bi-info-circle"></i>@rule</span>
+                    }
+                    @if (Model.PromoUnavailable.TryGetValue(promo.promoID, out var notNow))
+                    {
+                        <span class="is-off"><i class="bi bi-clock"></i>Not available right now · @notNow</span>
                     }
                 </div>
             </div>
@@ -138,12 +199,12 @@
    All / category tabs
    ===================================================== *@
 <div class="row md-grid d-none" id="menuGrid">
-@foreach (var item in Model.MenuItems)
-{
-    <div class="col-sm-6 col-xl-4 md-menu-item" data-category="@item.MenuCategory?.categoryName" data-name="@item.menuName">
-        <partial name="_MenuCard" model="item" />
-    </div>
-}
+    @foreach (var item in Model.MenuItems)
+    {
+        <div class="col-sm-6 col-xl-4 md-menu-item" data-category="@item.MenuCategory?.categoryName" data-name="@item.menuName">
+            <partial name="_MenuCard" model="item" />
+        </div>
+    }
 </div>
 
 <p class="md-empty d-none" id="menuEmpty">No dishes match your search. Try another name or category.</p>
@@ -195,6 +256,7 @@
     @* Antiforgery token + the saved cart (dish name -> id, id -> quantity) read by menu.js *@
     @Html.AntiForgeryToken()
     <script>window.MD_CART = @Json.Serialize(new { ids = Model.DishIds, quantities = Model.CartQuantities });</script>
+    <script>window.MD_USER = @Json.Serialize(new { allergies = Model.CustomerAllergies });</script>
     <script src="~/js/menu.js" asp-append-version="true"></script>
     <script>
         (function () {

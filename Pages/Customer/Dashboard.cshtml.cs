@@ -7,8 +7,8 @@ using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
-    // Customer overview (dashboard). The "Next reservation" and "Order in progress" cards read real data;
-    // the recommendations hero is still the static design.
+    // Customer overview (dashboard). The recommendation hero, the "Next reservation" card and the
+    // "Order in progress" card read real data.
     public class DashboardModel : PageModel
     {
         // Same open statuses as the Orders page (Completed and Cancelled orders are history)
@@ -19,12 +19,20 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         private readonly ApplicationDbContext _context;
         private readonly ReservationService _reservations;
+        private readonly RecommendationService _recommendations;
 
-        public DashboardModel(ApplicationDbContext context, ReservationService reservations)
+        public DashboardModel(
+            ApplicationDbContext context,
+            ReservationService reservations,
+            RecommendationService recommendations)
         {
             _context = context;
             _reservations = reservations;
+            _recommendations = recommendations;
         }
+
+        // Slides of the black recommendation section at the top (empty = the section is hidden)
+        public List<HeroSlide> HeroSlides { get; set; } = new();
 
         // Next reservations card, soonest first (empty → the card shows "Book a table")
         public List<Reservation> NextReservations { get; set; } = new();
@@ -53,6 +61,10 @@ namespace RestaurantManagementSystem.Pages.Customer
                 ? HttpContext.Session.GetUserId()
                 : null;
             if (custId == null) return;
+
+            // Same recommendations as the Menu page (allergies already filtered out)
+            var recs = await _recommendations.GetForCustomerAsync(custId.Value);
+            HeroSlides = recs.ToHeroSlides();
 
             // Next reservations: same list as the Reservations page, limited to the next 7 days
             var until = DateTime.Today.AddDays(NextReservationDays + 1);

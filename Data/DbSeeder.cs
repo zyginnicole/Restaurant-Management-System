@@ -1,5 +1,4 @@
-﻿
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Model;
 
 namespace RestaurantManagementSystem.Data
@@ -179,6 +178,40 @@ namespace RestaurantManagementSystem.Data
                     isAvailable = true,
                     menuImageUrl = "/images/menu/eight-course-tasting-menu.jpg"
                 });
+                db.SaveChanges();
+            }
+
+            // ---------- 9. Tags, allergens and signature dishes (used by the customer recommendations) ----------
+            // Fills only what is still empty, so anything the admin set by hand is never overwritten.
+            // Signature dishes are only seeded while no dish is marked signature yet.
+            // CHECK: allergens are best guesses from the dish names. The chef must confirm them before real customers use this.
+            // null allergens = unknown: the dish stays hidden from customers who have allergies.
+            {
+                var info = new Dictionary<string, (bool Signature, string? Tags, string? Allergens)>
+                {
+                    ["Oyster Selection"] = (false, "Seafood", "Shellfish"),
+                    ["Caviar & Soft Egg"] = (false, "Seafood", "Fish,Eggs,Dairy"),
+                    ["Wagyu Beef Tenderloin"] = (true, "Beef", "None"),                  // CHECK: jus may contain gluten or dairy
+                    ["Duck à l'Orange"] = (true, null, "Gluten,Eggs,Dairy"),     // pommes dauphine = choux pastry
+                    ["Pan-Seared Sea Bass"] = (false, "Seafood", "Fish,Dairy"),            // beurre blanc = butter
+                    ["Lobster Thermidor"] = (false, "Seafood", "Shellfish,Dairy,Eggs"),
+                    ["Mille-Feuille"] = (false, "Vegetarian,Sweet", "Gluten,Dairy,Eggs"),
+                    ["Valrhona Chocolate Fondant"] = (true, "Vegetarian,Sweet", "Gluten,Dairy,Eggs,Tree nuts,Soy"), // praline, chocolate
+                    ["Château Margaux 2018 · glass"] = (false, null, "None"),
+                    ["Sparkling Water"] = (false, "Vegan,Vegetarian,Halal", "None"),
+                    ["Eight-Course Tasting Menu"] = (true, null, null)                     // CHECK: courses change, ask the chef
+                };
+
+                bool seedSignature = !db.Menus.Any(m => m.isSignature);
+
+                foreach (var dish in db.Menus.ToList())
+                {
+                    if (!info.TryGetValue(dish.menuName, out var x)) continue;
+
+                    if (dish.menuTags == null) dish.menuTags = x.Tags;
+                    if (dish.menuAllergens == null) dish.menuAllergens = x.Allergens;
+                    if (seedSignature && x.Signature) dish.isSignature = true;
+                }
                 db.SaveChanges();
             }
         }
