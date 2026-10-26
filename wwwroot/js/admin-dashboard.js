@@ -72,11 +72,13 @@
             }
         });
 
-        // Reservations by start hour (20:00 = busiest)
-        var hours = ['12:00', '13:00', '14:00', '18:00', '19:00', '20:00', '21:00', '22:00'];
-        var bookings = [30, 34, 12, 22, 58, 72, 36, 9];
+        // Reservations by start hour for the chosen period (data-labels / data-values from the server; busiest = teal)
+        var peakCanvas = document.getElementById('peakChart');
+        if (!peakCanvas) return;   // no reservations in this period
+        var hours = JSON.parse(peakCanvas.dataset.labels || '[]');
+        var bookings = JSON.parse(peakCanvas.dataset.values || '[]');
 
-        new Chart(document.getElementById('peakChart'), {
+        new Chart(peakCanvas, {
             type: 'bar',
             data: {
                 labels: hours,
@@ -175,27 +177,27 @@
 })();
 
 // ---------- Period selector (day / month / year) ----------
-// Updates the period wording on the page. Loading figures for the chosen period is for the team to add.
+// Reloads the page for the chosen period: ?year=2026&month=10&day=25 · ?year=2026&month=10 · ?year=2026.
+// The server works out the figures and the period wording (DashboardModel).
 (function () {
     var day = document.getElementById('periodDay');
     var month = document.getElementById('periodMonth');
     var year = document.getElementById('periodYear');
     if (!day || !month || !year) return;
 
-    function update() {
-        // A single day only makes sense inside a chosen month
+    // A single day only makes sense inside a chosen month
+    function lockDay() {
         day.disabled = month.value === '';
         if (day.disabled) day.value = '';
-
-        var label = month.value === '' ? year.value                       // whole year
-                  : day.value === '' ? month.value                        // whole month
-                  : day.value + ' ' + month.value;                        // single date
-
-        document.querySelectorAll('[data-period-label]').forEach(function (el) {
-            el.textContent = el.hasAttribute('data-with-year') && month.value !== '' ? label + ' ' + year.value : label;
-        });
     }
 
-    [day, month, year].forEach(function (select) { select.addEventListener('change', update); });
-    update();
+    function reload() {
+        lockDay();
+        var query = new URLSearchParams({ year: year.value, month: month.value || '0' });
+        if (day.value) query.set('day', day.value);
+        window.location.search = query.toString();
+    }
+
+    [day, month, year].forEach(function (select) { select.addEventListener('change', reload); });
+    lockDay();
 })();

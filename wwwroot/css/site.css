@@ -240,7 +240,11 @@ a {
     background: var(--md-photo-interior);
     background-size: cover;
     background-position: center;
-    /* rest of the rule stays the same */
+    color: var(--md-white);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 3.5rem;
 }
 
     .md-auth-photo::before {
@@ -2741,7 +2745,9 @@ button.md-signout {
         box-shadow: inset 3px 0 0 #3f9b72;
     }
 
-    .md-list-row.is-cancelled {
+    .md-list-row.is-cancelled,
+    .md-list-row.is-noshow,
+    .md-list-row.is-declined {
         box-shadow: inset 3px 0 0 #c9c5bc;
     }
 
@@ -2999,6 +3005,20 @@ button.md-signout {
     .md-stack .is-pending, .md-legend .is-pending {
         background: var(--md-danger);
     }
+
+    /* Admin Dashboard "Reservations by status": Seated yellow, No-show / Declined darker greys */
+    .md-stack .is-seated, .md-legend .is-seated {
+        background: #e6b800;
+    }
+
+    .md-stack .is-noshow, .md-legend .is-noshow {
+        background: #a39e94;
+    }
+
+    .md-stack .is-declined, .md-legend .is-declined {
+        background: #8a857c;
+    }
+
 /* =========================================================
    Error page
    ========================================================= */
@@ -7250,36 +7270,37 @@ button.md-floor-table {
     color: var(--md-muted);
 }
 
-.md-chips {
+/* Menu tag chips (scoped to #tagChips so the chips on Reservations, Profile and Guests keep their own look) */
+#tagChips {
     display: flex;
     flex-wrap: wrap;
     gap: .4rem;
 }
 
-.md-chip {
-    padding: .3rem .8rem;
-    border: 1px solid var(--md-line);
-    border-radius: 1rem;
-    background: var(--md-white);
-    color: var(--md-ink);
-    font-size: .78rem;
-    cursor: pointer;
-}
-
-    .md-chip:hover {
-        border-color: var(--md-gold);
+    #tagChips .md-chip {
+        padding: .3rem .8rem;
+        border: 1px solid var(--md-line);
+        border-radius: 1rem;
+        background: var(--md-white);
+        color: var(--md-ink);
+        font-size: .78rem;
+        cursor: pointer;
     }
 
-    .md-chip.active {
-        background: var(--md-gold);
-        border-color: var(--md-gold);
-        color: var(--md-black);
-    }
+        #tagChips .md-chip:hover {
+            border-color: var(--md-gold);
+        }
 
-.md-chip-clear {
-    border-style: dashed;
-    color: var(--md-muted);
-}
+        #tagChips .md-chip.active {
+            background: var(--md-gold);
+            border-color: var(--md-gold);
+            color: var(--md-black);
+        }
+
+    #tagChips .md-chip-clear {
+        border-style: dashed;
+        color: var(--md-muted);
+    }
 
 /* Promotion that can't be used right now (wrong day / time / birthday month) */
 .md-promo-meta .is-off {

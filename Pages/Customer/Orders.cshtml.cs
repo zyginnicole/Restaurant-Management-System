@@ -26,6 +26,9 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         public List<OrderDisplayItem> OpenOrders { get; set; } = new();
 
+        // SST rate from Admin > Settings (shown in the takeaway note)
+        public decimal SstPct { get; set; } = 6m;
+
         public class OrderDisplayItem
         {
             public int OrderId { get; set; }
@@ -57,7 +60,8 @@ namespace RestaurantManagementSystem.Pages.Customer
             public int Quantity { get; set; }
             public decimal UnitPrice { get; set; }
             public string? Note { get; set; }
-            public decimal LineTotal => Quantity * UnitPrice;
+            public decimal Discount { get; set; }                    // promotion taken off this line
+            public decimal LineTotal => Quantity * UnitPrice - Discount;
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -132,6 +136,9 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         private async Task LoadOrdersAsync(int custId)
         {
+            var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            SstPct = settings?.sstPct ?? 6m;
+
             var openStatuses = OpenStatuses;
 
             var orders = await _context.Orders.AsNoTracking()
@@ -193,7 +200,8 @@ namespace RestaurantManagementSystem.Pages.Customer
                         Name = oi.Menu?.menuName ?? "Dish",
                         Quantity = oi.quantity,
                         UnitPrice = oi.unitPrice,
-                        Note = oi.orderRemark
+                        Note = oi.orderRemark,
+                        Discount = oi.discountAmount
                     }).ToList()
                 };
             }).ToList();

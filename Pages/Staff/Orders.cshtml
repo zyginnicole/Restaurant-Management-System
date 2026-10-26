@@ -4,50 +4,23 @@
     ViewData["Title"] = "Orders";
     ViewData["Module"] = "Staff";
     ViewData["ActiveNav"] = "Orders";
-    ViewData["Eyebrow"] = "Wednesday, 16 September 2026 · Dinner service";
+    ViewData["Eyebrow"] = Model.TodayLabel;
     ViewData["Heading"] = "Orders";
     ViewData["Subtitle"] = "Create orders for seated tables and move them through the kitchen";
     Layout = "_DashboardLayout";
 
-    // ---------- Example data – later from the database (see OrdersModel) ----------
+    // ---------- Data comes from OrdersModel (the database) ----------
     // Order + its Reservation / table. Steps = time each tracker step was reached (Order placed, Preparing, Served, Completed).
-    var orders = new (string Code, string Type, string? Table, string Name, string? Res, string Status, string[] Steps,
-                      string? Pickup, (int Qty, string Name, decimal Price, string? Remark)[] Items)[]
-    {
-        ("ORD-0089", "Takeaway", null, "Alexandra Beaumont", null, "Preparing", new[] { "20:44", "20:46", "", "" }, "21:30",
-            new[] { (1, "Wagyu Beef Tenderloin", 168m, (string?)null), (1, "Valrhona Chocolate Fondant", 36m, null) }),
-        ("ORD-0085", "Dine-in", "T-03", "Daniel Tan", "R-0047", "Order placed", new[] { "20:22", "", "", "" }, null,
-            new[] { (1, "Pan-Seared Sea Bass", 98m, (string?)"No butter sauce"), (1, "Valrhona Chocolate Fondant", 36m, null) }),
-        ("ORD-0083", "Dine-in", "T-09", "Thomas Ashford", "R-0039", "Served", new[] { "18:12", "18:14", "19:02", "" }, null,
-            new[] { (1, "Oyster Selection", 68m, (string?)null), (2, "Duck à l'Orange", 92m, null), (2, "Valrhona Chocolate Fondant", 36m, null), (1, "Sparkling Water", 18m, null), (1, "Mille-Feuille", 32m, null) }),
-        ("ORD-0082", "Dine-in", "T-12", "Eleanor Whitmore", "R-0041", "Preparing", new[] { "19:20", "19:22", "", "" }, null,
-            new[] { (2, "Wagyu Beef Tenderloin", 168m, (string?)"Medium rare"), (2, "Pan-Seared Sea Bass", 98m, null), (4, "Valrhona Chocolate Fondant", 36m, null) }),
-        ("ORD-0081", "Dine-in", "T-06", "Marcus Delacroix", "R-0042", "Preparing", new[] { "19:40", "19:41", "", "" }, null,
-            new[] { (1, "Caviar & Soft Egg", 85m, (string?)null), (1, "Wagyu Beef Tenderloin", 168m, "Medium"), (1, "Château Margaux 2018 · glass", 120m, null), (1, "Mille-Feuille", 32m, null) }),
-        ("ORD-0080", "Dine-in", "T-11", "Grace Lim", "R-0036", "Completed", new[] { "18:05", "18:06", "18:50", "19:45" }, null,
-            new[] { (2, "Oyster Selection", 68m, (string?)null), (2, "Duck à l'Orange", 92m, null) }),
-        ("ORD-0084", "Takeaway", null, "Jason Ong", null, "Cancelled", new[] { "19:10", "", "", "" }, "19:45",
-            new[] { (2, "Mille-Feuille", 32m, (string?)null) })
-    };
+    var orders = Model.Orders;
     string Group(string status) => status is "Completed" ? "completed" : status is "Cancelled" ? "cancelled" : "active";
     // CSS class for an order status: "Order placed" → is-placed, "Preparing" → is-preparing …
     string OrderClass(string status) => status == "Order placed" ? "is-placed" : "is-" + status.ToLower();
-    decimal Subtotal((int Qty, string Name, decimal Price, string? Remark)[] items) => items.Sum(i => i.Qty * i.Price);
+    decimal Subtotal(IEnumerable<RestaurantManagementSystem.Pages.Staff.OrdersModel.ItemRow> items) => items.Sum(i => i.Qty * i.Price - i.Discount);   // after promotions
     string Rm(decimal value) => "RM " + value.ToString("#,##0.00");
 
     // New order: Seated reservations (only these can get a dine-in order) and the Menu
-    var seated = new (string Res, string Table, string Name, bool WalkIn)[]
-    {
-        ("R-0047", "T-03", "Daniel Tan", true), ("R-0042", "T-06", "Marcus Delacroix", false), ("R-0041", "T-12", "Eleanor Whitmore", false)
-    };
-    var menu = new (int Id, string Category, string Name, decimal Price, bool Available)[]
-    {
-        (1, "Starters", "Oyster Selection", 68m, true), (2, "Starters", "Caviar & Soft Egg", 85m, true),
-        (3, "Mains", "Wagyu Beef Tenderloin", 168m, true), (4, "Mains", "Lobster Thermidor", 128m, false),
-        (5, "Mains", "Duck à l'Orange", 92m, true), (6, "Mains", "Pan-Seared Sea Bass", 98m, true),
-        (7, "Desserts", "Mille-Feuille", 32m, true), (8, "Desserts", "Valrhona Chocolate Fondant", 36m, true),
-        (9, "Beverages", "Château Margaux 2018 · glass", 120m, true), (10, "Beverages", "Sparkling Water", 18m, true)
-    };
+    var seated = Model.Seated;
+    var menu = Model.MenuRows;
     string[] steps = { "Order placed", "Preparing", "Served", "Completed" };
     // List order: the statuses that need staff come first
     string[] priority = { "Order placed", "Preparing", "Served", "Completed", "Cancelled" };
@@ -82,14 +55,14 @@
                 @foreach (var o in orders.OrderBy(o => Array.IndexOf(priority, o.Status)))
                 {
                     <li class="md-order md-staff-order @OrderClass(o.Status)" data-group="@Group(o.Status)" data-code="@o.Code">
-                        <span class="md-table-badge">@(o.Table != null ? o.Table[2..] : "TA")</span>
+                        <span class="md-table-badge">@(o.Table != null ? (o.Table.Length > 2 ? o.Table[2..] : o.Table) : "TA")</span>
                         <div class="md-order-main">
                             <button type="button" class="md-staff-order-btn stretched-link" data-show-order="@o.Code">@(o.Table ?? "Takeaway") · @o.Name</button>
                             <span class="md-guest-meta">@o.Code · @o.Items.Sum(i => i.Qty) items@(o.Pickup != null ? " · pick-up " + o.Pickup : "")</span>
                         </div>
                         <div class="md-order-side">
                             <span class="md-pill @OrderClass(o.Status)">@o.Status</span>
-                            <span class="md-order-amount">@Rm(Subtotal(o.Items))</span>
+                            <span class="md-order-amount">@Rm(o.Total)</span>
                         </div>
                     </li>
                 }
@@ -149,10 +122,10 @@
                         <div class="col-sm-5 col-lg-12 col-xl-5">
                             <label class="md-label" for="newPickup">Pick-up</label>
                             <select class="form-select md-input" id="newPickup" name="pickupDateTime">
-                                <option value="2026-09-16T21:15">21:15</option>
-                                <option value="2026-09-16T21:30" selected>21:30</option>
-                                <option value="2026-09-16T21:45">21:45</option>
-                                <option value="2026-09-16T22:00">22:00</option>
+                                @foreach (var p in Model.PickupOptions)
+                                {
+                                    <option value="@p.Value">@p.Label</option>
+                                }
                             </select>
                         </div>
                     </div>
@@ -169,7 +142,7 @@
                 <p class="md-notice-empty" id="draftEmpty">No items yet. Add dishes from the menu below.</p>
                 <div class="md-card-body md-draft-foot">
                     <div class="md-draft-total"><span>Subtotal</span><b id="draftSubtotal">RM 0.00</b></div>
-                    <p class="md-hint mt-1 mb-3">Service charge and SST are added on the bill.</p>
+                    <p class="md-hint mt-1 mb-3">Service charge and SST are added when the order is sent.</p>
                     <div class="md-edit-actions">
                         <button type="submit" class="btn md-btn-round md-btn-green" id="sendToKitchen" disabled>Send to kitchen</button>
                     </div>
@@ -182,10 +155,10 @@
                     <span class="md-card-label">Add items</span>
                     <div class="md-segment md-segment-sm" role="group" aria-label="Menu category" id="addTabs">
                         <button type="button" class="active" data-cat="all">All</button>
-                        <button type="button" data-cat="Starters">Starters</button>
-                        <button type="button" data-cat="Mains">Mains</button>
-                        <button type="button" data-cat="Desserts">Desserts</button>
-                        <button type="button" data-cat="Beverages">Beverages</button>
+                        @foreach (var cat in Model.Categories)
+                        {
+                            <button type="button" data-cat="@cat">@cat</button>
+                        }
                     </div>
                 </div>
                 <div class="md-card-body">
@@ -221,9 +194,9 @@
    ===================================================== *@
 @foreach (var o in orders)
 {
-    int reached = o.Steps.Count(s => s != "");
+    int reached = Array.IndexOf(steps, o.Status) + 1;     // steps done so far, from the status
     bool open = o.Status is "Order placed" or "Preparing";
-    string details = $"{(o.Table ?? "Takeaway")} · {o.Name} · {o.Items.Sum(i => i.Qty)} items · {Rm(Subtotal(o.Items))}";
+    string details = $"{(o.Table ?? "Takeaway")} · {o.Name} · {o.Items.Sum(i => i.Qty)} items · {Rm(o.Total)}";
     <template data-order="@o.Code">
         <section class="md-card">
             <div class="md-card-header">
@@ -233,6 +206,10 @@
             <div class="md-card-body">
                 <p class="md-hint mt-0 mb-3">
                     @o.Type@(o.Res != null ? " · reservation " + o.Res : "")@(o.Pickup != null ? " · pick-up " + o.Pickup : "") · placed at @o.Steps[0]
+                    @if (o.Phone != null)
+                    {
+                        <span class="d-block">Phone Number: @o.Phone</span>
+                    }
                 </p>
                 @if (o.Status != "Cancelled")
                 {
@@ -254,13 +231,17 @@
                                 {
                                     <small class="md-item-note">@i.Remark</small>
                                 }
+                                @if (!string.IsNullOrEmpty(i.Promo) && i.Discount > 0)
+                                {
+                                    <small class="md-item-note">Promo @i.Promo &minus;@Rm(i.Discount)</small>
+                                }
                             </span>
-                            <span>@Rm(i.Qty * i.Price)</span>
+                            <span>@Rm(i.Qty * i.Price - i.Discount)</span>
                         </li>
                     }
                 </ul>
-                <div class="md-draft-total"><span>Subtotal</span><b>@Rm(Subtotal(o.Items))</b></div>
-                <p class="md-hint mt-1 mb-3">@(o.Type == "Takeaway" ? "Takeaway is paid online with SST included." : "Service charge and SST are added on the bill.")</p>
+                <div class="md-draft-total"><span>Subtotal</span><b>@Rm(o.Total)</b></div>
+                <p class="md-hint mt-1 mb-3">@(o.Type == "Takeaway" ? "Includes SST, after promotions." : "Includes service charge and SST, after promotions.")</p>
 
                 <div class="md-edit-actions">
                     @switch (o.Status)
@@ -278,7 +259,7 @@
                             </form>
                             break;
                         case "Served":
-                            <a class="btn md-btn-round btn-md-dark" href="/Staff/Billing?order=@o.Code">Proceed payment</a>
+                            <a class="btn md-btn-round btn-md-dark" href="/Staff/Billing?order=@o.Code">@(o.Type == "Takeaway" ? "View payment" : "Proceed payment")</a>
                             break;
                     }
                     @if (open)

@@ -51,6 +51,14 @@
                 </span>
                 <span>@Rm(item.LineTotal)</span>
             </div>
+            @* Promotion applied to this item: code + amount taken off (smaller than the item, larger than the note) *@
+            @if (!string.IsNullOrEmpty(item.PromoCode) && item.Discount > 0)
+            {
+                <div class="md-receipt-row" style="font-size: .92em;">
+                    <span class="md-receipt-label">Promo @item.PromoCode</span>
+                    <span>&minus;@Rm(item.Discount)</span>
+                </div>
+            }
         }
     </div>
 

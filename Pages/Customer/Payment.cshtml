@@ -95,19 +95,23 @@
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label class="md-label" for="cardName">Name on card</label>
-                                        <input class="form-control md-input" id="cardName" autocomplete="cc-name" value="@Model.CustomerName" />
+                                        <input class="form-control md-input" id="cardName" name="cardName" autocomplete="cc-name" value="@Model.CustomerName" required />
+                                        <div class="invalid-feedback">Enter the name on your card.</div>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="md-label" for="cardNumber">Card number</label>
-                                        <input class="form-control md-input" id="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" />
+                                        <input class="form-control md-input" id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" required />
+                                        <div class="invalid-feedback">Enter a valid card number.</div>
                                     </div>
                                     <div class="col-6 col-md-3">
                                         <label class="md-label" for="cardExpiry">Expiry</label>
-                                        <input class="form-control md-input" id="cardExpiry" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" maxlength="7" />
+                                        <input class="form-control md-input" id="cardExpiry" name="cardExpiry" inputmode="numeric" autocomplete="cc-exp" placeholder="MM / YY" maxlength="7" required />
+                                        <div class="invalid-feedback">Enter a valid expiry date.</div>
                                     </div>
                                     <div class="col-6 col-md-3">
                                         <label class="md-label" for="cardCvc">CVC</label>
-                                        <input class="form-control md-input" id="cardCvc" inputmode="numeric" autocomplete="cc-csc" placeholder="3 digits" maxlength="4" />
+                                        <input class="form-control md-input" id="cardCvc" name="cardCvc" inputmode="numeric" autocomplete="cc-csc" placeholder="3 digits" maxlength="4" required />
+                                        <div class="invalid-feedback">Enter the 3 or 4 digit CVC.</div>
                                     </div>
                                 </div>
                                 <p class="md-hint mt-3 mb-0"><i class="bi bi-lock me-1"></i>Card details go straight to our payment provider over a secure connection. Maison Dorée never stores your card number.</p>
@@ -157,6 +161,10 @@
                         @foreach (var line in Model.Lines)
                         {
                             <div><dt>@line.Quantity&times; @line.Name</dt><dd>RM @line.LineTotal.ToString("N2")</dd></div>
+                            if (line.Discount > 0)
+                            {
+                                <div style="font-size: .92em;"><dt>Promo @line.PromoCode</dt><dd>&minus;RM @line.Discount.ToString("N2")</dd></div>
+                            }
                         }
                         <div><dt>Subtotal</dt><dd>RM @Model.Subtotal.ToString("N2")</dd></div>
                         @if (Model.IsDineIn)
@@ -166,7 +174,7 @@
                         <div><dt>SST @Model.SstPct.ToString("0.##")%</dt><dd>RM @Model.Sst.ToString("N2")</dd></div>
                         <div class="md-sum-total"><dt>Total</dt><dd>RM @Model.Total.ToString("N2")</dd></div>
                     </dl>
-                    <button type="submit" class="btn btn-md-green w-100 mb-2" disabled="@(Model.DefaultMethod == string.Empty)">Pay RM @Model.Total.ToString("N2")</button>
+                    <button type="submit" class="btn btn-md-green w-100 mb-2" id="payButton" disabled="@(Model.DefaultMethod == string.Empty)">Pay RM @Model.Total.ToString("N2")</button>
                     <a class="btn btn-md-outline w-100" href="@(Model.IsDineIn ? "/Customer/Orders" : "/Customer/Checkout")">@(Model.IsDineIn ? "Back to orders" : "Back to checkout")</a>
                 </div>
             </section>
@@ -188,7 +196,76 @@
                 });
             });
 
-            // Card number in groups of 4: 1234 5678 9012 3456 (the card panel is missing when cards are switched off)
+            // ---------- Card fields are required: Pay stays locked until every field is valid ----------
+            // The card panel is missing when cards are switched off, and so are all payment methods
+            // when none is accepted (the server already disables the Pay button then).
+            var payButton = document.getElementById('payButton');
+            var hasCardPanel = !!document.getElementById('cardNumber');
+            var hasMethods = !!document.querySelector('input[name="paymentMethod"]');
+
+            var cardFields = {
+                cardName: function (v) { return v.trim().length >= 2; },
+                cardNumber: function (v) {
+                    var d = v.replace(/\D/g, '');
+                    if (d.length < 13 || d.length > 19) return false;
+                    var sum = 0, dbl = false;                              // Luhn check: use 4242 4242 4242 4242
+                    for (var i = d.length - 1; i >= 0; i--) {
+                        var n = parseInt(d.charAt(i), 10);
+                        if (dbl) { n *= 2; if (n > 9) n -= 9; }
+                        sum += n; dbl = !dbl;
+                    }
+                    return sum % 10 === 0;
+                },
+                cardExpiry: function (v) {
+                    var d = v.replace(/\D/g, '');                          // works with or without the " / " formatting
+                    if (d.length !== 4) return false;
+                    var month = parseInt(d.slice(0, 2), 10), year = 2000 + parseInt(d.slice(2), 10);
+                    return month >= 1 && month <= 12 && new Date(year, month, 1) > new Date();
+                },
+                cardCvc: function (v) { return /^\d{3,4}$/.test(v); }
+            };
+            var touched = {};
+
+            function cardIsMethod() {
+                var chosen = document.querySelector('input[name="paymentMethod"]:checked');
+                return !!chosen && chosen.value === 'Card';
+            }
+
+            function refreshPay() {
+                if (!hasMethods) return;                                   // nothing to validate, button stays disabled
+                var isCard = hasCardPanel && cardIsMethod();
+                var allValid = true;
+                if (hasCardPanel) {
+                    Object.keys(cardFields).forEach(function (id) {
+                        var input = document.getElementById(id);
+                        input.required = isCard;                           // hidden panels must not block the other methods
+                        var ok = cardFields[id](input.value);
+                        if (!ok) allValid = false;
+                        input.classList.toggle('is-invalid', isCard && !!touched[id] && !ok);
+                    });
+                }
+                payButton.disabled = isCard && !allValid;
+            }
+
+            if (hasCardPanel) {
+                Object.keys(cardFields).forEach(function (id) {
+                    var input = document.getElementById(id);
+                    input.addEventListener('input', refreshPay);
+                    input.addEventListener('blur', function () { touched[id] = true; refreshPay(); });
+                });
+            }
+            document.querySelectorAll('input[name="paymentMethod"]').forEach(function (radio) {
+                radio.addEventListener('change', refreshPay);
+            });
+            document.getElementById('paymentForm').addEventListener('submit', function (e) {
+                if (hasCardPanel && cardIsMethod()) {
+                    Object.keys(cardFields).forEach(function (id) { touched[id] = true; });
+                    refreshPay();
+                    if (payButton.disabled) e.preventDefault();
+                }
+            });
+
+            // Card number in groups of 4: 1234 5678 9012 3456
             var cardNumber = document.getElementById('cardNumber');
             if (cardNumber) {
                 cardNumber.addEventListener('input', function () {
@@ -203,6 +280,8 @@
                     this.value = d.length > 2 ? d.slice(0, 2) + ' / ' + d.slice(2) : d;
                 });
             }
+
+            refreshPay();
         })();
     </script>
 }

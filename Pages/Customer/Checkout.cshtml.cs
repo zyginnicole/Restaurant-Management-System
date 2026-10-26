@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
-using CustomerModel = RestaurantManagementSystem.Model.Customer;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
@@ -43,6 +42,12 @@ namespace RestaurantManagementSystem.Pages.Customer
             public int Quantity { get; set; }
             public string? Note { get; set; }
             public string? ImageUrl { get; set; }
+
+            public string? PromoCode { get; set; }
+            public string? PromoLabel { get; set; }
+            public string? PromoType { get; set; }
+            public decimal PromoValue { get; set; }
+            public decimal Discount { get; set; }
         }
 
         public class PickupOption
@@ -67,12 +72,18 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             await LoadPageAsync(custId.Value);
 
-            var reservedTableId = await FindOwnReservationTableIdAsync(custId.Value);
-            if (reservedTableId.HasValue)
+            // Check if customer has a valid active reservation for today
+            var reservation = await GetTodayReservationAsync(custId.Value);
+            if (reservation != null)
             {
-                TableId = reservedTableId.Value;
+                TableId = reservation.tableID;
                 HasReservation = true;
                 OrderType = "DineIn";
+            }
+            else
+            {
+                HasReservation = false;
+                OrderType = "Takeaway";
             }
 
             return Page();
@@ -140,11 +151,18 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             // 3. Order type logic & optional reservation linking
             DiningTable? table = null;
-            CustomerModel? customer = null;
+            string? contactPhone = null;
             int? ownReservationId = null;
 
             if (dineIn)
             {
+                // Verify reservation for today
+                var reservation = await GetTodayReservationAsync(custId.Value);
+                if (reservation == null)
+                {
+                    return await FailAsync(custId.Value, "Dine-in is only available for guests with a reservation today.");
+                }
+
                 if (TableId == null)
                 {
                     return await FailAsync(custId.Value, "Please select your table number.");
@@ -158,13 +176,7 @@ namespace RestaurantManagementSystem.Pages.Customer
                     return await FailAsync(custId.Value, "The selected table is currently unavailable.");
                 }
 
-                var today = DateTime.Today;
-                ownReservationId = await _context.Reservations.AsNoTracking()
-                    .Where(r => r.custID == custId.Value && r.tableID == table.tableID
-                             && r.reservationDateTime >= today && r.reservationDateTime < today.AddDays(1)
-                             && r.reservationStatus != "Cancelled")
-                    .Select(r => (int?)r.reservationID)
-                    .FirstOrDefaultAsync();
+                ownReservationId = reservation.reservationID;
             }
             else
             {
@@ -185,44 +197,53 @@ namespace RestaurantManagementSystem.Pages.Customer
                     return await FailAsync(custId.Value, "Contact phone must be 10 to 11 digits (numbers only).");
                 }
 
-                customer = await _context.Customers.FindAsync(custId.Value);
-                if (customer != null && customer.custPhone != phone)
-                {
-                    customer.custPhone = phone;
-                }
+                // saved on the order (the customer's own profile phone is not changed)
+                contactPhone = phone;
             }
 
-            // 4. Calculate subtotal, service charge (dine-in only), and SST
+            // 4. Promotions
+            var promos = await PromotionPricing.RunningAsync(_context, DateTime.Today);
+            var priced = lines.Select(l => new
+            {
+                Line = l,
+                Menu = menus[l.MenuId],
+                Promo = PromotionPricing.BestFor(promos, l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)
+            }).ToList();
+
+            // 5. Calculate totals
             var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
             decimal servicePct = settings?.serviceChargePct ?? 10m;
             decimal sstPct = settings?.sstPct ?? 6m;
 
-            decimal subtotal = lines.Sum(l => menus[l.MenuId].menuPrice * l.Quantity);
+            decimal subtotal = priced.Sum(x => x.Menu.menuPrice * x.Line.Quantity - (x.Promo?.LineDiscount ?? 0m));
             decimal service = dineIn
                 ? Math.Round(subtotal * servicePct / 100m, 2, MidpointRounding.AwayFromZero)
                 : 0m;
             decimal sst = Math.Round((subtotal + service) * sstPct / 100m, 2, MidpointRounding.AwayFromZero);
 
-            // 5. Create Order & OrderItems
+            // 6. Create Order
             var order = new Order
             {
                 custID = custId.Value,
                 tableID = table?.tableID,
                 reservationID = ownReservationId,
                 pickupDateTime = dineIn ? null : PickupDateTime,
+                contactPhone = dineIn ? null : contactPhone,
                 orderDateTime = DateTimeOffset.Now,
                 orderStatus = "Order placed",
                 totalAmount = subtotal + service + sst
             };
 
-            foreach (var line in lines)
+            foreach (var x in priced)
             {
                 order.OrderItems.Add(new OrderItem
                 {
-                    menuID = line.MenuId,
-                    quantity = line.Quantity,
-                    unitPrice = menus[line.MenuId].menuPrice,
-                    orderRemark = line.Note
+                    menuID = x.Line.MenuId,
+                    quantity = x.Line.Quantity,
+                    unitPrice = x.Menu.menuPrice,
+                    orderRemark = x.Line.Note,
+                    promoCode = x.Promo?.Code,
+                    discountAmount = x.Promo?.LineDiscount ?? 0m
                 });
             }
 
@@ -243,20 +264,24 @@ namespace RestaurantManagementSystem.Pages.Customer
                 : null;
         }
 
-        private async Task<int?> FindOwnReservationTableIdAsync(int custId)
+        private async Task<Reservation?> GetTodayReservationAsync(int custId)
         {
             var today = DateTime.Today;
+            var validStatuses = new[] { "Pending", "Confirmed", "Completed" };
+
             return await _context.Reservations.AsNoTracking()
                 .Where(r => r.custID == custId
                          && r.reservationDateTime >= today && r.reservationDateTime < today.AddDays(1)
-                         && r.reservationStatus != "Cancelled")
+                         && validStatuses.Contains(r.reservationStatus))
                 .OrderBy(r => r.reservationDateTime)
-                .Select(r => (int?)r.tableID)
                 .FirstOrDefaultAsync();
         }
 
         private async Task LoadPageAsync(int custId)
         {
+            var reservation = await GetTodayReservationAsync(custId);
+            HasReservation = reservation != null;
+
             await LoadCartAsync();
 
             var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
@@ -291,6 +316,8 @@ namespace RestaurantManagementSystem.Pages.Customer
                 .Where(m => ids.Contains(m.menuID))
                 .ToDictionaryAsync(m => m.menuID);
 
+            var promos = await PromotionPricing.RunningAsync(_context, DateTime.Today);
+
             var kept = new List<CartItem>();
             foreach (var line in cart)
             {
@@ -302,6 +329,7 @@ namespace RestaurantManagementSystem.Pages.Customer
                 }
 
                 kept.Add(line);
+                var applied = PromotionPricing.BestFor(promos, menu.menuID, menu.menuPrice, line.Quantity);
                 CartLines.Add(new CartDisplayLine
                 {
                     MenuId = menu.menuID,
@@ -309,7 +337,12 @@ namespace RestaurantManagementSystem.Pages.Customer
                     UnitPrice = menu.menuPrice,
                     Quantity = line.Quantity,
                     Note = line.Note,
-                    ImageUrl = menu.menuImageUrl
+                    ImageUrl = menu.menuImageUrl,
+                    PromoCode = applied?.Code,
+                    PromoLabel = applied?.Label,
+                    PromoType = applied?.DiscountType,
+                    PromoValue = applied?.Value ?? 0m,
+                    Discount = applied?.LineDiscount ?? 0m
                 });
             }
 

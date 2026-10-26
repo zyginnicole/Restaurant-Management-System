@@ -37,6 +37,11 @@ namespace RestaurantManagementSystem.Model
         // Takeaway only (chosen on the Checkout page); null for dine-in
         public DateTime? pickupDateTime { get; set; }
 
+        // Takeaway only: phone of whoever collects the order. custID = the account that placed it (order tracking);
+        // this phone can be different (e.g. ordering for someone else). Null for dine-in.
+        [MaxLength(11, ErrorMessage = "Maximum 11 digits including the leading 0.")]
+        public string? contactPhone { get; set; }
+
         [Required]
         public string orderStatus { get; set; } = "Order placed"; // Order placed, Preparing, Served, Completed, Cancelled
 

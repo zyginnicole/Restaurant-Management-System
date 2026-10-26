@@ -140,7 +140,13 @@ else
                         }
                         else if (!o.IsDineIn)
                         {
-                            <p class="md-note-box mt-3 mb-0">SST 6% is added to your bill. The kitchen will start preparing your order soon. Thank you for waiting!</p>
+                            @* Takeaway: short status note (keeps the card from looking empty when there are few items) *@
+                            string sstText = Model.SstPct.ToString("0.##");
+                            <p class="md-note-box mt-3 mb-0">@(o.Status == "Order placed"
+                                ? $"{sstText}% SST is added to your bill. The kitchen will start preparing your order soon. Thank you for waiting!"
+                                : o.Status == "Preparing"
+                                    ? $"{sstText}% SST is added to your bill. The kitchen is preparing your order. Thank you for waiting!"
+                                    : "Your order is ready. Please collect it at the counter at your pick-up time. Thank you!")</p>
                         }
 
                         @* Cancel only while orderStatus = "Order placed" (before the kitchen starts) *@

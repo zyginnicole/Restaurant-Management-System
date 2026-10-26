@@ -40,7 +40,7 @@
                     @for (int i = 0; i < Model.CartLines.Count; i++)
                     {
                         var line = Model.CartLines[i];
-                        <li class="md-cart-item" data-price="@line.UnitPrice.ToString("0.00", inv)">
+                        <li class="md-cart-item" data-price="@line.UnitPrice.ToString("0.00", inv)" data-promo-type="@line.PromoType" data-promo-value="@line.PromoValue.ToString("0.##", inv)">
                             @if (!string.IsNullOrEmpty(line.ImageUrl))
                             {
                                 <img class="md-cart-photo" src="@line.ImageUrl" alt="@line.Name" />
@@ -54,13 +54,22 @@
                                 <span class="md-cart-each">RM @line.UnitPrice.ToString("N2") each</span>
                                 <input type="hidden" name="items[@i].menuId" value="@line.MenuId" />
                                 <input class="form-control md-input md-cart-note" name="items[@i].itemRemark" maxlength="200" placeholder="Note for the kitchen" value="@line.Note" aria-label="Note for @line.Name" />
+                                @* Promotion applied to this dish (code + label from the Promotion table) *@
+                                @if (line.PromoCode != null)
+                                {
+                                    <small class="md-hint d-block mt-1"><i class="bi bi-tag me-1" aria-hidden="true"></i>@line.PromoCode applied: @line.PromoLabel</small>
+                                }
                             </div>
                             <div class="md-qty" aria-label="Quantity">
                                 <button type="button" data-step="-1" aria-label="One less">−</button>
                                 <input type="number" name="items[@i].quantity" value="@line.Quantity" min="0" max="20" aria-label="Quantity of @line.Name" />
                                 <button type="button" data-step="1" aria-label="One more">+</button>
                             </div>
-                            <span class="md-cart-line" data-line>RM @((line.UnitPrice * line.Quantity).ToString("N2"))</span>
+                            <span class="md-cart-line">
+                                @* original amount struck through, the promotion price underneath *@
+                                <s data-line-was style="display:@(line.Discount > 0 ? "block" : "none"); font-size:.8em; opacity:.6;">RM @((line.UnitPrice * line.Quantity).ToString("N2"))</s>
+                                <span data-line>RM @((line.UnitPrice * line.Quantity - line.Discount).ToString("N2"))</span>
+                            </span>
                         </li>
                     }
                 </ul>
@@ -73,12 +82,18 @@
                     <span class="md-card-label">Order type</span>
                 </div>
                 <div class="md-card-body">
-                    <div class="md-choice mb-3" role="radiogroup" aria-label="Order type">
+                    <div class="md-choice mb-2" role="radiogroup" aria-label="Order type">
                         <input type="radio" class="btn-check" name="orderType" id="typeTakeaway" value="Takeaway" checked="@(!dineInSelected)" />
                         <label for="typeTakeaway">Takeaway</label>
-                        <input type="radio" class="btn-check" name="orderType" id="typeDineIn" value="DineIn" checked="@dineInSelected" />
-                        <label for="typeDineIn">Dine-in at my table</label>
+
+                        <input type="radio" class="btn-check" name="orderType" id="typeDineIn" value="DineIn" checked="@dineInSelected" disabled="@(!Model.HasReservation)" />
+                        <label for="typeDineIn" style="@(!Model.HasReservation ? "cursor: not-allowed; opacity: 0.5;" : "")">Dine-in at my table</label>
                     </div>
+
+                    @if (!Model.HasReservation)
+                    {
+                        <p class="md-hint mb-3">Dine-in is only available for guests with a reservation today.</p>
+                    }
 
                     @* Takeaway panel *@
                     <div class="row g-3 @(dineInSelected ? "d-none" : "")" data-type-panel="Takeaway">
@@ -153,11 +168,28 @@
             var rm = function (n) { return 'RM ' + n.toFixed(2); };
             var token = form.querySelector('input[name="__RequestVerificationToken"]');
 
+            // Promotion discount of one line: same formula as the server (PromotionPricing.LineDiscount)
+            function lineDiscount(item, qty, gross) {
+                var type = item.dataset.promoType;
+                var value = parseFloat(item.dataset.promoValue) || 0;
+                if (!type || value <= 0) return 0;
+                var d = type === 'Percentage' ? Math.round(gross * value) / 100
+                      : type === 'FixedAmount' ? value * qty : 0;
+                return Math.min(d, gross);
+            }
+
             function recalc() {
                 var subtotal = 0, count = 0;
                 document.querySelectorAll('.md-cart-item').forEach(function (item) {
                     var qty = parseInt(item.querySelector('.md-qty input').value, 10) || 0;
-                    var line = qty * parseFloat(item.dataset.price);
+                    var gross = qty * parseFloat(item.dataset.price);
+                    var discount = lineDiscount(item, qty, gross);
+                    var line = gross - discount;
+                    var was = item.querySelector('[data-line-was]');
+                    if (was) {
+                        was.textContent = rm(gross);
+                        was.style.display = discount > 0 ? 'block' : 'none';
+                    }
                     item.querySelector('[data-line]').textContent = rm(line);
                     item.classList.toggle('is-removed', qty === 0);
                     subtotal += line; count += qty;

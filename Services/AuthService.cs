@@ -108,6 +108,34 @@ namespace RestaurantManagementSystem.Services
             await _context.SaveChangesAsync();
         }
 
+        // ---------- Guest profiles (walk-ins booked by staff) ----------
+        // Staff › Book reservations saves a walk-in guest as a Customer with name, email, phone and an EMPTY password
+        // (ReservationService.CreateWalkInAsync). It can't sign in until the guest registers with that email.
+
+        public static bool IsGuestProfile(Customer customer) => string.IsNullOrEmpty(customer.custPassword);
+
+        // The guest profile that uses this email, or null
+        public async Task<Customer?> FindGuestProfileAsync(string email)
+        {
+            string normalised = NormaliseEmail(email);
+            Customer? customer = await _context.Customers.FirstOrDefaultAsync(c => c.custEmail == normalised);
+            return customer != null && IsGuestProfile(customer) ? customer : null;
+        }
+
+        // Register with the email of a guest profile: turn that same row into a full account,
+        // so the bookings staff made for this guest are already in it.
+        public async Task ActivateGuestProfileAsync(Customer guestProfile, Customer form)
+        {
+            guestProfile.custName = form.custName.Trim();
+            guestProfile.custPhone = form.custPhone.Trim();
+            guestProfile.DietaryPref = form.DietaryPref;
+            guestProfile.promoOptIn = form.promoOptIn;
+            guestProfile.custPassword = _passwordService.HashPassword(form.custPassword);
+            guestProfile.FailedLoginAttempts = 0;
+            guestProfile.LockoutEnd = null;
+            await _context.SaveChangesAsync();
+        }
+
         // Checks a customer's email + password and counts failed attempts.
         public async Task<LoginResult> LoginCustomerAsync(string email, string password)
         {
@@ -120,6 +148,13 @@ namespace RestaurantManagementSystem.Services
             if (customer == null)
             {
                 return LoginResult.Failed(WrongDetailsMessage);
+            }
+
+            // 1b. Guest profile made by staff for a walk-in: no password yet (not counted as a failed attempt)
+            if (IsGuestProfile(customer))
+            {
+                return LoginResult.Failed(
+                    "Our staff made a booking with this email. Please register with it to set your password.");
             }
 
             // 2. Account is locked right now

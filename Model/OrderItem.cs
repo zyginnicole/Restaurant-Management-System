@@ -30,5 +30,13 @@ namespace RestaurantManagementSystem.Model
         // Kitchen note for this dish, e.g. "Medium rare" (entered on Checkout)
         [MaxLength(200)]
         public string? orderRemark { get; set; }
+
+        // Promotion applied to this line at checkout (null = none): its code, and the amount taken off the
+        // line total (quantity × unitPrice). Saved here so old receipts never change if the promotion changes.
+        [MaxLength(20)]
+        public string? promoCode { get; set; }
+
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal discountAmount { get; set; } = 0m;
     }
 }

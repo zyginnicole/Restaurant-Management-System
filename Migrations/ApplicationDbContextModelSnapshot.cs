@@ -387,6 +387,10 @@ namespace RestaurantManagementSystem.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("orderID"));
 
+                    b.Property<string>("contactPhone")
+                        .HasMaxLength(11)
+                        .HasColumnType("nvarchar(11)");
+
                     b.Property<int>("custID")
                         .HasColumnType("int");
 
@@ -433,6 +437,9 @@ namespace RestaurantManagementSystem.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("orderItemID"));
 
+                    b.Property<decimal>("discountAmount")
+                        .HasColumnType("decimal(10,2)");
+
                     b.Property<int>("menuID")
                         .HasColumnType("int");
 
@@ -442,6 +449,10 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<string>("orderRemark")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("promoCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int>("quantity")
                         .HasColumnType("int");

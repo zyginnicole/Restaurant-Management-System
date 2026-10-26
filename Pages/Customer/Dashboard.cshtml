@@ -1,33 +1,44 @@
 @page
 @model RestaurantManagementSystem.Pages.Customer.DashboardModel
 @using RestaurantManagementSystem.Helpers
+@using RestaurantManagementSystem.Services
 @{
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var hour = DateTime.Now.Hour;
+
     ViewData["Title"] = "Overview";
     ViewData["ActiveNav"] = "Overview";
-    ViewData["Eyebrow"] = "Good evening";
+    ViewData["Eyebrow"] = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
     ViewData["Heading"] = HttpContext.Session.GetUserName() ?? "Welcome";
     Layout = "_CustomerLayout";
 
-    // Next reservations card: the customer's Pending / Confirmed (incl. Seated) reservations in the next 7 days, soonest first.
-    // Backend: replace this list with the query result. The card always has two slots:
+    // Next reservations card: the customer's Pending / Confirmed / Seated reservations in the next 7 days, soonest first
+    // (DashboardModel.NextReservations). The card always has two slots:
     //   1 reservation → top slot filled, bottom slot left blank · 2 → both slots · 3 or more → the slots scroll inside the card.
-    // UI preview only: /Customer/Dashboard?preview=2 or ?preview=3
-    var nextReservations = new List<(string Code, string Status, string Month, string Day, string DayText, string Time, int Guests, string Table)>
+    var nextReservations = Model.NextReservations.Select(r => (
+        Code: ReservationService.Code(r),
+        Status: r.reservationStatus,
+        Month: r.reservationDateTime.ToString("MMM", inv),
+        Day: r.reservationDateTime.ToString("dd", inv),
+        DayText: DayText(r.reservationDateTime),
+        Time: r.reservationDateTime.ToString("h:mm tt", inv),
+        Guests: r.partySize,
+        Table: r.DiningTable?.tableNumber + " · " + r.DiningTable?.DiningArea?.areaName
+    )).ToList();
+}
+
+@functions {
+    // "Tonight" / "Tomorrow evening" / "Sunday evening" (same wording as the Reservations page)
+    static string DayText(DateTime start)
     {
-        ("R-0041", "Confirmed", "Sep", "20", "Sunday evening", "7:30 PM", 2, "T-07 · Indoor")
-    };
-    var preview = Request.Query["preview"].ToString();
-    if (preview == "2" || preview == "3")
-    {
-        nextReservations.Insert(0, ("R-0047", "Seated", "Sep", "16", "Tonight", "7:00 PM", 3, "T-05 · Outdoor"));
-    }
-    if (preview == "3")
-    {
-        nextReservations.Add(("R-0049", "Pending", "Oct", "04", "Sunday evening", "8:00 PM", 8, "VIP"));
+        var part = start.Hour < 16 ? "lunch" : "evening";
+        if (start.Date == DateTime.Today) return start.Hour < 16 ? "Today, lunch" : "Tonight";
+        if (start.Date == DateTime.Today.AddDays(1)) return "Tomorrow " + part;
+        return start.ToString("dddd", System.Globalization.CultureInfo.InvariantCulture) + " " + part;
     }
 }
 
-@* Example data from the design. Replace with the signed-in customer's data later. *@
+@* The recommendations hero below is still example data from the design. *@
 
 @* ---------- Recommendations hero ----------
    Same dishes as the Menu page's Recommendations tab (RecommendationService.ToHeroSlides).
@@ -132,6 +143,19 @@
                         <li class="md-next-slot is-empty" aria-hidden="true"></li>
                     }
                 </ul>
+            </section>
+        }
+        else
+        {
+            @* No reservation in the next 7 days *@
+            <section class="md-card h-100">
+                <div class="md-card-header">
+                    <span class="md-card-label">Next reservation</span>
+                </div>
+                <div class="md-card-body text-center py-4">
+                    <p class="md-hint mb-3">You have no reservations in the next 7 days.</p>
+                    <a class="btn btn-md-dark" href="/Customer/Reservations">Book a table</a>
+                </div>
             </section>
         }
     </div>

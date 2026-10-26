@@ -31,7 +31,7 @@ namespace RestaurantManagementSystem.Pages.Shared.Partials
         public string PaymentStatus { get; set; } = "";
         public DateTimeOffset PaidAt { get; set; }
 
-        public decimal Subtotal => Items.Sum(i => i.LineTotal);
+        public decimal Subtotal => Items.Sum(i => i.LineTotal - i.Discount);   // after promotions
         public decimal ServiceCharge => IsDineIn ? Round(Subtotal * ServiceChargeRate) : 0m;
         public decimal Sst => Round((Subtotal + ServiceCharge) * SstRate);
         public decimal Total => Subtotal + ServiceCharge + Sst;
@@ -45,6 +45,8 @@ namespace RestaurantManagementSystem.Pages.Shared.Partials
         public string Name { get; set; } = "";
         public decimal UnitPrice { get; set; }            // OrderItem.unitPrice (price when ordered)
         public string? Note { get; set; }                 // OrderItem.itemRemark, e.g. "Medium rare" (null hides it)
-        public decimal LineTotal => Quantity * UnitPrice;
+        public string? PromoCode { get; set; }            // OrderItem.promoCode, e.g. "OYSTERPROMO" (null = no promotion)
+        public decimal Discount { get; set; }             // OrderItem.discountAmount: amount taken off this line
+        public decimal LineTotal => Quantity * UnitPrice; // before the promotion
     }
 }

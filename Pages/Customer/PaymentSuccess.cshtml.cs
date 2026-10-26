@@ -98,7 +98,7 @@ namespace RestaurantManagementSystem.Pages.Customer
             //one line per dish (same dish, price and note from different orders are added together)
             var lines = bill
                 .SelectMany(o => o.OrderItems)
-                .GroupBy(oi => new { oi.menuID, oi.unitPrice, oi.orderRemark });
+                .GroupBy(oi => new { oi.menuID, oi.unitPrice, oi.orderRemark, oi.promoCode });
 
             foreach (var g in lines)
             {
@@ -107,7 +107,9 @@ namespace RestaurantManagementSystem.Pages.Customer
                     Quantity = g.Sum(x => x.quantity),
                     Name = g.First().Menu?.menuName ?? "Item",
                     UnitPrice = g.Key.unitPrice,
-                    Note = g.Key.orderRemark
+                    Note = g.Key.orderRemark,
+                    PromoCode = g.Key.promoCode,
+                    Discount = g.Sum(x => x.discountAmount)
                 });
             }
 

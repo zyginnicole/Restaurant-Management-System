@@ -238,6 +238,15 @@
     // Cards of dishes that are already in the saved cart show their state straight away
     Object.keys(quantities).forEach(showQuantity);
 
+    // No reservation today: the menu is browse-only, the add buttons are locked
+    if (cartData.locked) {
+        document.querySelectorAll('.md-add-btn').forEach(function (button) {
+            button.disabled = true;
+            button.textContent = 'Reservation required';
+            button.title = cartData.lockMessage || '';
+        });
+    }
+
     // ---------- Allergens + tags ----------
     // Allergies of the signed-in customer (set by Menu.cshtml)
     var myAllergies = ((window.MD_USER && window.MD_USER.allergies) || []).map(function (a) { return a.toLowerCase(); });

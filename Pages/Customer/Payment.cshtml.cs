@@ -13,7 +13,7 @@ namespace RestaurantManagementSystem.Pages.Customer
     //              after ALL of them are Served. Each order gets its own Payment row (same time and
     //              method) and becomes Completed.
     //  - /Customer/Payment?orderId=... works with any order of the bill.
-    //  - Card number / CVC inputs have no name="" so they are never posted or saved.
+    //  - Card details are only checked here (never stored or logged).
     //  - Which methods are offered comes from Admin > Settings > Billing & payments (cashless only).
     public class PaymentModel : PageModel
     {
@@ -58,7 +58,9 @@ namespace RestaurantManagementSystem.Pages.Customer
             public string Name { get; set; } = string.Empty;
             public int Quantity { get; set; }
             public string? Note { get; set; }
-            public decimal LineTotal { get; set; }
+            public decimal LineTotal { get; set; }                  // quantity × price (before the promotion)
+            public string? PromoCode { get; set; }                  // promotion applied to this dish (null = none)
+            public decimal Discount { get; set; }                   // amount taken off this line
         }
 
         // The orders being paid together (1 for takeaway, 1 or more for a dine-in table)
@@ -79,7 +81,11 @@ namespace RestaurantManagementSystem.Pages.Customer
         public async Task<IActionResult> OnPostAsync(
             [FromQuery] int orderId,
             [FromForm(Name = "orderId")] int? formOrderId,
-            string? paymentMethod)
+            string? paymentMethod,
+            string? cardName,
+            string? cardNumber,
+            string? cardExpiry,
+            string? cardCvc)
         {
             int? custId = CurrentCustomerId();
             if (custId == null) return RedirectToPage("/Customer/Login");
@@ -100,6 +106,17 @@ namespace RestaurantManagementSystem.Pages.Customer
             {
                 ModelState.AddModelError(string.Empty, "This payment method is not available. Please choose another one.");
                 return Page();
+            }
+
+            //card: every field is required and checked (the details are only checked here, never stored or logged)
+            if (paymentMethod == "Card")
+            {
+                string? cardError = ValidateCard(cardName, cardNumber, cardExpiry, cardCvc);
+                if (cardError != null)
+                {
+                    ModelState.AddModelError(string.Empty, cardError);
+                    return Page();
+                }
             }
 
             bool paid = SimulatePayment(paymentMethod);
@@ -124,6 +141,30 @@ namespace RestaurantManagementSystem.Pages.Customer
                 {
                     bo.orderStatus = "Completed";
                 }
+            }
+
+            //a paid dine-in bill ends the visit: the table is free again (unless other orders are still open at it)
+            //and a reservation still marked Seated is completed (same as staff Billing)
+            if (paid && IsDineIn)
+            {
+                int? tableId = _billOrders.First().tableID;
+                var billIds = _billOrders.Select(o => o.orderID).ToList();
+                var open = OpenStatuses;
+
+                bool othersOpen = await _context.Orders.AnyAsync(o => o.tableID == tableId
+                                                                   && open.Contains(o.orderStatus)
+                                                                   && !billIds.Contains(o.orderID));
+                if (!othersOpen)
+                {
+                    var table = await _context.DiningTables.FirstOrDefaultAsync(t => t.tableID == tableId);
+                    if (table != null && table.tableStatus == "Occupied") table.tableStatus = "Available";
+                }
+
+                var reservationIds = _billOrders.Where(o => o.reservationID != null).Select(o => o.reservationID!.Value).Distinct().ToList();
+                var seatedReservations = await _context.Reservations
+                    .Where(r => reservationIds.Contains(r.reservationID) && r.reservationStatus == "Seated")
+                    .ToListAsync();
+                foreach (var r in seatedReservations) r.reservationStatus = "Completed";
             }
 
             //one SaveChanges = all payments and order updates succeed or fail together
@@ -222,26 +263,80 @@ namespace RestaurantManagementSystem.Pages.Customer
             PickupTime = order.pickupDateTime?.ToString("HH:mm");
             OrderCodes = string.Join(", ", _billOrders.Select(o => "ORD-" + o.orderID.ToString("0000")));
 
-            //the same dish (same price and note) from different orders is added together
+            //the same dish (same price, note and promotion) from different orders is added together
             Lines = _billOrders
                 .SelectMany(o => o.OrderItems)
-                .GroupBy(oi => new { oi.menuID, oi.unitPrice, oi.orderRemark })
+                .GroupBy(oi => new { oi.menuID, oi.unitPrice, oi.orderRemark, oi.promoCode })
                 .Select(g => new BillLine
                 {
                     Name = g.First().Menu?.menuName ?? "Item",
                     Quantity = g.Sum(x => x.quantity),
                     Note = g.Key.orderRemark,
-                    LineTotal = g.Sum(x => x.quantity * x.unitPrice)
+                    LineTotal = g.Sum(x => x.quantity * x.unitPrice),
+                    PromoCode = g.Key.promoCode,
+                    Discount = g.Sum(x => x.discountAmount)
                 })
                 .ToList();
 
             //totals: what is charged = the orders' saved totals; service charge worked out per order like Checkout
-            Subtotal = Lines.Sum(l => l.LineTotal);
+            Subtotal = Lines.Sum(l => l.LineTotal - l.Discount);    // after promotions
             Total = _billOrders.Sum(o => o.totalAmount);
             ServiceCharge = IsDineIn
-                ? _billOrders.Sum(o => Math.Round(o.OrderItems.Sum(oi => oi.unitPrice * oi.quantity) * ServiceChargePct / 100m, 2, MidpointRounding.AwayFromZero))
+                ? _billOrders.Sum(o => Math.Round(o.OrderItems.Sum(oi => oi.unitPrice * oi.quantity - oi.discountAmount) * ServiceChargePct / 100m, 2, MidpointRounding.AwayFromZero))
                 : 0m;
             Sst = Total - Subtotal - ServiceCharge;                 // the rest, so the rows always add up
+        }
+
+        // ---------- Card checks (simulation, but with real rules) ----------
+        private static string? ValidateCard(string? name, string? number, string? expiry, string? cvc)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return "Please enter the name on your card.";
+
+            string digits = new string((number ?? string.Empty).Where(char.IsDigit).ToArray());
+            if (digits.Length < 13 || digits.Length > 19 || !PassesLuhn(digits))
+                return "Please enter a valid card number.";
+
+            if (!ExpiryIsValid(expiry))
+                return "Please enter a valid expiry date (MM / YY) that has not passed.";
+
+            string code = (cvc ?? string.Empty).Trim();
+            if (code.Length < 3 || code.Length > 4 || !code.All(char.IsDigit))
+                return "Please enter the 3 or 4 digit CVC.";
+
+            return null;
+        }
+
+        // Standard card-number checksum (Luhn)
+        private static bool PassesLuhn(string digits)
+        {
+            int sum = 0;
+            bool doubleIt = false;
+            for (int i = digits.Length - 1; i >= 0; i--)
+            {
+                int d = digits[i] - '0';
+                if (doubleIt)
+                {
+                    d *= 2;
+                    if (d > 9) d -= 9;
+                }
+                sum += d;
+                doubleIt = !doubleIt;
+            }
+            return sum % 10 == 0;
+        }
+
+        // "MM / YY": month 01–12, and the card is valid until the end of that month
+        private static bool ExpiryIsValid(string? expiry)
+        {
+            string d = new string((expiry ?? string.Empty).Where(char.IsDigit).ToArray());
+            if (d.Length != 4) return false;
+
+            int month = int.Parse(d.Substring(0, 2));
+            int year = 2000 + int.Parse(d.Substring(2, 2));
+            if (month < 1 || month > 12) return false;
+
+            return new DateTime(year, month, 1).AddMonths(1) > DateTime.Now;
         }
 
         // MOCK: replace with a real payment gateway call later. Return false to test the Failed path.

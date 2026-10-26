@@ -16,7 +16,6 @@
 	</ItemGroup>
 
     <ItemGroup>
-        <Folder Include="Pages\Customer\" />
         <Folder Include="Pages\Staff\" />
         <Folder Include="wwwroot\images\auth\" />
     </ItemGroup>

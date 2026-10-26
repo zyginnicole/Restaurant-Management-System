@@ -119,7 +119,9 @@
     <div class="form-check mb-2">
         <input class="form-check-input" id="AgreeTerms" name="AgreeTerms" type="checkbox" value="true"
                checked="@Model.AgreeTerms" />
-        <label class="form-check-label" for="AgreeTerms">I agree to the Terms and Privacy Policy</label>
+        <label class="form-check-label" for="AgreeTerms">
+            I agree to the <a href="~/docs/Lumiere-Terms-and-Conditions.pdf" target="_blank" rel="noopener noreferrer">Terms and Privacy Policy</a>
+        </label>
         <div><span class="text-danger small" asp-validation-for="AgreeTerms"></span></div>
     </div>
 

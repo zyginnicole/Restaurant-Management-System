@@ -114,6 +114,17 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return Page();
             }
 
+            //email of a guest profile (staff booked a walk-in with it): activate that profile instead of a new account,
+            //so the guest's reservations are already in it
+            var guestProfile = await _authService.FindGuestProfileAsync(Customer.custEmail);
+            if (guestProfile != null)
+            {
+                Customer.promoOptIn = PromoOptIn;
+                await _authService.ActivateGuestProfileAsync(guestProfile, Customer);
+                TempData["SuccessMessage"] = "Your account has been created. Your bookings at the restaurant are already in it. You can now sign in.";
+                return RedirectToPage();
+            }
+
             //email must not belong to ANY account (customer, staff or admin)
             if (await _authService.IsEmailTakenAsync(Customer.custEmail))
             {
