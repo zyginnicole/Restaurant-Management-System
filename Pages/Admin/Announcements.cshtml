@@ -9,22 +9,15 @@
     ViewData["Subtitle"] = "Notices for customers and staff, such as closures and opening hours";
     Layout = "_DashboardLayout";
 
-    // ---------- Example data – later from the database (see AnnouncementsModel) ----------
-    // Announcement.targetAudience: All · Customers · Staff (counts for the labels)
-    var audiences = new (string Value, string Label, int Count)[]
-    {
-        ("All", "Everyone", 855), ("Customers", "Customers", 847), ("Staff", "Staff", 8)
-    };
-    string AudienceText(string v) { var a = audiences.First(x => x.Value == v); return $"{a.Label} ({a.Count})"; }
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    // Announcement.targetAudience: All · Customers · Staff (counts for the labels, AnnouncementsModel)
+    var audiences = Model.Audiences;
+    string AudienceText(string v) { var a = audiences.FirstOrDefault(x => x.Value == v); return a.Label == null ? v : $"{a.Label} ({a.Count})"; }
 
     // Pinned first, then newest first
-    var items = new (int Id, string Title, string Message, string Audience, string Date, bool Pinned)[]
-    {
-        (12, "Malaysia Day hours", "On 16 September we open for dinner only, from 18:00 to 22:30.", "Customers", "14 Sep 2026, 12:00", true),
-        (13, "Kitchen briefing: new menu", "New autumn menu starts on 1 October. Tasting for all kitchen and floor staff on 28 Sep at 15:00.", "Staff", "15 Sep 2026, 16:20", false),
-        (11, "Monday closure – kitchen deep clean", "The restaurant is closed on Monday 8 September for a kitchen deep clean.", "All", "5 Sep 2026, 09:00", false),
-        (9, "New private dining room", "Our VIP room now seats up to 12 guests. Ask our team when you book.", "Customers", "28 Aug 2026, 10:30", false)
-    };
+    var items = Model.Items.Select(a => (Id: a.announcementID, Title: a.announcementTitle, Message: a.announcementMessage,
+        Audience: a.targetAudience, Date: a.announcementDate.ToString("d MMM yyyy, HH:mm", inv), Pinned: a.isPinned)).ToList();
 }
 
 @section HeaderActions {
@@ -35,7 +28,14 @@
 @* Message after an action (TempData["AdminMessage"]) *@
 @if (TempData["AdminMessage"] is string message)
 {
-    <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+    if (TempData["AdminMessageIsError"] is true)
+    {
+        <p class="md-note-box md-note-box-danger md-section" role="alert">@message</p>
+    }
+    else
+    {
+        <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+    }
 }
 
 @* =====================================================
@@ -91,7 +91,7 @@
                     </tbody>
                 </table>
             </div>
-            <p class="md-notice-empty d-none" id="announceEmpty">No pinned announcements.</p>
+            <p class="md-notice-empty @(items.Count > 0 ? "d-none" : "")" id="announceEmpty">@(items.Count > 0 ? "No pinned announcements." : "No announcements yet. Use New announcement to post one.")</p>
         </section>
     </div>
 </div>

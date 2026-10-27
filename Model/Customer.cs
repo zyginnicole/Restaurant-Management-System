@@ -38,6 +38,10 @@ namespace RestaurantManagementSystem.Model
         // Comma-separated allergens (MenuVocabulary.Allergens). Dishes containing them are never recommended. "None" = no allergies
         public string Allergies { get; set; } = "None";
 
+        // Optional free-text note for the kitchen, e.g. "no coriander" (Profile page). Staff see it with the booking
+        [MaxLength(300)]
+        public string? kitchenNotes { get; set; }
+
         public bool promoOptIn { get; set; } = false;
 
         public int FailedLoginAttempts { get; set; } = 0;

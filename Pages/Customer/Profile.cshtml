@@ -9,9 +9,6 @@
 
     // Values come from the signed-in Customer (ProfileModel.Input), or what they typed after a failed save
 
-    // TODO: kitchenNotes is not in the Customer table yet, so it is shown but not saved for now.
-    string? kitchenNotes = null;                                                 // Customer.kitchenNotes
-
     // Open the Change password pop-up again when OnPostPassword returns Page() with errors
     var reopenPassword = Request.Query["handler"] == "Password" && !ViewData.ModelState.IsValid;
 
@@ -136,7 +133,7 @@
                         @* Customer.kitchenNotes – optional, max 300 characters *@
                         <div>
                             <label class="md-label" for="Customer_kitchenNotes">Other notes for the kitchen</label>
-                            <input class="form-control md-input" id="Customer_kitchenNotes" name="Customer.kitchenNotes" type="text" maxlength="300" placeholder="e.g. no coriander" value="@kitchenNotes" />
+                            <input class="form-control md-input" id="Customer_kitchenNotes" name="Customer.kitchenNotes" type="text" maxlength="300" placeholder="e.g. no coriander" value="@Model.Input.kitchenNotes" />
                             <p class="md-hint mt-2 mb-0">Shared with restaurant staff only, to prepare your visit.</p>
                         </div>
 

@@ -179,6 +179,10 @@ namespace RestaurantManagementSystem.Migrations
                         .HasMaxLength(11)
                         .HasColumnType("nvarchar(11)");
 
+                    b.Property<string>("kitchenNotes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<bool>("promoOptIn")
                         .HasColumnType("bit");
 

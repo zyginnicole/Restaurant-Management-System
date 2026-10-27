@@ -130,7 +130,8 @@ namespace RestaurantManagementSystem.Pages.Customer
                     custPhone = customer.custPhone,
                     Prefs = MenuVocabulary.Parse(customer.DietaryPref).ToList(),
                     Allergies = MenuVocabulary.Parse(customer.Allergies).ToList(),
-                    promoOptIn = customer.promoOptIn
+                    promoOptIn = customer.promoOptIn,
+                    kitchenNotes = customer.kitchenNotes
                 };
             }
 
