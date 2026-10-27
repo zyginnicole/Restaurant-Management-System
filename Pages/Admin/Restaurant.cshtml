@@ -41,7 +41,7 @@
                             <h3 class="a-area-name">@a.Name</h3>
                             <input type="checkbox" class="a-switch area-active" autocomplete="off" data-id="@a.Id" @(a.Active ? "checked" : "") data-on="Active" data-off="Inactive" aria-label="@a.Name active" />
                         </div>
-                        <div class="a-area-meta">@a.TableCount @(a.TableCount == 1 ? "table" : "tables") ·<span title="Every table in this area starts with this code">@a.Code-01, @a.Code-02 …</span><br /><span title="Covers = the total number of guests this area can seat at once (sum of its tables' pax)">@a.Covers covers</span></div>
+                        <div class="a-area-meta">@a.TableCount @(a.TableCount == 1 ? "table" : "tables")<br /><span title="Covers = the total number of guests this area can seat at once (sum of its tables' pax)">@a.Covers covers</span></div>
                         <span class="a-badge @(a.Active ? "active" : "inactive")" data-switch-text>@(a.Active ? "Active" : "Inactive")</span>
                         <div class="d-flex gap-1 mt-2">
                             <button type="button" class="a-icon-btn" data-bs-toggle="modal" data-bs-target="#areaModal" data-json="@a.Json" aria-label="Edit @a.Name"><i class="bi bi-pencil"></i></button>
