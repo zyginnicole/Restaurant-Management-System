@@ -147,6 +147,12 @@ namespace RestaurantManagementSystem.Data
                 .HasForeignKey(oi => oi.menuID)
                 .OnDelete(DeleteBehavior.Restrict);         // keep order history if a menu item is removed
 
+            modelBuilder.Entity<OrderItem>()
+                .HasOne<Promotion>()
+                .WithMany()
+                .HasForeignKey(oi => oi.promoID)
+                .OnDelete(DeleteBehavior.SetNull);          // optional FK; old lines keep their promoCode text
+
             // ---------- Payment (one-to-one with Order) ----------
             modelBuilder.Entity<Payment>()
                 .HasOne(p => p.Order)

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Staff
 {
@@ -20,8 +21,11 @@ namespace RestaurantManagementSystem.Pages.Staff
     //      Paid             = Payment.paymentStatus "Paid" (takeaway: usually paid online on the Payment page)
     //  - Totals: subtotal after promotions, + service charge (dine-in only) + SST on (that + service charge).
     //    Rates come from Admin > Settings, rounded per order exactly like Checkout / Payment, so the numbers match.
-    //  - Promotions: the dropdown lists promotions running today that apply to dishes on the bill that have no
-    //    promotion yet. The chosen one is saved on those OrderItem lines (promoCode, discountAmount).
+    //  - Promotions: the dropdown lists promotions the bill's customer may use right now (PromotionService: day, time,
+    //    birthday month, members only, order type, minimum spend, usage limits) that apply to dishes on the bill that
+    //    have no promotion yet. A birthday promotion is never combined with another one on the same bill.
+    //    The chosen one is saved on those OrderItem lines (promoCode, promoID, discountAmount).
+    //    Usage limits are checked again right before the payment is recorded.
     //  - Paying: one Payment per order (same time and method), orders → Completed, the table → Available, all in
     //    one SaveChanges. The reservation process already ended when the guests were seated (the table became
     //    Occupied on DiningTable), so the reservation is only touched if it is still marked "Seated".
@@ -30,10 +34,12 @@ namespace RestaurantManagementSystem.Pages.Staff
         private static readonly string[] OpenStatuses = { "Order placed", "Preparing", "Served" };
 
         private readonly ApplicationDbContext _context;
+        private readonly PromotionService _promotions;
 
-        public BillingModel(ApplicationDbContext context)
+        public BillingModel(ApplicationDbContext context, PromotionService promotions)
         {
             _context = context;
+            _promotions = promotions;
         }
 
         // ---------- What the page shows (names match Billing.cshtml) ----------
@@ -126,14 +132,10 @@ namespace RestaurantManagementSystem.Pages.Staff
                 .Where(o => !(o.orderStatus == "Completed" && !IsPaid(o)))      // completed without a payment: nothing to bill
                 .ToList();
 
-            // ---- promotions running today (also those that are not auto-applied) ----
-            var promotions = (await _context.Promotions.AsNoTracking()
-                    .Include(p => p.Menus)
-                    .Where(p => p.promoActive)
-                    .ToListAsync())
-                .Where(p => PromotionPricing.IsRunning(p, today))
-                .OrderBy(p => p.promoTitle)
-                .ToList();
+            // ---- promotions that are switched on (also those that are not auto-applied); checked per bill below ----
+            var promotions = (await _promotions.ActiveAsync()).OrderBy(p => p.promoTitle).ToList();
+            var birthdayIds = promotions.Where(p => p.birthdayOnly).Select(p => p.promoID).ToHashSet();
+            var promoNow = MalaysiaClock.Now;
 
             // ---- group the orders into bills ----
             var groups = new List<List<Order>>();
@@ -142,7 +144,21 @@ namespace RestaurantManagementSystem.Pages.Staff
             groups.AddRange(dineIn.Where(o => !IsPaid(o)).GroupBy(o => o.tableID!.Value).Select(g => g.ToList()));
             groups.AddRange(dineIn.Where(IsPaid).GroupBy(o => (o.tableID!.Value, o.Payment!.paymentDate)).Select(g => g.ToList()));
 
-            var bills = groups.Select(g => BuildBill(g, today, servicePct, sstPct, promotions)).ToList();
+            var bills = new List<BillRow>();
+            foreach (var g in groups)
+            {
+                // only a bill that is awaiting payment gets a promotion dropdown
+                bool canPay = g.All(o => o.orderStatus == "Served") && !g.Any(IsPaid);
+                var offer = new List<Promotion>();
+                if (canPay)
+                {
+                    foreach (var p in promotions)
+                    {
+                        if (await WhyNotOnBillAsync(p, g, birthdayIds, promoNow) == null) offer.Add(p);
+                    }
+                }
+                bills.Add(BuildBill(g, today, servicePct, sstPct, offer));
+            }
 
             // awaiting payment first, then still dining, then paid; newest first within each
             Bills = bills
@@ -216,14 +232,19 @@ namespace RestaurantManagementSystem.Pages.Staff
             if (waiting.Count > 0)
                 return Done($"{code} cannot be paid yet: {string.Join(", ", waiting.Select(o => OrderCode(o.orderID)))} not served yet.", code);
 
-            //3. promotion (optional): saved on the dish lines it applies to
+            //3. promotion (optional): every rule is checked again here, then it is saved on the dish lines it applies to
             var plan = new Dictionary<OrderItem, (string Code, decimal Discount)>();
             if (promotionId != null)
             {
-                var promo = await _context.Promotions.AsNoTracking().Include(p => p.Menus)
-                    .FirstOrDefaultAsync(p => p.promoID == promotionId);
-                if (promo == null || !promo.promoActive || !PromotionPricing.IsRunning(promo, DateTime.Today))
-                    return Done("That promotion is not available today.", code);
+                var active = await _promotions.ActiveAsync();
+                var promo = active.FirstOrDefault(p => p.promoID == promotionId);
+                if (promo == null)
+                    return Done("That promotion is switched off or no longer exists.", code);
+
+                var birthdayIds = active.Where(p => p.birthdayOnly).Select(p => p.promoID).ToHashSet();
+                string? why = await WhyNotOnBillAsync(promo, bill, birthdayIds, MalaysiaClock.Now);
+                if (why != null)
+                    return Done($"{promo.promoCode} can't be used on this bill: {why}", code);
 
                 plan = PlanPromotion(promo, bill);
                 if (plan.Count == 0)
@@ -234,9 +255,20 @@ namespace RestaurantManagementSystem.Pages.Staff
                     if (plan.TryGetValue(line, out var applied))
                     {
                         line.promoCode = applied.Code;
+                        line.promoID = promo.promoID;
                         line.discountAmount = applied.Discount;
                     }
                 }
+            }
+
+            //3b. usage limits, right before paying: a promotion that is used up is taken off (and the total changes),
+            //    so staff check the new total and record the payment again
+            var removed = await _promotions.RecheckLimitsAsync(bill, servicePct, sstPct);
+            if (removed.Count > 0)
+            {
+                await _context.SaveChangesAsync();
+                return Done($"{string.Join(", ", removed)} removed from {code}: its usage limit has been reached. " +
+                            "Check the new total and record the payment again.", code);
             }
 
             //4. totals (current rates; each order rounded on its own like Checkout)
@@ -440,6 +472,23 @@ namespace RestaurantManagementSystem.Pages.Staff
             decimal service = dineIn ? Round(subtotal * servicePct / 100m) : 0m;
             decimal sst = Round((subtotal + service) * sstPct / 100m);
             return new OrderPrice(subtotal, service, sst, subtotal + service + sst);
+        }
+
+        // null = staff may add this promotion to the bill. Same server-side rules as Checkout (PromotionService),
+        // for the bill's customer, plus the stacking rule: a birthday promotion is never combined with another one.
+        private async Task<string?> WhyNotOnBillAsync(Promotion p, List<Order> bill, HashSet<int> birthdayIds, DateTime now)
+        {
+            var lines = bill.SelectMany(o => o.OrderItems).ToList();
+            if (lines.Any(oi => oi.promoID is int id && birthdayIds.Contains(id)))
+                return "a birthday promotion is already on this bill and can't be combined.";
+            if (p.birthdayOnly && lines.Any(oi => !string.IsNullOrEmpty(oi.promoCode)))
+                return "a birthday promotion can't be combined with the promotion already on this bill.";
+
+            var first = bill.OrderBy(o => o.orderID).First();
+            var buyer = await _promotions.GetBuyerAsync(first.custID);
+            string orderType = first.tableID != null ? PromotionRules.DineIn : PromotionRules.Takeaway;
+            decimal gross = lines.Sum(oi => oi.unitPrice * oi.quantity);
+            return await _promotions.WhyNotAsync(p, buyer, now, orderType, gross, bill.Select(o => o.orderID).ToList());
         }
 
         // ---------- helpers ----------

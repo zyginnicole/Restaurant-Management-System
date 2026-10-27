@@ -245,6 +245,20 @@ namespace RestaurantManagementSystem.Pages.Admin
                 return Fail("Uses per customer must be at least 1, or leave it empty.", "promos");
             if (maxTotalUses.HasValue && maxTotalUses < 1)
                 return Fail("Total uses must be at least 1, or leave it empty.", "promos");
+            if (maxTotalUses.HasValue && maxUsesPerCustomer.HasValue && maxTotalUses < maxUsesPerCustomer)
+                return Fail("Total uses can't be lower than uses per customer.", "promos");
+
+            // A day name that can't be read binds as Sunday, so check the binding errors as well
+            if (!Enum.IsDefined(startDay) || !Enum.IsDefined(endDay)
+                || ModelState[nameof(startDay)]?.Errors.Count > 0 || ModelState[nameof(endDay)]?.Errors.Count > 0)
+                return Fail("Please choose a valid start day and end day.", "promos");
+
+            // Birthday promotions: a limit per customer that starts again every year, otherwise one customer
+            // could use it again and again all month, or only once in their life
+            if (birthdayOnly && !maxUsesPerCustomer.HasValue)
+                return Fail("A birthday promotion needs a \"uses per customer\" limit (for example 1).", "promos");
+            if (birthdayOnly && !limitResetsYearly)
+                return Fail("A birthday promotion's limit must reset every year (tick \"Per-customer limit resets every year\").", "promos");
 
             string orderKind = orderType == PromotionRules.DineIn || orderType == PromotionRules.Takeaway
                 ? orderType!
@@ -263,10 +277,10 @@ namespace RestaurantManagementSystem.Pages.Admin
             }
             else
             {
-                // TODO: use the signed-in admin once the login feature is merged.
-                // For now a new promotion is created under the first admin account.
-                var admin = await _db.Admins.FirstOrDefaultAsync();
-                if (admin == null) return Fail("No admin account exists yet, so a promotion can't be created.", "promos");
+                // A new promotion belongs to the signed-in admin (RequireRoleFilter only lets admins reach this page)
+                int? adminId = HttpContext.Session.GetUserId();
+                var admin = await _db.Admins.FirstOrDefaultAsync(a => a.adminID == adminId);
+                if (admin == null) return Fail("Your admin account could not be found. Please sign in again.", "promos");
 
                 promo = new Promotion { Admin = admin };
                 _db.Promotions.Add(promo);
@@ -353,7 +367,7 @@ namespace RestaurantManagementSystem.Pages.Admin
         private static string AvailabilityText(Promotion p)
         {
             if (StatusOf(p) != "Active") return "";
-            var why = PromotionRules.NotAvailableReason(p, DateTime.Now, null, checkBirthday: false);
+            var why = PromotionRules.NotAvailableReason(p, MalaysiaClock.Now, null, checkBirthday: false);
             return why == null ? "Valid right now" : "Not valid right now · " + why;
         }
 
@@ -366,7 +380,7 @@ namespace RestaurantManagementSystem.Pages.Admin
         }
 
         // Badge text on the card: Inactive / Expired / Scheduled / Active
-        private static string StatusOf(Promotion p) => PromotionRules.StatusOf(p, DateTime.Now);
+        private static string StatusOf(Promotion p) => PromotionRules.StatusOf(p, MalaysiaClock.Now);
 
         // =====================================================================
         //  Simple classes the page loops over

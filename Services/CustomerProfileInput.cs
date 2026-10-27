@@ -25,5 +25,10 @@ namespace RestaurantManagementSystem.Services
         public List<string> Allergies { get; set; } = new();
 
         public bool promoOptIn { get; set; }
+
+        // Birthday for birthday offers. Can only be added while the account has none; once saved it can't be
+        // changed here (so nobody can move it to get the birthday promotion again). ProfileService enforces this.
+        [DataType(DataType.Date)]
+        public DateTime? custBirthday { get; set; }
     }
 }

@@ -65,6 +65,20 @@
                                 <label class="md-label" for="Customer_custPhone">Phone number</label>
                                 <input class="form-control md-input" id="Customer_custPhone" name="Customer.custPhone" type="tel" maxlength="11" inputmode="numeric" autocomplete="tel" value="@Model.Input.custPhone" />
                             </div>
+                            @* Customer.custBirthday: can be added once; after that it is shown but can't be changed *@
+                            <div class="col-md-6">
+                                <label class="md-label" for="Customer_custBirthday">Birthday</label>
+                                @if (Model.SavedBirthday.HasValue)
+                                {
+                                    <input class="form-control md-input" id="Customer_custBirthday" type="text" value="@Model.SavedBirthday.Value.ToString("d MMMM yyyy")" readonly tabindex="-1" />
+                                    <div class="form-text">Used for birthday offers. Please ask our staff if it needs correcting.</div>
+                                }
+                                else
+                                {
+                                    <input class="form-control md-input" id="Customer_custBirthday" name="Customer.custBirthday" type="date" max="@MalaysiaClock.Today.ToString("yyyy-MM-dd")" value="@(Model.Input.custBirthday?.ToString("yyyy-MM-dd"))" />
+                                    <div class="form-text">Optional, for birthday offers. It can't be changed once saved.</div>
+                                }
+                            </div>
                         </div>
 
                         @* Customer.promoOptIn *@

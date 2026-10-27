@@ -137,7 +137,10 @@ namespace RestaurantManagementSystem.Data
                             promoCode = "BIRTHDAY",
                             discountType = "Complimentary",
                             discountValue = null,
-                            autoApply = false
+                            autoApply = false,
+                            birthdayOnly = true,           // only in the customer's birthday month
+                            maxUsesPerCustomer = 1,        // once ...
+                            limitResetsYearly = true       // ... per year
                         });
                     db.SaveChanges();
                 }

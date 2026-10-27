@@ -12,11 +12,13 @@ namespace RestaurantManagementSystem.Pages.Customer
     {
         private readonly ApplicationDbContext _context;
         private readonly RecommendationService _recommendations;
+        private readonly PromotionService _promotions;
 
-        public MenuModel(ApplicationDbContext context, RecommendationService recommendations)
+        public MenuModel(ApplicationDbContext context, RecommendationService recommendations, PromotionService promotions)
         {
             _context = context;
             _recommendations = recommendations;
+            _promotions = promotions;
         }
 
         public List<Menu> MenuItems { get; set; } = new();
@@ -42,7 +44,8 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         public async Task<IActionResult> OnGetAsync()
         {
-            // Every customer must sign in. TODO: change to your real login page path.
+            // RequireRoleFilter already sends visitors who aren't signed in to the login page; this check is a fallback
+            // and gives us the customer ID for their allergies and recommendations.
             if (CurrentCustomerId() is not int custId)
             {
                 return RedirectToPage("/Customer/Login");
@@ -71,7 +74,8 @@ namespace RestaurantManagementSystem.Pages.Customer
                 .ThenBy(m => m.menuName)
                 .ToListAsync();
 
-            var today = DateTime.Today;
+            var now = MalaysiaClock.Now;
+            var today = now.Date;
             Promotions = await _context.Promotions
                 .Include(p => p.Menus.Where(m => activeIds.Contains(m.categoryID)))
                 .Where(p => p.promoActive
@@ -79,11 +83,12 @@ namespace RestaurantManagementSystem.Pages.Customer
                          && (p.validUntil == null || p.validUntil >= today))
                 .ToListAsync();
 
-            // Which promotions can be used right now (day, time of day, birthday month)
-            var now = DateTime.Now;
+            // Which promotions this customer can use right now (day, time of day, birthday month, usage limits).
+            // Order type and minimum spend are checked at Checkout, when the order is known.
+            var buyer = await _promotions.GetBuyerAsync(custId);
             foreach (var promo in Promotions)
             {
-                var why = PromotionRules.NotAvailableReason(promo, now, customerInfo?.custBirthday);
+                var why = await _promotions.WhyNotAsync(promo, buyer, now);
                 if (why != null) PromoUnavailable[promo.promoID] = why;
             }
 

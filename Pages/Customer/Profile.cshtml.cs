@@ -25,6 +25,9 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         public string MemberSince { get; set; } = string.Empty;
 
+        // The saved birthday (null = not added yet, so the form lets the customer add it once)
+        public DateTime? SavedBirthday { get; set; }
+
         // Password rule sentence for the Change password pop-up (from Admin > Settings > Security)
         public string PasswordHint { get; set; } = string.Empty;
 
@@ -115,6 +118,7 @@ namespace RestaurantManagementSystem.Pages.Customer
             }
 
             MemberSince = customer.custCreateAt.ToString("MMM yyyy");
+            SavedBirthday = customer.custBirthday;
             PasswordHint = PasswordPolicy.Describe(await _settingsService.GetAsync());
 
             if (fillForm)

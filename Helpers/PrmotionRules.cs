@@ -10,6 +10,7 @@ namespace RestaurantManagementSystem.Helpers
     //   active + inside valid from/until + today is inside start day - end day + time is inside the time window
     //   + (birthday-only: it is the customer's birthday month)
     //   + (at Checkout) order type matches, minimum spend reached, and the usage limits are not used up.
+    // "now" is always Malaysia time (MalaysiaClock). PromotionService runs these checks on the server.
     public static class PromotionRules
     {
         public const string Any = "Any";
@@ -39,6 +40,7 @@ namespace RestaurantManagementSystem.Helpers
             return start < end ? time >= start && time < end : time >= start || time < end;
         }
 
+        // The whole birthday month counts (Feb 29 birthdays get all of February, leap year or not)
         public static bool IsBirthdayMonth(DateTime? birthday, DateTime now) =>
             birthday.HasValue && birthday.Value.Month == now.Month;
 
@@ -85,11 +87,16 @@ namespace RestaurantManagementSystem.Helpers
         //  Checkout checks (the order and payment code plugs these in)
         // =====================================================================
 
+        // Birthday and limited promotions need a real account: a walk-in guest record has no birthday,
+        // and one guest can end up with several records, so per-customer limits can't be trusted for guests.
+        public static bool MembersOnly(Promotion p) => p.birthdayOnly || p.maxUsesPerCustomer.HasValue;
+
         // Where to start counting a customer's earlier uses of this promotion:
-        // 1 January of this year if the limit resets yearly, otherwise null (count everything).
-        // Count the customer's orders with this promoID whose orderStatus is not "Cancelled", from this date.
-        public static DateTime? UsageWindowStart(Promotion p, DateTime now) =>
-            p.limitResetsYearly ? new DateTime(now.Year, 1, 1) : (DateTime?)null;
+        // 1 January (Malaysia time) of this year if the limit resets yearly, otherwise null (count everything).
+        // A use = one order with this promoID on a line, that is PAID and not "Cancelled" (PromotionService counts them),
+        // so an unpaid order, a failed payment or a cancelled order never uses up the limit.
+        public static DateTimeOffset? UsageWindowStart(Promotion p, DateTime now) =>
+            p.limitResetsYearly ? MalaysiaClock.StartOf(new DateTime(now.Year, 1, 1)) : (DateTimeOffset?)null;
 
         // null = OK, otherwise the message to show the customer.
         //   orderSubtotal  = the whole order before any discount

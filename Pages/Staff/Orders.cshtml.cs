@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 using CustomerModel = RestaurantManagementSystem.Model.Customer;
 
 namespace RestaurantManagementSystem.Pages.Staff
@@ -23,10 +24,12 @@ namespace RestaurantManagementSystem.Pages.Staff
         private const int MaxQuantity = 20;
 
         private readonly ApplicationDbContext _context;
+        private readonly PromotionService _promotions;
 
-        public OrdersModel(ApplicationDbContext context)
+        public OrdersModel(ApplicationDbContext context, PromotionService promotions)
         {
             _context = context;
+            _promotions = promotions;
         }
 
         // ---------- What the page shows (names match Orders.cshtml) ----------
@@ -255,13 +258,16 @@ namespace RestaurantManagementSystem.Pages.Staff
                 }
             }
 
-            //3. promotions + totals (same rules as the customer Checkout)
-            var promos = await PromotionPricing.RunningAsync(_context, DateTime.Today);
-            var priced = lines.Select(l => new
+            //3. promotions + totals (same server-side rules as the customer Checkout).
+            //   A walk-in takeaway guest is not a member, so birthday and limited promotions don't apply.
+            var buyer = guest != null ? PromoBuyer.Guest : await _promotions.GetBuyerAsync(custId);
+            var applied = await _promotions.PriceNewOrderAsync(buyer, orderType,
+                lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList());
+            var priced = lines.Select((l, i) => new
             {
                 Line = l,
                 Menu = menus[l.MenuId],
-                Promo = PromotionPricing.BestFor(promos, l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)
+                Promo = applied[i]
             }).ToList();
 
             var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
@@ -300,6 +306,7 @@ namespace RestaurantManagementSystem.Pages.Staff
                     unitPrice = x.Menu.menuPrice,
                     orderRemark = note,
                     promoCode = x.Promo?.Code,
+                    promoID = x.Promo?.PromoId,
                     discountAmount = x.Promo?.LineDiscount ?? 0m
                 });
             }
