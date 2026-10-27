@@ -40,6 +40,19 @@
    Upcoming reservations and open orders stay on the Reservations and Orders pages.
    All three tabs read the database (Reservations: ReservationService; Orders and Payments: HistoryModel). *@
 
+@* Message after rating a visit (TempData set by OnPostRate) *@
+@if (TempData["HistoryMessage"] is string message)
+{
+    if (TempData["HistoryMessageIsError"] is true)
+    {
+        <p class="md-note-box md-note-box-danger md-section" role="alert">@message</p>
+    }
+    else
+    {
+        <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+    }
+}
+
 <nav class="md-tabs md-page-tabs" aria-label="History sections" id="historyTabs">
     <button type="button" class="active" data-tab="reservations" aria-controls="tab-reservations">Reservations</button>
     <button type="button" data-tab="orders" aria-controls="tab-orders">Orders</button>
@@ -468,7 +481,7 @@
                 </div>
 
                 <label class="md-label" for="comment">Your feedback (optional)</label>
-                <textarea class="form-control md-input" id="comment" name="comment" rows="3" placeholder="Tell us about the food, service or anything we could do better"></textarea>
+                <textarea class="form-control md-input" id="comment" name="comment" rows="3" maxlength="450" placeholder="Tell us about the food, service or anything we could do better"></textarea>
                 <p class="md-hint mt-2 mb-0">Only completed visits can be rated, once per visit.</p>
             </div>
             <div class="modal-footer">

@@ -16,8 +16,8 @@
 
         const icon = btn.querySelector('i');
         if (icon) {
-            icon.classList.toggle('bi-eye', !show);
-            icon.classList.toggle('bi-eye-slash', show);
+            icon.classList.toggle('bi-eye', show);          // open eye = password visible
+            icon.classList.toggle('bi-eye-slash', !show);   // crossed-out eye = password hidden
         }
         btn.setAttribute('aria-pressed', show);
         btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');

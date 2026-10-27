@@ -36,6 +36,10 @@ namespace RestaurantManagementSystem.Model
         [MaxLength(20)]
         public string? promoCode { get; set; }
 
+        // The same promotion by ID, used to count uses (the code text can be changed by the admin later).
+        // Set to null if the promotion is deleted.
+        public int? promoID { get; set; }
+
         [Column(TypeName = "decimal(10,2)")]
         public decimal discountAmount { get; set; } = 0m;
     }

@@ -13,11 +13,12 @@ namespace RestaurantManagementSystem.Pages.Shared.Partials
     //   PaidAt         Payment.paymentDate
     //
     // Service charge, SST and total are worked out here, so every page shows the same numbers.
-    // The total should match Order.totalAmount / Payment.paymentAmount.
+    // The total should match Order.totalAmount / Payment.paymentAmount, so pass the rates from
+    // Admin > Settings (SystemSetting.serviceChargePct / sstPct); the defaults are SystemSetting's defaults.
     public class ReceiptView
     {
-        public const decimal ServiceChargeRate = 0.10m;   // dine-in only
-        public const decimal SstRate = 0.06m;             // on subtotal + service charge
+        public decimal ServiceChargePct { get; set; } = 10m;   // dine-in only
+        public decimal SstPct { get; set; } = 6m;              // on subtotal + service charge
 
         public string ReceiptNo { get; set; } = "";
         public string OrderCode { get; set; } = "";
@@ -32,8 +33,8 @@ namespace RestaurantManagementSystem.Pages.Shared.Partials
         public DateTimeOffset PaidAt { get; set; }
 
         public decimal Subtotal => Items.Sum(i => i.LineTotal - i.Discount);   // after promotions
-        public decimal ServiceCharge => IsDineIn ? Round(Subtotal * ServiceChargeRate) : 0m;
-        public decimal Sst => Round((Subtotal + ServiceCharge) * SstRate);
+        public decimal ServiceCharge => IsDineIn ? Round(Subtotal * ServiceChargePct / 100m) : 0m;
+        public decimal Sst => Round((Subtotal + ServiceCharge) * SstPct / 100m);
         public decimal Total => Subtotal + ServiceCharge + Sst;
 
         private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);

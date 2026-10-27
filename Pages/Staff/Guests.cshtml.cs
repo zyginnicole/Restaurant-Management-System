@@ -12,7 +12,7 @@ namespace RestaurantManagementSystem.Pages.Staff
     //    Tabs: All · Tonight (a Pending / Confirmed / Seated reservation today) · Regulars (3 or more visits).
     //    ?guest=12 shows that customer on the right.
     //  - Walk-in guests booked by staff appear too (guest profile, marked "Not registered yet") – see AuthService.
-    //  - Dining preferences = Customer.DietaryPref (the only preference field).
+    //  - Dining preferences = Customer.DietaryPref, plus Customer.kitchenNotes when the customer wrote one.
     public class GuestsModel : PageModel
     {
         private readonly ApplicationDbContext _db;

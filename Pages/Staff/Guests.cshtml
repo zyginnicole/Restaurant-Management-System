@@ -103,6 +103,11 @@
                             @* Allergies red, other dietary needs (Vegetarian, Halal …) amber *@
                             <span class="md-chip @(diet.Contains("allergy", StringComparison.OrdinalIgnoreCase) ? "is-allergy" : diet != "None" ? "is-diet" : "")">Dietary: @diet</span>
                         </div>
+                        @* Customer.kitchenNotes (set by the customer on Profile) *@
+                        @if (c.kitchenNotes != null)
+                        {
+                            <p class="md-res-note mt-2 mb-0">Kitchen notes: “@c.kitchenNotes”</p>
+                        }
                     </div>
                     <div class="col-md-6">
                         <span class="md-label">Tonight</span>

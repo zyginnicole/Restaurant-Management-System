@@ -1,44 +1,122 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
+using RestaurantManagementSystem.Model;
 
 namespace RestaurantManagementSystem.Pages.Admin
 {
     // Admin Announcements: short notices for customers and/or staff (closures, opening hours, briefings).
     // Promotions are managed on Menu & Offers, not here.
-    // Static UI for now – backend notes (Announcement table only, no new fields):
-    //  - OnGet: Announcements (+ Admin), pinned first, then newest first (announcementDate).
+    //  - OnGet: Announcements, pinned first, then newest first (announcementDate).
+    //    Audience labels show how many people each reaches: customers, active staff, or both.
     //  - Fields: announcementTitle (max 100), announcementMessage (max 500),
     //    targetAudience "All" / "Customers" / "Staff", isPinned. adminID = signed-in admin.
-    //  - Post: announcementDate = now (no scheduling). Customers see "All" + "Customers"; staff see "All" + "Staff".
-    //  - Every action redirects back with TempData["AdminMessage"].
+    //  - Post: announcementDate = now (no scheduling); editing keeps the original date.
+    //    Customers see "All" + "Customers"; staff see "All" + "Staff".
+    //  - Every action redirects back with TempData["AdminMessage"] (+ AdminMessageIsError when it was refused).
     public class AnnouncementsModel : PageModel
     {
-        public void OnGet()
+        public const int MaxTitle = 100;
+        public const int MaxMessage = 500;
+        public static readonly string[] AudienceValues = { "All", "Customers", "Staff" };
+
+        private readonly ApplicationDbContext _db;
+
+        public AnnouncementsModel(ApplicationDbContext db)
         {
+            _db = db;
         }
 
-        // ---- UI flow only (no saving yet) – backend: save first, then redirect ----
+        public List<Announcement> Items { get; set; } = new();
+        public List<(string Value, string Label, int Count)> Audiences { get; set; } = new();
+
+        public async Task OnGetAsync()
+        {
+            Items = await _db.Announcements.AsNoTracking()
+                .OrderByDescending(a => a.isPinned)
+                .ThenByDescending(a => a.announcementDate)
+                .ToListAsync();
+
+            int customers = await _db.Customers.CountAsync();
+            int staff = await _db.StaffMembers.CountAsync(s => s.staffActive);
+            Audiences = new()
+            {
+                ("All", "Everyone", customers + staff),
+                ("Customers", "Customers", customers),
+                ("Staff", "Staff", staff)
+            };
+        }
 
         // Compose form. announcementId empty = new (announcementDate = now), otherwise update that announcement.
-        // Fields: announcementId, announcementTitle, announcementMessage, targetAudience, isPinned.
-        public IActionResult OnPostSave(int? announcementId, string announcementTitle)
+        public async Task<IActionResult> OnPostSaveAsync(int? announcementId, string? announcementTitle,
+            string? announcementMessage, string? targetAudience, bool isPinned)
         {
-            TempData["AdminMessage"] = announcementId == null
-                ? $"\"{announcementTitle}\" posted."
-                : $"\"{announcementTitle}\" updated.";
+            var title = announcementTitle?.Trim() ?? "";
+            var message = announcementMessage?.Trim() ?? "";
+
+            if (title.Length == 0) return Fail("Please enter a title.");
+            if (title.Length > MaxTitle) return Fail($"The title can be at most {MaxTitle} characters.");
+            if (message.Length == 0) return Fail("Please enter a message.");
+            if (message.Length > MaxMessage) return Fail($"The message can be at most {MaxMessage} characters.");
+            if (!AudienceValues.Contains(targetAudience)) return Fail("Please choose who should see it.");
+
+            Announcement? item;
+            if (announcementId == null)
+            {
+                var adminId = HttpContext.Session.GetUserId();
+                if (adminId == null || !await _db.Admins.AnyAsync(a => a.adminID == adminId))
+                    return Fail("Please sign in again as an administrator.");
+
+                item = new Announcement { adminID = adminId.Value, announcementDate = DateTimeOffset.Now };
+                _db.Announcements.Add(item);
+            }
+            else
+            {
+                item = await _db.Announcements.FindAsync(announcementId.Value);
+                if (item == null) return Fail("That announcement no longer exists.");
+            }
+
+            item.announcementTitle = title;
+            item.announcementMessage = message;
+            item.targetAudience = targetAudience!;
+            item.isPinned = isPinned;
+            await _db.SaveChangesAsync();
+
+            TempData["AdminMessage"] = announcementId == null ? $"\"{title}\" posted." : $"\"{title}\" updated.";
             return RedirectToPage();
         }
 
         // Pin / Unpin: isPinned = pin (pinned announcements stay at the top for customers / staff)
-        public IActionResult OnPostPin(int announcementId, bool pin)
+        public async Task<IActionResult> OnPostPinAsync(int announcementId, bool pin)
         {
-            TempData["AdminMessage"] = pin ? "Announcement pinned." : "Announcement unpinned.";
+            var item = await _db.Announcements.FindAsync(announcementId);
+            if (item == null) return Fail("That announcement no longer exists.");
+
+            item.isPinned = pin;
+            await _db.SaveChangesAsync();
+
+            TempData["AdminMessage"] = pin ? $"\"{item.announcementTitle}\" pinned." : $"\"{item.announcementTitle}\" unpinned.";
             return RedirectToPage();
         }
 
-        public IActionResult OnPostDelete(int announcementId)
+        public async Task<IActionResult> OnPostDeleteAsync(int announcementId)
         {
-            TempData["AdminMessage"] = "Announcement deleted.";
+            var item = await _db.Announcements.FindAsync(announcementId);
+            if (item == null) return Fail("That announcement no longer exists.");
+
+            _db.Announcements.Remove(item);
+            await _db.SaveChangesAsync();
+
+            TempData["AdminMessage"] = $"\"{item.announcementTitle}\" deleted.";
+            return RedirectToPage();
+        }
+
+        private IActionResult Fail(string message)
+        {
+            TempData["AdminMessage"] = message;
+            TempData["AdminMessageIsError"] = true;
             return RedirectToPage();
         }
     }

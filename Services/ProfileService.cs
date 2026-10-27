@@ -59,6 +59,18 @@ namespace RestaurantManagementSystem.Services
             customer.DietaryPref = MenuVocabulary.Join(input.Prefs.Where(x => MenuVocabulary.Tags.Contains(x)));
             customer.Allergies = MenuVocabulary.Join(input.Allergies.Where(x => MenuVocabulary.Allergens.Contains(x)));
             customer.promoOptIn = input.promoOptIn;
+            customer.kitchenNotes = string.IsNullOrWhiteSpace(input.kitchenNotes) ? null : input.kitchenNotes.Trim();
+
+            // Birthday: set once. A saved birthday is never changed from the Profile page.
+            if (customer.custBirthday == null && input.custBirthday.HasValue)
+            {
+                DateTime birthday = input.custBirthday.Value.Date;
+                if (birthday > MalaysiaClock.Today || birthday.Year < 1900)
+                {
+                    return "Please enter a valid birthday.";
+                }
+                customer.custBirthday = birthday;
+            }
 
             await _context.SaveChangesAsync();
             return null;

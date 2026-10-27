@@ -46,6 +46,7 @@ namespace RestaurantManagementSystem.Data
             modelBuilder.Entity<Admin>().HasIndex(a => a.adminEmail).IsUnique();
             modelBuilder.Entity<MenuCategory>().HasIndex(c => c.categoryName).IsUnique();
             modelBuilder.Entity<DiningArea>().HasIndex(a => a.areaName).IsUnique();
+            modelBuilder.Entity<DiningArea>().HasIndex(a => a.areaCode).IsUnique();
 
             // ---------- Menu ----------
             modelBuilder.Entity<Menu>()
@@ -61,9 +62,9 @@ namespace RestaurantManagementSystem.Data
                 .HasForeignKey(t => t.areaID)
                 .OnDelete(DeleteBehavior.Restrict);         // can't delete an area that still has tables
 
-            // one table number per area (the same number can repeat in a different area)
+            // a table number starts with its area's code (I-01, O-01 ...), so it is unique in the whole restaurant
             modelBuilder.Entity<DiningTable>()
-                .HasIndex(t => new { t.areaID, t.tableNumber })
+                .HasIndex(t => t.tableNumber)
                 .IsUnique();
 
             // ---------- Restaurant -> OperatingHour ----------
@@ -146,6 +147,12 @@ namespace RestaurantManagementSystem.Data
                 .WithMany(m => m.OrderItems)
                 .HasForeignKey(oi => oi.menuID)
                 .OnDelete(DeleteBehavior.Restrict);         // keep order history if a menu item is removed
+
+            modelBuilder.Entity<OrderItem>()
+                .HasOne<Promotion>()
+                .WithMany()
+                .HasForeignKey(oi => oi.promoID)
+                .OnDelete(DeleteBehavior.SetNull);          // optional FK; old lines keep their promoCode text
 
             // ---------- Payment (one-to-one with Order) ----------
             modelBuilder.Entity<Payment>()

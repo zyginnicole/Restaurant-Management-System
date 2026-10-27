@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
@@ -20,10 +21,12 @@ namespace RestaurantManagementSystem.Pages.Customer
         private static readonly string[] OpenStatuses = { "Order placed", "Preparing", "Served" };
 
         private readonly ApplicationDbContext _context;
+        private readonly PromotionService _promotions;
 
-        public PaymentModel(ApplicationDbContext context)
+        public PaymentModel(ApplicationDbContext context, PromotionService promotions)
         {
             _context = context;
+            _promotions = promotions;
         }
 
         // ---------- What the page shows ----------
@@ -117,6 +120,19 @@ namespace RestaurantManagementSystem.Pages.Customer
                     ModelState.AddModelError(string.Empty, cardError);
                     return Page();
                 }
+            }
+
+            //a limited promotion may have been used up since checkout (e.g. another unpaid order took the last use):
+            //take it off, show the new total, and let the customer confirm again before anything is charged
+            var removed = await _promotions.RecheckLimitsAsync(_billOrders, ServiceChargePct, SstPct);
+            if (removed.Count > 0)
+            {
+                await _context.SaveChangesAsync();
+                await FillAsync(_billOrders.First(o => o.orderID == OrderId));
+                ModelState.AddModelError(string.Empty,
+                    $"{string.Join(", ", removed)} has already been used up, so it was removed and your total has been updated. " +
+                    "Nothing was charged. Please check the total and pay again.");
+                return Page();
             }
 
             bool paid = SimulatePayment(paymentMethod);

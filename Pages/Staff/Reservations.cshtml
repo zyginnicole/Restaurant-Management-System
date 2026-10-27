@@ -191,6 +191,10 @@
                     {
                         <span class="md-res-note">“@r.specialRequest”</span>
                     }
+                    @if (r.Customer?.kitchenNotes != null && !ended)
+                    {
+                        <span class="md-res-note">Kitchen notes: “@r.Customer.kitchenNotes”</span>
+                    }
                 </div>
 
                 <div class="md-staff-res-side">

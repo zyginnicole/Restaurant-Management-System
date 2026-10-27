@@ -7,8 +7,11 @@ using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Staff
 {
-    // Staff dashboard: today's reservations (connected) and active orders (still example data – orders feature).
+    // Staff dashboard: today's reservations and the open orders (both from the database).
     // Clicking a reservation opens the shared details pop-up; its actions post to /Staff/Reservations and come back here.
+    // Orders: every order that is "Order placed", "Preparing" or "Served" and not paid yet (any day, so nothing is missed).
+    // Awaiting payment = Served orders without a Paid payment, grouped into bills like Billing does
+    // (dine-in: one bill per table, takeaway: one bill per order); amounts are Order.totalAmount, as on the Orders page.
     public class DashboardModel : PageModel
     {
         private readonly ApplicationDbContext _db;
@@ -38,6 +41,24 @@ namespace RestaurantManagementSystem.Pages.Staff
         public DateTime? PendingFirstDate { get; set; }
         public int PendingDays { get; set; }   // how many different days those requests are on
 
+        // ---------- Orders (stat cards 3–4 + Active orders) ----------
+        public static readonly string[] OpenOrderStatuses = { "Order placed", "Preparing", "Served" };
+        public List<OrderRow> OpenOrders { get; set; } = new();
+        public decimal AwaitingTotal { get; set; }
+        public int AwaitingBills { get; set; }
+        public string? AwaitingFirstCode { get; set; }              // first bill to open on Billing (?order=)
+        public List<string> AwaitingLabels { get; set; } = new();   // "I-01", "Takeaway"
+
+        public class OrderRow
+        {
+            public string Code { get; set; } = string.Empty;        // "ORD-0085"
+            public string? Table { get; set; }                      // "I-03" (null = takeaway)
+            public string Name { get; set; } = string.Empty;
+            public string Status { get; set; } = string.Empty;
+            public int Items { get; set; }
+            public decimal Total { get; set; }
+        }
+
         public async Task OnGetAsync()
         {
             Settings = await _settings.GetAsync();
@@ -58,6 +79,48 @@ namespace RestaurantManagementSystem.Pages.Staff
             var seatedTableIds = Today.Where(r => r.reservationStatus == ReservationStatus.Seated).Select(r => r.tableID).ToHashSet();
             TablesTotal = tables.Count;
             TablesOccupied = tables.Count(t => t.tableStatus == "Occupied" || seatedTableIds.Contains(t.tableID));
+
+            await LoadOrdersAsync();
+        }
+
+        private async Task LoadOrdersAsync()
+        {
+            var orders = await _db.Orders.AsNoTracking()
+                .Include(o => o.Customer)
+                .Include(o => o.DiningTable)
+                .Include(o => o.Payment)
+                .Include(o => o.OrderItems)
+                .Where(o => OpenOrderStatuses.Contains(o.orderStatus))
+                .ToListAsync();
+            // a paid takeaway that is Served is only waiting to be collected, not for payment
+            bool Paid(Order o) => o.Payment?.paymentStatus == "Paid";
+
+            // Order placed first (to accept), then Preparing, then Served; newest first within each
+            OpenOrders = orders
+                .OrderBy(o => Array.IndexOf(OpenOrderStatuses, o.orderStatus))
+                .ThenByDescending(o => o.orderDateTime)
+                .Select(o => new OrderRow
+                {
+                    Code = "ORD-" + o.orderID.ToString("0000"),
+                    Table = o.DiningTable?.tableNumber,
+                    Name = o.Customer?.custName ?? "Guest",
+                    Status = o.orderStatus,
+                    Items = o.OrderItems.Sum(oi => oi.quantity),
+                    Total = Paid(o) ? o.Payment!.paymentAmount : o.totalAmount
+                })
+                .ToList();
+
+            var awaiting = orders.Where(o => o.orderStatus == "Served" && !Paid(o)).ToList();
+            var bills = awaiting.Where(o => o.tableID != null).GroupBy(o => o.tableID!.Value).Select(g => g.ToList())
+                .Concat(awaiting.Where(o => o.tableID == null).Select(o => new List<Order> { o }))
+                .Select(g => g.OrderBy(o => o.orderID).ToList())
+                .OrderBy(g => g[0].orderID)
+                .ToList();
+
+            AwaitingTotal = awaiting.Sum(o => o.totalAmount);
+            AwaitingBills = bills.Count;
+            AwaitingFirstCode = bills.Count > 0 ? "ORD-" + bills[0][0].orderID.ToString("0000") : null;
+            AwaitingLabels = bills.Select(g => g[0].DiningTable?.tableNumber ?? "Takeaway").ToList();
         }
     }
 }

@@ -21,7 +21,7 @@ namespace RestaurantManagementSystem.Model
         [DataType(DataType.Password)]
         public string custPassword { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "Phone number is required!")]
         [MaxLength(11, ErrorMessage = "Maximum 11 digits including the leading 0.")]
         public string custPhone { get; set; }
 
@@ -37,6 +37,10 @@ namespace RestaurantManagementSystem.Model
 
         // Comma-separated allergens (MenuVocabulary.Allergens). Dishes containing them are never recommended. "None" = no allergies
         public string Allergies { get; set; } = "None";
+
+        // Optional free-text note for the kitchen, e.g. "no coriander" (Profile page). Staff see it with the booking
+        [MaxLength(300)]
+        public string? kitchenNotes { get; set; }
 
         public bool promoOptIn { get; set; } = false;
 

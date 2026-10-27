@@ -16,9 +16,9 @@ namespace RestaurantManagementSystem.Pages.Customer
     //    one table bill are ONE row (same receipt no. as on the receipt page).
     //  - "Rate this visit" shows only for a Completed visit whose order has no Feedback row yet
     //    (one rating per visit); a rated visit shows its stars instead.
-    //  - OnPostRate (fields: orderId, rating 1–5, comment): not saved yet (feedback feature) –
-    //    backend: save a Feedback row (custID from Session, feedbackDate = now). The "What stood out?" chips
-    //    are added to the comment text, because Feedback has no separate field for them.
+    //  - OnPostRate (fields: orderId, rating 1–5, comment): saves a Feedback row (custID from Session, feedbackDate = now)
+    //    after checking the order is the customer's, belongs to a Completed visit and is not rated yet.
+    //    The "What stood out?" chips are added to the comment text, because Feedback has no separate field for them.
     public class HistoryModel : PageModel
     {
         private readonly ApplicationDbContext _db;
@@ -110,9 +110,46 @@ namespace RestaurantManagementSystem.Pages.Customer
             PaymentYears = YearsOf(Payments.Select(p => p.Date.Year));
         }
 
-        // UI flow only (no saving yet) – feedback feature: save the Feedback first, then redirect.
-        public IActionResult OnPostRate()
+        // Saves the rating for a completed visit (one Feedback per order), then back to the list with a message
+        public async Task<IActionResult> OnPostRateAsync(int orderId, int rating, string? comment)
         {
+            var custId = HttpContext.Session.GetUserId();
+            if (custId == null) return RedirectToPage();
+
+            var order = await _db.Orders.AsNoTracking()
+                .Include(o => o.Reservation)
+                .FirstOrDefaultAsync(o => o.orderID == orderId && o.custID == custId.Value);
+            comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+
+            string? error = null;
+            if (order == null || order.orderStatus == "Cancelled"
+                || order.Reservation?.reservationStatus != ReservationStatus.Completed)
+                error = "Only completed visits can be rated.";
+            else if (rating < 1 || rating > 5)
+                error = "Please choose a rating from 1 to 5 stars.";
+            else if (comment?.Length > 500)
+                error = "Your feedback can be at most 500 characters.";
+            else if (await _db.Feedbacks.AnyAsync(f => f.orderID == orderId))
+                error = "This visit has already been rated.";
+
+            if (error != null)
+            {
+                TempData["HistoryMessage"] = error;
+                TempData["HistoryMessageIsError"] = true;
+                return RedirectToPage();
+            }
+
+            _db.Feedbacks.Add(new Feedback
+            {
+                custID = custId.Value,
+                orderID = orderId,
+                rating = rating,
+                comment = comment,
+                feedbackDate = DateTimeOffset.Now
+            });
+            await _db.SaveChangesAsync();
+
+            TempData["HistoryMessage"] = "Thank you! Your rating has been saved.";
             return RedirectToPage();
         }
 
