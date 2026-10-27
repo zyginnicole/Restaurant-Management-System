@@ -20,10 +20,16 @@
     var pending = Count(ReservationStatus.Pending);
     var handled = guests.Count - pending;
     string[] endedStatuses = { ReservationStatus.Completed, ReservationStatus.Cancelled, ReservationStatus.NoShow, ReservationStatus.Declined };
+
+    // Orders: open orders (Order placed, Preparing, Served – see DashboardModel.LoadOrdersAsync)
+    var orders = Model.OpenOrders;
+    int OrderCount(string status) => orders.Count(o => o.Status == status);
+    var placedCount = OrderCount("Order placed");
+    var preparingCount = OrderCount("Preparing");
+    string OrderClass(string status) => status == "Order placed" ? "is-placed" : "is-" + status.ToLowerInvariant();
 }
 
-@* Reservations (stat cards 1–2 + Upcoming guests) come from the database.
-   Orders (stat cards 3–4 + Active orders) are still example data – they belong to the orders / billing feature.
+@* Reservations (stat cards 1–2 + Upcoming guests) and orders (stat cards 3–4 + Active orders) come from the database.
    Order statuses: Order placed → Preparing → Served → Completed (or Cancelled before Served)
 
    This dashboard has no action buttons on its rows. Clicking a reservation opens the Reservation
@@ -90,17 +96,23 @@
         </div>
     </div>
 
-    @* ---- Example data from here (orders feature) ---- *@
-    @* Open orders: orange = Preparing, yellow = Order placed (same colours as the order tags) (waiting to be accepted) *@
+    @* Open orders (Order placed + Preparing): orange = Preparing, yellow = Order placed (waiting to be accepted) *@
     <div class="col-sm-6 col-xl-3">
         <div class="md-stat md-staff-stat">
             <span class="md-label">Open orders</span>
-            <div class="md-stat-value">3</div>
-            <div class="md-statbar" role="img" aria-label="2 preparing, 1 waiting to be accepted">
-                <i class="is-orange" style="flex: 2"></i>
-                <i class="is-yellow" style="flex: 1"></i>
+            <div class="md-stat-value">@(placedCount + preparingCount)</div>
+            <div class="md-statbar" role="img" aria-label="@preparingCount preparing, @placedCount waiting to be accepted">
+                <i class="is-orange" style="flex: @preparingCount"></i>
+                <i class="is-yellow" style="flex: @placedCount"></i>
             </div>
-            <a class="md-stat-action" href="/Staff/Orders?status=placed">1 to accept <i class="bi bi-arrow-right"></i></a>
+            @if (placedCount > 0)
+            {
+                <a class="md-stat-action" href="/Staff/Orders?status=placed">@placedCount to accept <i class="bi bi-arrow-right"></i></a>
+            }
+            else
+            {
+                <a class="md-stat-action" href="/Staff/Orders">None to accept <i class="bi bi-arrow-right"></i></a>
+            }
         </div>
     </div>
 
@@ -108,11 +120,19 @@
     <div class="col-sm-6 col-xl-3">
         <div class="md-stat md-staff-stat">
             <span class="md-label">Awaiting payment</span>
-            <div class="md-stat-value">RM 436.08</div>
-            <div class="md-statbar" role="img" aria-label="1 bill waiting for payment">
-                <i class="is-blue" style="flex: 1"></i>
+            <div class="md-stat-value">RM @Model.AwaitingTotal.ToString("N2", inv)</div>
+            <div class="md-statbar" role="img" aria-label="@Model.AwaitingBills @(Model.AwaitingBills == 1 ? "bill" : "bills") waiting for payment">
+                <i class="is-blue" style="flex: @Model.AwaitingBills"></i>
             </div>
-            <a class="md-stat-action" href="/Staff/Billing?order=ORD-0083">1 bill · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>T-09 <i class="bi bi-arrow-right"></i></a>
+            @if (Model.AwaitingBills > 0)
+            {
+                var shownLabels = Model.AwaitingLabels.Take(3).ToList();
+                <a class="md-stat-action" href="/Staff/Billing?order=@Model.AwaitingFirstCode">@Model.AwaitingBills @(Model.AwaitingBills == 1 ? "bill" : "bills") · <i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@string.Join(", ", shownLabels)@(Model.AwaitingLabels.Count > 3 ? " …" : "") <i class="bi bi-arrow-right"></i></a>
+            }
+            else
+            {
+                <a class="md-stat-action" href="/Staff/Billing">No bills waiting <i class="bi bi-arrow-right"></i></a>
+            }
         </div>
     </div>
 </div>
@@ -189,62 +209,38 @@
 
             @* Filter tabs by order status (counts replace the old summary strip) *@
             <nav class="md-tabs md-filter-tabs" aria-label="Order status" data-filter-list="orderList">
-                <button type="button" class="active" data-filter="all">All <small>4</small></button>
-                <button type="button" data-filter="is-placed">Order placed <small>1</small></button>
-                <button type="button" data-filter="is-preparing">Preparing <small>2</small></button>
-                <button type="button" data-filter="is-served">Served <small>1</small></button>
+                <button type="button" class="active" data-filter="all">All <small>@orders.Count</small></button>
+                @foreach (var s in RestaurantManagementSystem.Pages.Staff.DashboardModel.OpenOrderStatuses)
+                {
+                    <button type="button" data-filter="@OrderClass(s)">@s <small>@OrderCount(s)</small></button>
+                }
             </nav>
 
-            @* Newest action first: Order placed → Preparing → Served.
+            @if (orders.Count == 0)
+            {
+                <p class="md-empty">No open orders right now.</p>
+            }
+            @* Order placed first (to accept), then Preparing, then Served; newest first within each.
                Colours: Order placed yellow · Preparing orange · Served blue.
                Completed and Cancelled orders are NOT shown here (only open orders:
                orderStatus is "Order placed", "Preparing" or "Served").
                Each row is a link (stretched-link) to the Orders page with that order shown (?view=ORD-0085). *@
             <ul class="md-order-list" id="orderList">
-                <li class="md-order md-row-link is-placed">
-                    <span class="md-table-badge">03</span>
-                    <div class="md-order-main">
-                        <a class="stretched-link md-guest-name" href="/Staff/Orders?view=ORD-0085">Daniel Tan</a>
-                        <span class="md-guest-meta">ORD-0085 · 2 items</span>
-                    </div>
-                    <div class="md-order-side">
-                        <span class="md-pill is-placed">Order placed</span>
-                        <span class="md-order-amount">RM 134.00</span>
-                    </div>
-                </li>
-                <li class="md-order md-row-link is-preparing">
-                    <span class="md-table-badge">12</span>
-                    <div class="md-order-main">
-                        <a class="stretched-link md-guest-name" href="/Staff/Orders?view=ORD-0082">Eleanor Whitmore</a>
-                        <span class="md-guest-meta">ORD-0082 · 8 items</span>
-                    </div>
-                    <div class="md-order-side">
-                        <span class="md-pill is-preparing">Preparing</span>
-                        <span class="md-order-amount">RM 676.00</span>
-                    </div>
-                </li>
-                <li class="md-order md-row-link is-preparing">
-                    <span class="md-table-badge">06</span>
-                    <div class="md-order-main">
-                        <a class="stretched-link md-guest-name" href="/Staff/Orders?view=ORD-0081">Marcus Delacroix</a>
-                        <span class="md-guest-meta">ORD-0081 · 5 items</span>
-                    </div>
-                    <div class="md-order-side">
-                        <span class="md-pill is-preparing">Preparing</span>
-                        <span class="md-order-amount">RM 387.00</span>
-                    </div>
-                </li>
-                <li class="md-order md-row-link is-served">
-                    <span class="md-table-badge">09</span>
-                    <div class="md-order-main">
-                        <a class="stretched-link md-guest-name" href="/Staff/Orders?view=ORD-0083">Thomas Ashford</a>
-                        <span class="md-guest-meta">ORD-0083 · 4 items</span>
-                    </div>
-                    <div class="md-order-side">
-                        <span class="md-pill is-served">Served</span>
-                        <span class="md-order-amount">RM 374.00</span>
-                    </div>
-                </li>
+                @foreach (var o in orders)
+                {
+                    var key = OrderClass(o.Status);
+                    <li class="md-order md-row-link @key">
+                        <span class="md-table-badge">@(o.Table != null ? o.Table.Replace("-", "") : "TA")</span>@* "I-01" -> "I01": keeps the area code *@
+                        <div class="md-order-main">
+                            <a class="stretched-link md-guest-name" href="/Staff/Orders?view=@o.Code">@o.Name</a>
+                            <span class="md-guest-meta">@o.Code · @o.Items @(o.Items == 1 ? "item" : "items")</span>
+                        </div>
+                        <div class="md-order-side">
+                            <span class="md-pill @key">@o.Status</span>
+                            <span class="md-order-amount">RM @o.Total.ToString("N2", inv)</span>
+                        </div>
+                    </li>
+                }
             </ul>
         </section>
     </div>

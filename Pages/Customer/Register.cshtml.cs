@@ -114,12 +114,16 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return Page();
             }
 
+            //ticked boxes → saved fields (both the guest-profile and new-account paths below use them)
+            Customer.promoOptIn = PromoOptIn;
+            Customer.DietaryPref = MenuVocabulary.Join(SelectedPrefs.Where(x => MenuVocabulary.Tags.Contains(x)));
+            Customer.Allergies = MenuVocabulary.Join(SelectedAllergies.Where(x => MenuVocabulary.Allergens.Contains(x)));
+
             //email of a guest profile (staff booked a walk-in with it): activate that profile instead of a new account,
             //so the guest's reservations are already in it
             var guestProfile = await _authService.FindGuestProfileAsync(Customer.custEmail);
             if (guestProfile != null)
             {
-                Customer.promoOptIn = PromoOptIn;
                 await _authService.ActivateGuestProfileAsync(guestProfile, Customer);
                 TempData["SuccessMessage"] = "Your account has been created. Your bookings at the restaurant are already in it. You can now sign in.";
                 return RedirectToPage();
@@ -135,9 +139,6 @@ namespace RestaurantManagementSystem.Pages.Customer
             }
 
             //save: the service trims the fields and hashes the password
-            Customer.promoOptIn = PromoOptIn;
-            Customer.DietaryPref = MenuVocabulary.Join(SelectedPrefs.Where(x => MenuVocabulary.Tags.Contains(x)));
-            Customer.Allergies = MenuVocabulary.Join(SelectedAllergies.Where(x => MenuVocabulary.Allergens.Contains(x)));
             await _authService.RegisterCustomerAsync(Customer);
 
             //show the success pop-up (redirect to itself so refresh won't re-submit the form)

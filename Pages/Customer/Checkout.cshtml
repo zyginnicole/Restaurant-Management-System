@@ -40,7 +40,7 @@
                     @for (int i = 0; i < Model.CartLines.Count; i++)
                     {
                         var line = Model.CartLines[i];
-                        <li class="md-cart-item" data-price="@line.UnitPrice.ToString("0.00", inv)" data-promo-type="@line.PromoType" data-promo-value="@line.PromoValue.ToString("0.##", inv)">
+                        <li class="md-cart-item" data-price="@line.UnitPrice.ToString("0.00", inv)" data-promo-type="@line.PromoType" data-promo-value="@line.PromoValue.ToString("0.##", inv)" data-promo-min="@(line.PromoMinSpend?.ToString("0.00", inv))" data-promo-order-type="@line.PromoOrderType">
                             @if (!string.IsNullOrEmpty(line.ImageUrl))
                             {
                                 <img class="md-cart-photo" src="@line.ImageUrl" alt="@line.Name" />
@@ -168,22 +168,34 @@
             var rm = function (n) { return 'RM ' + n.toFixed(2); };
             var token = form.querySelector('input[name="__RequestVerificationToken"]');
 
-            // Promotion discount of one line: same formula as the server (PromotionPricing.LineDiscount)
-            function lineDiscount(item, qty, gross) {
+            // Promotion discount of one line: same formula as the server (PromotionPricing.LineDiscount).
+            // The server checks every rule again when the order is placed; this only keeps the preview honest
+            // when the quantities or the order type change (minimum spend = whole order before discounts).
+            function lineDiscount(item, qty, gross, orderGross, orderType) {
                 var type = item.dataset.promoType;
                 var value = parseFloat(item.dataset.promoValue) || 0;
-                if (!type || value <= 0) return 0;
+                if (!type || qty <= 0) return 0;
+                var min = parseFloat(item.dataset.promoMin);
+                if (!isNaN(min) && orderGross < min) return 0;
+                if (item.dataset.promoOrderType && item.dataset.promoOrderType !== orderType) return 0;
                 var d = type === 'Percentage' ? Math.round(gross * value) / 100
-                      : type === 'FixedAmount' ? value * qty : 0;
+                      : type === 'FixedAmount' ? value * qty
+                      : type === 'Complimentary' ? parseFloat(item.dataset.price) : 0;
                 return Math.min(d, gross);
             }
 
             function recalc() {
                 var subtotal = 0, count = 0;
+                var checkedType = form.querySelector('input[name="orderType"]:checked');
+                var orderType = checkedType ? checkedType.value : '';
+                var orderGross = 0;
+                document.querySelectorAll('.md-cart-item').forEach(function (item) {
+                    orderGross += (parseInt(item.querySelector('.md-qty input').value, 10) || 0) * parseFloat(item.dataset.price);
+                });
                 document.querySelectorAll('.md-cart-item').forEach(function (item) {
                     var qty = parseInt(item.querySelector('.md-qty input').value, 10) || 0;
                     var gross = qty * parseFloat(item.dataset.price);
-                    var discount = lineDiscount(item, qty, gross);
+                    var discount = lineDiscount(item, qty, gross, orderGross, orderType);
                     var line = gross - discount;
                     var was = item.querySelector('[data-line-was]');
                     if (was) {

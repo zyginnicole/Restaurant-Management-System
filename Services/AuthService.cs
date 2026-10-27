@@ -129,6 +129,8 @@ namespace RestaurantManagementSystem.Services
             guestProfile.custName = form.custName.Trim();
             guestProfile.custPhone = form.custPhone.Trim();
             guestProfile.DietaryPref = form.DietaryPref;
+            guestProfile.Allergies = form.Allergies;
+            guestProfile.custBirthday ??= form.custBirthday;     // staff never enter a birthday, so this is the first one
             guestProfile.promoOptIn = form.promoOptIn;
             guestProfile.custPassword = _passwordService.HashPassword(form.custPassword);
             guestProfile.FailedLoginAttempts = 0;

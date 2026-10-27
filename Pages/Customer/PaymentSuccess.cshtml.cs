@@ -80,8 +80,13 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             int? reservationId = bill.Select(o => o.reservationID).FirstOrDefault(id => id != null);
 
+            //same rates as Checkout / Payment, so the receipt matches the amount charged
+            var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+
             Receipt = new ReceiptView
             {
+                ServiceChargePct = settings?.serviceChargePct ?? 10m,
+                SstPct = settings?.sstPct ?? 6m,
                 ReceiptNo = "RCP-" + bill.Min(o => o.Payment!.paymentID).ToString("0000"),
                 OrderCode = OrderCode,
                 IsDineIn = IsDineIn,

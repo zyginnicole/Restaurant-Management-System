@@ -2,7 +2,7 @@
 @*
     Shared receipt (till-receipt style) for dine-in and takeaway.
     Usage: <partial name="~/Pages/Shared/Partials/_Receipt.cshtml" model="receipt" />   (receipt = ReceiptView, see ReceiptView.cs)
-    Dine-in shows the reservation + table and adds the 10% service charge; takeaway shows the pick-up time.
+    Dine-in shows the reservation + table and adds the service charge (rates from Admin > Settings); takeaway shows the pick-up time.
     id="receiptPaper" is what the "Download receipt (PDF)" button saves.
 *@
 @{
@@ -67,13 +67,13 @@
     <div class="md-receipt-row"><span>Subtotal</span><span>@Rm(Model.Subtotal)</span></div>
     @if (Model.IsDineIn)
     {
-        <div class="md-receipt-row"><span>Service charge 10%</span><span>@Rm(Model.ServiceCharge)</span></div>
+        <div class="md-receipt-row"><span>Service charge @Model.ServiceChargePct.ToString("0.##")%</span><span>@Rm(Model.ServiceCharge)</span></div>
     }
     else
     {
         <div class="md-receipt-row md-receipt-label"><span>Service charge</span><span>Dine-in only</span></div>
     }
-    <div class="md-receipt-row"><span>SST 6%</span><span>@Rm(Model.Sst)</span></div>
+    <div class="md-receipt-row"><span>SST @Model.SstPct.ToString("0.##")%</span><span>@Rm(Model.Sst)</span></div>
     <div class="md-receipt-row md-receipt-total"><span>Total (RM)</span><span>@Rm(Model.Total)</span></div>
 
     <div class="md-receipt-pay">

@@ -9,25 +9,15 @@
     ViewData["Subtitle"] = "Ratings and comments from completed dining experiences";
     Layout = "_DashboardLayout";
 
-    // ?period=week · month (default) · all – backend reloads the figures for that period
-    string period = Request.Query["period"].ToString() is "week" or "all" ? Request.Query["period"].ToString() : "month";
+    // ?period=week · month (default) · all – FeedbackModel loads the figures for that period
+    string period = Model.Period;
     string periodText = period switch { "week" => "this week", "all" => "all time", _ => "this month" };
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
 
-    // ---------- Example data – later from the database (see FeedbackModel) ----------
-    // Feedback + Customer (phone, email) + Order (+ Reservation for dine-in)
-    var items = new (string Date, string Name, string Phone, string Email, string Order, string? Res, int Rating, string Comment)[]
-    {
-        ("15 Sep 2026", "Victoria Blake",     "+60 12-234 1111", "victoria.blake@example.com", "ORD-0080", "R-0036", 5, "Tasting menu was outstanding; sommelier pairing spot on."),
-        ("13 Sep 2026", "James Carlton",      "+60 17-220 9184", "j.carlton@example.com",      "ORD-0078", "R-0033", 2, "Waited 25 minutes for our table despite booking."),
-        ("12 Sep 2026", "Thomas Ashford",     "+60 12-876 5432", "t.ashford@example.com",      "ORD-0074", "R-0031", 5, "Staff handled my shellfish allergy perfectly."),
-        ("11 Sep 2026", "Priya Raman",        "+60 13-901 2234", "priya.r@example.com",        "ORD-0071", null,     1, "Takeaway was cold when I collected it at 21:30."),
-        ("10 Sep 2026", "Alexandra Beaumont", "+60 12-345 6789", "alexandra@example.com",      "ORD-0069", "R-0029", 4, "Lovely evening. Lobster slightly overcooked."),
-        ("8 Sep 2026",  "Kenji Watanabe",     "+60 11-765 0098", "kenji.w@example.com",        "ORD-0066", "R-0027", 2, "Music was too loud for a quiet dinner."),
-        ("6 Sep 2026",  "Grace Lim",          "+60 16-998 2210", "grace.lim@example.com",      "ORD-0062", "R-0024", 5, "Beautiful room and attentive service.")
-    };
-    int reviews = 126;
-    // Rating distribution for the period (share of reviews)
-    var distribution = new (int Stars, int Percent)[] { (5, 78), (4, 15), (3, 4), (2, 2), (1, 1) };
+    // Feedback + Customer (phone, email) + Order (+ Reservation for dine-in), newest first
+    var items = Model.Items;
+    int reviews = items.Count;
+    var distribution = Model.Distribution;
     string Stars(int n) => new string('★', n) + new string('☆', 5 - n);
 }
 
@@ -45,7 +35,7 @@
     <div class="col-md-4">
         <div class="md-stat md-staff-stat">
             <span class="md-label">Average rating</span>
-            <div class="md-stat-value">4.7 <small>/ 5</small></div>
+            <div class="md-stat-value">@(Model.Average?.ToString("0.0", inv) ?? "—") <small>/ 5</small></div>
             <span class="md-hint">Average of all ratings @periodText</span>
         </div>
     </div>
@@ -71,7 +61,7 @@
         <section class="md-card h-100">
             <div class="md-card-header">
                 <span class="md-card-label">Rating distribution</span>
-                <span class="md-card-meta">@reviews reviews</span>
+                <span class="md-card-meta">@reviews @(reviews == 1 ? "review" : "reviews")</span>
             </div>
             <div class="md-card-body">
                 <ul class="md-dist-bars">
@@ -106,19 +96,20 @@
                     <tbody>
                         @foreach (var f in items)
                         {
+                            var date = f.Date.ToString("d MMM yyyy", inv);
                             <tr class="md-row-click @(f.Rating <= 2 ? "is-low" : "")" tabindex="0"
-                                data-name="@f.Name" data-date="@f.Date" data-phone="@f.Phone" data-email="@f.Email"
-                                data-visit="@f.Order@(f.Res != null ? " · " + f.Res : " · Takeaway")" data-rating="@f.Rating" data-comment="@f.Comment">
-                                <td>@f.Date</td>
+                                data-name="@f.Name" data-date="@date" data-phone="@f.Phone" data-email="@f.Email"
+                                data-visit="@f.Order@(f.Res != null ? " · " + f.Res : " · Takeaway")" data-rating="@f.Rating" data-comment="@(f.Comment ?? "")">
+                                <td>@date</td>
                                 <td>@f.Name<small class="d-block md-muted-text">@(f.Res ?? f.Order)</small></td>
                                 <td class="md-report-stars" aria-label="@f.Rating out of 5">@Stars(f.Rating)</td>
-                                <td class="md-feedback-comment"><div>@f.Comment</div></td>
+                                <td class="md-feedback-comment"><div>@(f.Comment ?? "No comment")</div></td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            <p class="md-notice-empty d-none" id="feedbackEmpty">No low ratings in this period.</p>
+            <p class="md-notice-empty @(items.Count > 0 ? "d-none" : "")" id="feedbackEmpty">@(items.Count > 0 ? "No low ratings in this period." : "No feedback " + periodText + " yet.")</p>
         </section>
     </div>
 </div>
@@ -172,7 +163,7 @@
                 document.getElementById('feedbackTitle').textContent = d.name;
                 document.getElementById('fbStars').textContent = '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
                 document.getElementById('fbVisit').textContent = d.visit;
-                document.getElementById('fbComment').textContent = '“' + d.comment + '”';
+                document.getElementById('fbComment').textContent = d.comment ? '“' + d.comment + '”' : 'No comment';
                 var phone = document.getElementById('fbPhone'), email = document.getElementById('fbEmail');
                 phone.textContent = d.phone; phone.href = 'tel:' + d.phone.replace(/[^\d+]/g, '');
                 email.textContent = d.email; email.href = 'mailto:' + d.email;

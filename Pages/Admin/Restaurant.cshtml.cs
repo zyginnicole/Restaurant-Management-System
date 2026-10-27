@@ -1,9 +1,9 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
 
 namespace RestaurantManagementSystem.Pages.Admin
@@ -54,6 +54,7 @@ namespace RestaurantManagementSystem.Pages.Admin
             {
                 Id = a.areaID,
                 Name = a.areaName,
+                Code = a.areaCode,
                 Description = a.areaDescription ?? "",
                 Active = a.areaActive,
                 TableCount = a.DiningTables.Count,
@@ -71,7 +72,7 @@ namespace RestaurantManagementSystem.Pages.Admin
                     Area = a.areaName
                 }))
                 .OrderBy(t => t.Area)
-                .ThenBy(t => NumberPart(t.Number))
+                .ThenBy(t => TableNumbering.NumberPart(t.Number))
                 .ThenBy(t => t.Number)
                 .ToList();
 
@@ -343,7 +344,7 @@ namespace RestaurantManagementSystem.Pages.Admin
                 if (table.areaID != areaId)
                 {
                     var number = await NextNumberAsync(areaId);
-                    if (number == null) return Fail("That area already has T-99, the highest table number.");
+                    if (number == null) return Fail("That area already has 99 tables, the highest table number.");
                     table.areaID = areaId;
                     table.tableNumber = number;
                 }
@@ -351,7 +352,7 @@ namespace RestaurantManagementSystem.Pages.Admin
             else
             {
                 var number = await NextNumberAsync(areaId);
-                if (number == null) return Fail("That area already has T-99, the highest table number.");
+                if (number == null) return Fail("That area already has 99 tables, the highest table number.");
 
                 table = new DiningTable { areaID = areaId, tableNumber = number };
                 _db.DiningTables.Add(table);
@@ -366,7 +367,7 @@ namespace RestaurantManagementSystem.Pages.Admin
             }
             catch (DbUpdateException)
             {
-                // The unique index (area + table number) stopped a duplicate, e.g. two admins adding at once
+                // The unique index on the table number stopped a duplicate, e.g. two admins adding at once
                 return Fail("That table number was just taken. Please try again.");
             }
 
@@ -421,7 +422,7 @@ namespace RestaurantManagementSystem.Pages.Admin
             DiningArea? area;
             if (id.HasValue)
             {
-                area = await _db.DiningAreas.FindAsync(id.Value);
+                area = await _db.DiningAreas.Include(a => a.DiningTables).FirstOrDefaultAsync(a => a.areaID == id.Value);
                 if (area == null) return Fail("That area no longer exists.");
             }
             else
@@ -430,28 +431,51 @@ namespace RestaurantManagementSystem.Pages.Admin
                 _db.DiningAreas.Add(area);
             }
 
+            // The area code starts every table number (I-01 ...). A new name can give a new code:
+            // then this area's tables keep their numbers but get the new code (G-02 -> T-02 for "Terrace").
+            string oldCode = area.areaCode;
+            bool renamed = area.areaName != name;
+            if (!id.HasValue || renamed)
+            {
+                var otherCodes = await _db.DiningAreas.Where(a => a.areaID != thisId).Select(a => a.areaCode).ToListAsync();
+                string firstLetter = TableNumbering.CodeFor(name, Array.Empty<string>())[..1];
+
+                // keep the code while it still starts with the name's first letter, so a small rename doesn't renumber tables
+                if (!id.HasValue || !oldCode.StartsWith(firstLetter, StringComparison.OrdinalIgnoreCase))
+                    area.areaCode = TableNumbering.CodeFor(name, otherCodes);
+            }
+
             area.areaName = name;
             area.areaDescription = description;
             area.areaActive = active;
 
-            // New area: create its tables T-01, T-02 ... with the chosen pax
             if (!id.HasValue)
             {
+                // New area: create its tables I-01, I-02 ... (its own code) with the chosen pax
                 for (int i = 1; i <= tableCount; i++)
                 {
                     area.DiningTables.Add(new DiningTable
                     {
-                        tableNumber = $"T-{i:00}",
+                        tableNumber = TableNumbering.Format(area.areaCode, i),
                         tableCapacity = seatsPerTable,
                         tableStatus = "Available"
                     });
                 }
             }
+            else if (area.areaCode != oldCode)
+            {
+                foreach (var t in area.DiningTables)
+                    t.tableNumber = TableNumbering.Format(area.areaCode, TableNumbering.NumberPart(t.tableNumber));
+            }
 
             await _db.SaveChangesAsync();
             TempData["Toast"] = id.HasValue
-                ? "Dining area updated"
-                : tableCount > 0 ? $"Dining area added with {tableCount} tables" : "Dining area added";
+                ? area.areaCode != oldCode && area.DiningTables.Count > 0
+                    ? $"Dining area updated. Its tables now start with {area.areaCode}- (e.g. {area.DiningTables.OrderBy(t => t.tableNumber).First().tableNumber})."
+                    : "Dining area updated"
+                : tableCount == 1 ? $"Dining area added with table {TableNumbering.Format(area.areaCode, 1)}"
+                : tableCount > 1 ? $"Dining area added with tables {TableNumbering.Format(area.areaCode, 1)} to {TableNumbering.Format(area.areaCode, tableCount)}"
+                : $"Dining area added. Its tables will be numbered {area.areaCode}-01, {area.areaCode}-02 ...";
             return RedirectToPage();
         }
 
@@ -535,24 +559,18 @@ namespace RestaurantManagementSystem.Pages.Admin
             await _db.SaveChangesAsync();
         }
 
-        // Next table number inside one area: the highest number there + 1, written as T-01, T-02 ...
-        // Returns null when the area already has T-99.
+        // Next table number inside one area: its code + (the highest number there + 1), e.g. I-05.
+        // Returns null when the area already has number 99.
         private async Task<string?> NextNumberAsync(int areaId)
         {
+            var code = await _db.DiningAreas.Where(a => a.areaID == areaId).Select(a => a.areaCode).FirstAsync();
             var numbers = await _db.DiningTables
                 .Where(t => t.areaID == areaId)
                 .Select(t => t.tableNumber)
                 .ToListAsync();
 
-            int max = numbers.Count == 0 ? 0 : numbers.Max(NumberPart);
-            return max >= 99 ? null : $"T-{max + 1:00}";
-        }
-
-        // "T-07" -> 7, "V-12" -> 12, anything without digits -> 0
-        private static int NumberPart(string number)
-        {
-            var match = Regex.Match(number ?? "", @"(\d+)\s*$");
-            return match.Success && int.TryParse(match.Groups[1].Value, out var n) ? n : 0;
+            int max = numbers.Count == 0 ? 0 : numbers.Max(TableNumbering.NumberPart);
+            return max >= TableNumbering.MaxPerArea ? null : TableNumbering.Format(code, max + 1);
         }
 
         // =====================================================================
@@ -562,6 +580,7 @@ namespace RestaurantManagementSystem.Pages.Admin
         {
             public int Id { get; set; }
             public string Name { get; set; } = "";
+            public string Code { get; set; } = "";          // starts the area's table numbers, e.g. "I" -> I-01
             public string Description { get; set; } = "";
             public bool Active { get; set; }
             public int TableCount { get; set; }

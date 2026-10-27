@@ -20,13 +20,13 @@ namespace RestaurantManagementSystem.Data
                 db.SaveChanges();
             }
 
-            // ---------- 2. Dining areas ----------
+            // ---------- 2. Dining areas (the code starts each table number, e.g. I-01) ----------
             if (!db.DiningAreas.Any())
             {
                 db.DiningAreas.AddRange(
-                    new DiningArea { areaName = "Indoor" },
-                    new DiningArea { areaName = "Outdoor" },
-                    new DiningArea { areaName = "VIP" });
+                    new DiningArea { areaName = "Indoor", areaCode = "I" },
+                    new DiningArea { areaName = "Outdoor", areaCode = "O" },
+                    new DiningArea { areaName = "VIP", areaCode = "V" });
                 db.SaveChanges();
             }
 
@@ -52,20 +52,20 @@ namespace RestaurantManagementSystem.Data
                 db.SaveChanges();
             }
 
-            // ---------- 4. Tables (T-05 Outdoor and T-07 Indoor appear in the Reservations page) ----------
+            // ---------- 4. Tables: area code + number inside the area (TableNumbering) ----------
             if (!db.DiningTables.Any())
             {
                 var area = db.DiningAreas.ToDictionary(a => a.areaName, a => a.areaID);
 
                 db.DiningTables.AddRange(
-                    Table("T-01", 2, area["Indoor"]),
-                    Table("T-02", 2, area["Indoor"]),
-                    Table("T-03", 4, area["Indoor"]),
-                    Table("T-07", 4, area["Indoor"]),
+                    Table("I-01", 2, area["Indoor"]),
+                    Table("I-02", 2, area["Indoor"]),
+                    Table("I-03", 4, area["Indoor"]),
+                    Table("I-04", 4, area["Indoor"]),
 
-                    Table("T-05", 4, area["Outdoor"]),
-                    Table("T-06", 4, area["Outdoor"]),
-                    Table("T-08", 6, area["Outdoor"]),
+                    Table("O-01", 4, area["Outdoor"]),
+                    Table("O-02", 4, area["Outdoor"]),
+                    Table("O-03", 6, area["Outdoor"]),
 
                     Table("V-01", 8, area["VIP"]),
                     Table("V-02", 12, area["VIP"]));
@@ -126,7 +126,9 @@ namespace RestaurantManagementSystem.Data
                             discountValue = 15m,
                             autoApply = true,
                             startDay = DayOfWeek.Tuesday,
-                            endDay = DayOfWeek.Sunday
+                            endDay = DayOfWeek.Sunday,
+                            startTime = new TimeSpan(12, 0, 0),    // from opening ...
+                            endTime = new TimeSpan(18, 30, 0)      // ... until 18:30, as the label says
                         },
                         new Promotion
                         {
@@ -137,7 +139,10 @@ namespace RestaurantManagementSystem.Data
                             promoCode = "BIRTHDAY",
                             discountType = "Complimentary",
                             discountValue = null,
-                            autoApply = false
+                            autoApply = false,
+                            birthdayOnly = true,           // only in the customer's birthday month
+                            maxUsesPerCustomer = 1,        // once ...
+                            limitResetsYearly = true       // ... per year
                         });
                     db.SaveChanges();
                 }

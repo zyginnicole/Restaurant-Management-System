@@ -1,79 +1,90 @@
-using Microsoft.EntityFrameworkCore;
-using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Model;
 
 namespace RestaurantManagementSystem.Helpers
 {
     // The promotion that was applied to one cart line, e.g. WEEKEND15 – "15% off wine flight", RM 10.20 off
-    public record AppliedPromo(string Code, string Label, string DiscountType, decimal Value, decimal LineDiscount);
+    public record AppliedPromo(int PromoId, string Code, string Label, string DiscountType, decimal Value, decimal LineDiscount);
 
-    // Works out promotion discounts. Used by Checkout (price shown + saved on the order lines)
-    // and the Menu page (only promotions that are really running today are listed).
-    //   Percentage  → discountValue % of the line total
-    //   FixedAmount → discountValue off EACH item (never more than the item price)
-    //   Complimentary → nothing is taken off the price
+    // One line of an order being priced
+    public record PricedLine(int MenuId, decimal UnitPrice, int Quantity);
+
+    // Works out promotion discounts. Which promotions may be used is decided first by PromotionService
+    // (PromotionRules + usage limits); this class only does the money.
+    //   Percentage    → discountValue % of the line total
+    //   FixedAmount   → discountValue off EACH item (never more than the item price)
+    //   Complimentary → one unit of the cheapest covered dish on the order is free
+    //
+    // Stacking:
+    //   - a dish line gets at most ONE promotion: the one that takes the most off
+    //   - a birthday promotion is never combined with another promotion on the same order;
+    //     it is used only when it saves more than the other promotions together (a tie keeps the birthday use for later)
     public static class PromotionPricing
     {
-        // ON, inside its campaign dates, and today is inside its Mon–Sun window (e.g. Fri–Sun, Sat–Mon)
-        public static bool IsRunning(Promotion p, DateTime today)
+        // The promotion for each line (same order as "lines"; null = none)
+        public static AppliedPromo?[] Apply(IReadOnlyList<Promotion> usable, IReadOnlyList<PricedLine> lines)
         {
-            if (!p.promoActive) return false;
-            if (p.validFrom != null && p.validFrom.Value.Date > today.Date) return false;
-            if (p.validUntil != null && p.validUntil.Value.Date < today.Date) return false;
+            var plans = usable
+                .Select(p => (Promo: p, Lines: Plan(p, lines)))
+                .Where(x => x.Lines.Count > 0)
+                .ToList();
 
-            DayOfWeek d = today.DayOfWeek;
-            return p.startDay <= p.endDay
-                ? d >= p.startDay && d <= p.endDay
-                : d >= p.startDay || d <= p.endDay;        // window that wraps over the weekend
-        }
-
-        // Promotions that apply by themselves ("Auto-apply enabled") and are running today, with the dishes they cover
-        public static async Task<List<Promotion>> RunningAsync(ApplicationDbContext db, DateTime today)
-        {
-            var list = await db.Promotions.AsNoTracking()
-                .Include(p => p.Menus)
-                .Where(p => p.promoActive && p.autoApply
-                         && (p.validFrom == null || p.validFrom <= today)
-                         && (p.validUntil == null || p.validUntil >= today))
-                .ToListAsync();
-
-            return list.Where(p => IsRunning(p, today)).ToList();
-        }
-
-        // The best promotion for one dish (the one that takes the most off), or null if none applies
-        public static AppliedPromo? BestFor(IEnumerable<Promotion> running, int menuId, decimal unitPrice, int quantity)
-        {
-            Promotion? best = null;
-            decimal bestPerItem = 0m;
-
-            foreach (var p in running)
+            // 1. regular promotions: the best one on each line
+            var best = new AppliedPromo?[lines.Count];
+            foreach (var (promo, plan) in plans.Where(x => !x.Promo.birthdayOnly))
             {
-                if (!p.Menus.Any(m => m.menuID == menuId)) continue;
-
-                decimal perItem = PerItemDiscount(p, unitPrice);
-                if (perItem > bestPerItem)
+                foreach (var (i, discount) in plan)
                 {
-                    best = p;
-                    bestPerItem = perItem;
+                    if (best[i] == null || discount > best[i]!.LineDiscount) best[i] = Make(promo, discount);
                 }
             }
+            decimal bestTotal = best.Sum(a => a?.LineDiscount ?? 0m);
 
-            if (best == null) return null;
+            // 2. a birthday promotion on its own
+            foreach (var (promo, plan) in plans.Where(x => x.Promo.birthdayOnly))
+            {
+                decimal total = plan.Values.Sum();
+                if (total <= bestTotal) continue;
 
-            decimal line = LineDiscount(best, unitPrice, quantity);
-            return line > 0
-                ? new AppliedPromo(best.promoCode, best.promoLabel, best.discountType, best.discountValue ?? 0m, line)
-                : null;
+                best = new AppliedPromo?[lines.Count];
+                foreach (var (i, discount) in plan) best[i] = Make(promo, discount);
+                bestTotal = total;
+            }
+
+            return best;
         }
 
-        private static decimal PerItemDiscount(Promotion p, decimal unitPrice) => p.discountType switch
+        // Line index → amount this promotion alone would take off
+        private static Dictionary<int, decimal> Plan(Promotion p, IReadOnlyList<PricedLine> lines)
         {
-            "Percentage" => unitPrice * (p.discountValue ?? 0m) / 100m,
-            "FixedAmount" => Math.Min(p.discountValue ?? 0m, unitPrice),
-            _ => 0m
-        };
+            var plan = new Dictionary<int, decimal>();
+            var covered = p.Menus.Select(m => m.menuID).ToHashSet();
+            var eligible = Enumerable.Range(0, lines.Count)
+                .Where(i => covered.Contains(lines[i].MenuId) && lines[i].Quantity > 0)
+                .ToList();
+
+            if (p.discountType == "Complimentary")
+            {
+                if (eligible.Count > 0)
+                {
+                    int cheapest = eligible.OrderBy(i => lines[i].UnitPrice).First();
+                    plan[cheapest] = lines[cheapest].UnitPrice;
+                }
+                return plan;
+            }
+
+            foreach (int i in eligible)
+            {
+                decimal discount = LineDiscount(p, lines[i].UnitPrice, lines[i].Quantity);
+                if (discount > 0m) plan[i] = discount;
+            }
+            return plan;
+        }
+
+        private static AppliedPromo Make(Promotion p, decimal discount) =>
+            new(p.promoID, p.promoCode, p.promoLabel, p.discountType, p.discountValue ?? 0m, discount);
 
         // Amount taken off one order line (quantity × price). Same formula as the Checkout page script.
+        // Complimentary: one unit free.
         public static decimal LineDiscount(Promotion p, decimal unitPrice, int quantity)
         {
             decimal gross = unitPrice * quantity;
@@ -81,9 +92,19 @@ namespace RestaurantManagementSystem.Helpers
             {
                 "Percentage" => Math.Round(gross * (p.discountValue ?? 0m) / 100m, 2, MidpointRounding.AwayFromZero),
                 "FixedAmount" => (p.discountValue ?? 0m) * quantity,
+                "Complimentary" => quantity > 0 ? unitPrice : 0m,
                 _ => 0m
             };
             return Math.Clamp(discount, 0m, gross);
+        }
+
+        // Subtotal (after promotions), service charge (dine-in only) and SST of one order, rounded like Checkout
+        public static (decimal Subtotal, decimal Service, decimal Sst, decimal Total) Totals(
+            decimal subtotalAfterPromos, bool dineIn, decimal servicePct, decimal sstPct)
+        {
+            decimal service = dineIn ? Math.Round(subtotalAfterPromos * servicePct / 100m, 2, MidpointRounding.AwayFromZero) : 0m;
+            decimal sst = Math.Round((subtotalAfterPromos + service) * sstPct / 100m, 2, MidpointRounding.AwayFromZero);
+            return (subtotalAfterPromos, service, sst, subtotalAfterPromos + service + sst);
         }
     }
 }

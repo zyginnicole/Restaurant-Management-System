@@ -179,6 +179,10 @@ namespace RestaurantManagementSystem.Migrations
                         .HasMaxLength(11)
                         .HasColumnType("nvarchar(11)");
 
+                    b.Property<string>("kitchenNotes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<bool>("promoOptIn")
                         .HasColumnType("bit");
 
@@ -201,6 +205,11 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<bool>("areaActive")
                         .HasColumnType("bit");
 
+                    b.Property<string>("areaCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
                     b.Property<string>("areaDescription")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -210,6 +219,9 @@ namespace RestaurantManagementSystem.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("areaID");
+
+                    b.HasIndex("areaCode")
+                        .IsUnique();
 
                     b.HasIndex("areaName")
                         .IsUnique();
@@ -241,7 +253,9 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasKey("tableID");
 
-                    b.HasIndex("areaID", "tableNumber")
+                    b.HasIndex("areaID");
+
+                    b.HasIndex("tableNumber")
                         .IsUnique();
 
                     b.ToTable("Tables");
@@ -454,6 +468,9 @@ namespace RestaurantManagementSystem.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<int?>("promoID")
+                        .HasColumnType("int");
+
                     b.Property<int>("quantity")
                         .HasColumnType("int");
 
@@ -465,6 +482,8 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("menuID");
 
                     b.HasIndex("orderID");
+
+                    b.HasIndex("promoID");
 
                     b.ToTable("OrderItems");
                 });
@@ -949,6 +968,11 @@ namespace RestaurantManagementSystem.Migrations
                         .HasForeignKey("orderID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("RestaurantManagementSystem.Model.Promotion", null)
+                        .WithMany()
+                        .HasForeignKey("promoID")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Menu");
 

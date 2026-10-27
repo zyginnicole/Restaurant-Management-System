@@ -25,5 +25,14 @@ namespace RestaurantManagementSystem.Services
         public List<string> Allergies { get; set; } = new();
 
         public bool promoOptIn { get; set; }
+
+        // Optional note for the kitchen (Customer.kitchenNotes)
+        [MaxLength(300, ErrorMessage = "Kitchen notes cannot be longer than 300 characters.")]
+        public string? kitchenNotes { get; set; }
+
+        // Birthday for birthday offers. Can only be added while the account has none; once saved it can't be
+        // changed here (so nobody can move it to get the birthday promotion again). ProfileService enforces this.
+        [DataType(DataType.Date)]
+        public DateTime? custBirthday { get; set; }
     }
 }

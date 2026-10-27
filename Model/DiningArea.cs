@@ -13,6 +13,12 @@ namespace RestaurantManagementSystem.Model
         [Required(ErrorMessage = "Area name is required!")]
         public string areaName { get; set; }              // Indoor, Outdoor, VIP
 
+        // Short unique code that starts every table number in this area: I -> I-01, I-02 ...
+        // Worked out from the name (TableNumbering.CodeFor), so staff can tell the area from the table number.
+        [Required]
+        [StringLength(3)]
+        public string areaCode { get; set; } = "";
+
         [StringLength(200)]
         public string? areaDescription { get; set; }
 

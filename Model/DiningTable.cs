@@ -12,7 +12,7 @@ namespace RestaurantManagementSystem.Model
         public int tableID { get; set; }
 
         [Required]
-        public string tableNumber { get; set; }          // e.g. "T01"
+        public string tableNumber { get; set; }          // area code + number, e.g. "I-03" (unique in the restaurant)
 
         [Range(1, 20, ErrorMessage = "Capacity must be between 1 and 20.")]
         public int tableCapacity { get; set; }

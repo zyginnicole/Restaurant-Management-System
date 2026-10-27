@@ -47,6 +47,7 @@ builder.Services.AddScoped<ReservationService>();
 // Closes unanswered Pending requests (15 min before the booking) and earlier days' open bookings (on start, then every minute)
 builder.Services.AddHostedService<ReservationCleanupService>();
 builder.Services.AddScoped<RecommendationService>();
+builder.Services.AddScoped<PromotionService>();      // server-side promotion rules (Checkout, staff Orders/Billing, Payment)
 builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<EmailService>();

@@ -87,8 +87,9 @@ Fill a `ReceiptView` from the Order + Payment and pass it in:
 <partial name="~/Pages/Shared/Partials/_Receipt.cshtml" model="receipt" />
 ```
 
-`ReceiptView` works out the service charge (10%, dine-in only = `reservationID != null`), SST (6% of subtotal
-+ service charge) and the total, so every page shows the same numbers. Mapping to the database is in
+`ReceiptView` works out the service charge (dine-in only = `reservationID != null`), SST (on subtotal
++ service charge) and the total, so every page shows the same numbers. Set `ServiceChargePct` and `SstPct`
+from Admin > Settings (`SystemSetting.serviceChargePct` / `sstPct`) so the receipt matches the amount charged. Mapping to the database is in
 `ReceiptView.cs`. The Download PDF button uses `data-pdf-target="#receiptPaper"` (`wwwroot/js/pdf-download.js`).
 
 ## Other shared scripts (wwwroot/js)

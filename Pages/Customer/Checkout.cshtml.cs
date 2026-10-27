@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
@@ -13,10 +14,12 @@ namespace RestaurantManagementSystem.Pages.Customer
         private const int PrepMinutes = 30;
 
         private readonly ApplicationDbContext _context;
+        private readonly PromotionService _promotions;
 
-        public CheckoutModel(ApplicationDbContext context)
+        public CheckoutModel(ApplicationDbContext context, PromotionService promotions)
         {
             _context = context;
+            _promotions = promotions;
         }
 
         // ---------- Form fields ----------
@@ -48,6 +51,8 @@ namespace RestaurantManagementSystem.Pages.Customer
             public string? PromoType { get; set; }
             public decimal PromoValue { get; set; }
             public decimal Discount { get; set; }
+            public decimal? PromoMinSpend { get; set; }     // the page script drops the discount below this subtotal
+            public string? PromoOrderType { get; set; }     // DineIn / Takeaway only, or null = any
         }
 
         public class PickupOption
@@ -201,13 +206,15 @@ namespace RestaurantManagementSystem.Pages.Customer
                 contactPhone = phone;
             }
 
-            // 4. Promotions
-            var promos = await PromotionPricing.RunningAsync(_context, DateTime.Today);
-            var priced = lines.Select(l => new
+            // 4. Promotions: every rule is checked here on the server (PromotionService), for this customer and order type
+            var buyer = await _promotions.GetBuyerAsync(custId.Value);
+            var applied = await _promotions.PriceNewOrderAsync(buyer, OrderType,
+                lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList());
+            var priced = lines.Select((l, i) => new
             {
                 Line = l,
                 Menu = menus[l.MenuId],
-                Promo = PromotionPricing.BestFor(promos, l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)
+                Promo = applied[i]
             }).ToList();
 
             // 5. Calculate totals
@@ -243,6 +250,7 @@ namespace RestaurantManagementSystem.Pages.Customer
                     unitPrice = x.Menu.menuPrice,
                     orderRemark = x.Line.Note,
                     promoCode = x.Promo?.Code,
+                    promoID = x.Promo?.PromoId,
                     discountAmount = x.Promo?.LineDiscount ?? 0m
                 });
             }
@@ -282,7 +290,9 @@ namespace RestaurantManagementSystem.Pages.Customer
             var reservation = await GetTodayReservationAsync(custId);
             HasReservation = reservation != null;
 
-            await LoadCartAsync();
+            // the order type the cart is priced for: what was posted, otherwise the page's default
+            string orderType = Request.Method == "POST" ? OrderType : (HasReservation ? "DineIn" : "Takeaway");
+            await LoadCartAsync(custId, orderType);
 
             var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
             ServiceChargePct = settings?.serviceChargePct ?? 10m;
@@ -302,7 +312,7 @@ namespace RestaurantManagementSystem.Pages.Customer
             await LoadPickupOptionsAsync();
         }
 
-        private async Task LoadCartAsync()
+        private async Task LoadCartAsync(int custId, string orderType)
         {
             CartLines = new();
             RemovedNotices = new();
@@ -316,8 +326,6 @@ namespace RestaurantManagementSystem.Pages.Customer
                 .Where(m => ids.Contains(m.menuID))
                 .ToDictionaryAsync(m => m.menuID);
 
-            var promos = await PromotionPricing.RunningAsync(_context, DateTime.Today);
-
             var kept = new List<CartItem>();
             foreach (var line in cart)
             {
@@ -327,9 +335,24 @@ namespace RestaurantManagementSystem.Pages.Customer
                     RemovedNotices.Add($"{menu.menuName} is no longer available and was removed from your cart.");
                     continue;
                 }
-
                 kept.Add(line);
-                var applied = PromotionPricing.BestFor(promos, menu.menuID, menu.menuPrice, line.Quantity);
+            }
+
+            // same server-side rules as placing the order
+            var buyer = await _promotions.GetBuyerAsync(custId);
+            var appliedLines = await _promotions.PriceNewOrderAsync(buyer, orderType,
+                kept.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList());
+            var appliedIds = appliedLines.Where(a => a != null).Select(a => a!.PromoId).ToList();
+            var promoRules = await _context.Promotions.AsNoTracking()
+                .Where(p => appliedIds.Contains(p.promoID))
+                .ToDictionaryAsync(p => p.promoID);
+
+            for (int i = 0; i < kept.Count; i++)
+            {
+                var line = kept[i];
+                var menu = menus[line.MenuId];
+                var applied = appliedLines[i];
+                var rule = applied != null && promoRules.TryGetValue(applied.PromoId, out var r) ? r : null;
                 CartLines.Add(new CartDisplayLine
                 {
                     MenuId = menu.menuID,
@@ -342,7 +365,9 @@ namespace RestaurantManagementSystem.Pages.Customer
                     PromoLabel = applied?.Label,
                     PromoType = applied?.DiscountType,
                     PromoValue = applied?.Value ?? 0m,
-                    Discount = applied?.LineDiscount ?? 0m
+                    Discount = applied?.LineDiscount ?? 0m,
+                    PromoMinSpend = rule?.minSpend,
+                    PromoOrderType = rule?.orderType is PromotionRules.DineIn or PromotionRules.Takeaway ? rule.orderType : null
                 });
             }
 

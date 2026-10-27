@@ -480,6 +480,13 @@
                 });
                 syncType();
             });
+
+            // Birthday month only → default to once per customer, resetting every year (the server requires both)
+            $('pBirthday').addEventListener('change', function () {
+                if (!this.checked) return;
+                if ($('pPerCustomer').value === '') $('pPerCustomer').value = 1;
+                $('pYearly').checked = true;
+            });
         })();
     </script>
 }
