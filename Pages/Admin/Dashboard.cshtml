@@ -1,0 +1,365 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Admin.DashboardModel
+@using RestaurantManagementSystem.Services
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["Module"] = "Admin";
+    ViewData["ActiveNav"] = "Dashboard";
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    ViewData["Eyebrow"] = DateTime.Now.ToString("dddd, d MMMM yyyy", inv) + (DateTime.Now.Hour < 16 ? " · Lunch service" : " · Dinner service");
+    ViewData["Heading"] = "Administration";
+    ViewData["Subtitle"] = "Overview of sales, reservations and dining activity";
+    ViewData["BodyClass"] = "md-admin";   // Admin Dashboard scale and indigo/teal colours
+    Layout = "_DashboardLayout";
+
+    // Share of a total as a CSS width ("85.9%")
+    string Pct(int part, int total) => total > 0 ? (part * 100.0 / total).ToString("0.#", inv) + "%" : "0%";
+    // Position on the arrivals timeline (WindowStart … WindowEnd)
+    string Pos(DateTime t)
+    {
+        var span = (Model.WindowEnd - Model.WindowStart).TotalMinutes;
+        var at = (t.TimeOfDay - Model.WindowStart).TotalMinutes;
+        return (span > 0 ? Math.Clamp(at / span * 100, 0, 100) : 0).ToString("0.##", inv) + "%";
+    }
+    string Clock(TimeSpan t) => t.TotalHours >= 24 ? "24:00" : DateTime.Today.Add(t).ToString("HH:mm", inv);
+    // "No-show" → "is-noshow" (same classes as the Staff pages)
+    string StaffStatusClass(string status) => RestaurantManagementSystem.Pages.Staff.StaffReservationText.StatusClass(status);
+}
+
+@* Reservation figures come from the database (DashboardModel): Reservations KPI, Tables occupied, Arrivals today,
+   Peak dining hours, Table utilization by area, Reservations by status.
+   Revenue, customers, rating, recent activity, collected tonight, daily sales and top menu items are still
+   example data from the design (orders / payments / feedback features). *@
+
+@section HeaderActions {
+    <a class="btn btn-md-dark md-header-btn" href="/Admin/Reports"><i class="bi bi-download"></i>Export report</a>
+}
+
+@* ---------- Tabs (left) + period filter (right) ---------- *@
+<div class="md-tabbar">
+    <nav class="md-tabs md-page-tabs" aria-label="Dashboard sections">
+        <button type="button" class="active" data-tab="live">Live operations</button>
+        <button type="button" data-tab="trends">Sales &amp; trends</button>
+    </nav>
+    @* Period selector: a single date, a whole month (All days) or a whole year (All months).
+       Changing it reloads the page (?year=&month=&day=), see admin-dashboard.js *@
+    <div class="md-period" role="group" aria-label="Period">
+        <select class="form-select md-period-select" id="periodDay" aria-label="Day">
+            <option value="" selected="@(Model.Day == 0)">All days</option>
+            @for (int d = 1; d <= 31; d++)
+            {
+                <option value="@d" selected="@(Model.Day == d)">@d</option>
+            }
+        </select>
+        <select class="form-select md-period-select" id="periodMonth" aria-label="Month">
+            <option value="" selected="@(Model.Month == 0)">All months</option>
+            @for (int m = 1; m <= 12; m++)
+            {
+                <option value="@m" selected="@(Model.Month == m)">@inv.DateTimeFormat.GetMonthName(m)</option>
+            }
+        </select>
+        <select class="form-select md-period-select" id="periodYear" aria-label="Year">
+            @foreach (var y in Model.Years)
+            {
+                <option value="@y" selected="@(Model.Year == y)">@y</option>
+            }
+        </select>
+    </div>
+</div>
+@* =====================================================
+   Live operations
+   ===================================================== *@
+<div data-pane="live">
+    @* ---------- KPI cards with micro-visuals (Option A) ----------
+ *@
+    <div class="row md-grid md-section">
+        <div class="col-6 col-xl-3">
+            <div class="md-stat md-kpi">
+                <span class="md-label">Revenue · <span data-period-label>@Model.PeriodLabel</span></span>
+                <div class="md-kpi-top">
+                    <div class="md-stat-value">RM 148,390</div>
+                </div>
+                <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>12% vs August</div>
+                <div class="md-kpi-progress" aria-label="93% of the RM 160,000 target"><i style="width: 93%"></i></div>
+                <div class="md-stat-note">93% of RM 160,000 target</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="md-stat md-kpi">
+                @* Reservations in the period: completed (green) · cancelled / no-show / declined (grey) · upcoming (blue) *@
+                <span class="md-label">Reservations · <span data-period-label>@Model.PeriodLabel</span></span>
+                <div class="md-stat-value">@Model.ResTotal</div>
+                @if (Model.ResDeltaPercent is int delta)
+                {
+                    <div class="md-kpi-delta @(delta >= 0 ? "is-up" : "is-down")"><i class="bi @(delta >= 0 ? "bi-arrow-up-right" : "bi-arrow-down-right")"></i>@Math.Abs(delta)% vs @Model.PreviousLabel</div>
+                }
+                else
+                {
+                    <div class="md-kpi-delta">No bookings in @Model.PreviousLabel to compare</div>
+                }
+                <div class="md-stack md-kpi-stack" role="img" aria-label="@Model.ResCompleted completed, @Model.ResEnded cancelled or missed, @Model.ResUpcoming upcoming">
+                    <i class="is-completed" style="width: @Pct(Model.ResCompleted, Model.ResTotal)"></i>
+                    <i class="is-cancelled" style="width: @Pct(Model.ResEnded, Model.ResTotal)"></i>
+                    <i class="is-confirmed" style="width: @Pct(Model.ResUpcoming, Model.ResTotal)"></i>
+                </div>
+                <div class="md-stat-note">@Model.ResCompleted completed · @Model.ResEnded cancelled / no-show · @Model.ResUpcoming upcoming</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="md-stat md-kpi">
+                <span class="md-label">Registered customers</span>
+                <div class="md-kpi-top">
+                    <div class="md-stat-value">847</div>
+                </div>
+                <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>7 new this week</div>
+                <div class="md-stat-note">51 new in the last 10 weeks</div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="md-stat md-kpi">
+                <span class="md-label">Average rating</span>
+                <div class="md-kpi-top">
+                    <div class="md-stat-value">4.7 / 5</div>
+                    @* Gold stars filled to the rating: width = rating ÷ 5 *@
+                    <span class="md-stars" aria-label="4.7 out of 5 stars"><span class="md-stars-fill" style="width: 94%">★★★★★</span>★★★★★</span>
+                </div>
+                <div class="md-rating-bars" aria-label="Rating distribution">
+                    <div><span>5★</span><i><b style="width: 78%"></b></i><em>78%</em></div>
+                    <div><span>4★</span><i><b style="width: 15%"></b></i><em>15%</em></div>
+                    <div><span>3★</span><i><b style="width: 4%"></b></i><em>4%</em></div>
+                    <div><span>2★</span><i><b style="width: 2%"></b></i><em>2%</em></div>
+                    <div><span>1★</span><i><b style="width: 1%"></b></i><em>1%</em></div>
+                </div>
+                <div class="md-stat-note">126 reviews · 3 need follow-up</div>
+            </div>
+        </div>
+    </div>
+
+    @* ---------- Tonight, live (Option B) ---------- *@
+    <h2 class="md-subhead">Tonight <span class="md-live-dot">Live</span></h2>
+    <div class="row md-grid md-section">
+        @* Tables occupied: ring gauge *@
+        <div class="col-md-6 col-xxl-3">
+            <section class="md-card h-100 md-live">
+                @* Right now: today's Seated bookings (or tables marked Occupied) out of the tables in service *@
+                @{
+                    var occupiedPct = Model.TablesInService > 0 ? Model.OccupiedNow * 100.0 / Model.TablesInService : 0;
+                }
+                <div class="md-card-header"><span class="md-card-label">Tables occupied</span></div>
+                <div class="md-card-body md-live-ring">
+                    <svg viewBox="0 0 36 36" class="md-ring" role="img" aria-label="@Model.OccupiedNow of @Model.TablesInService tables occupied, @occupiedPct.ToString("0", inv) percent">
+                        <circle class="md-ring-track" cx="18" cy="18" r="15.9155" />
+                        <circle class="md-ring-value" cx="18" cy="18" r="15.9155" stroke-dasharray="@occupiedPct.ToString("0.##", inv) @((100 - occupiedPct).ToString("0.##", inv))" />
+                    </svg>
+                    <div>
+                        <div class="md-live-value">@Model.OccupiedNow <small>/ @Model.TablesInService</small></div>
+                        <div class="md-stat-note">@occupiedPct.ToString("0", inv)% of tables · @Model.GuestsNow @(Model.GuestsNow == 1 ? "guest" : "guests")</div>
+                        <ul class="md-area-list">
+                            @foreach (var a in Model.OccupiedByArea)
+                            {
+                                <li><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@a.Area <b>@a.Count / @a.Total</b></li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        @* Arrivals today: timeline from WindowStart to WindowEnd (18:00–22:00, widened to fit the day's bookings).
+           Seated = Seated or Completed (arrived) · Expected = Confirmed · Pending = waiting for approval *@
+        @{
+            string ArrivalClass(string s) => s == ReservationStatus.Pending ? "is-pending" : s == ReservationStatus.Confirmed ? "is-expected" : "is-seated";
+            string ArrivalWord(string s) => s == ReservationStatus.Pending ? "pending" : s == ReservationStatus.Confirmed ? "expected" : "arrived";
+            var mid = Model.WindowStart + (Model.WindowEnd - Model.WindowStart) / 2;
+        }
+        <div class="col-md-6 col-xxl-3">
+            <section class="md-card h-100 md-live">
+                <div class="md-card-header"><span class="md-card-label">Arrivals today</span></div>
+                <div class="md-card-body">
+                    <div class="md-live-value">@Model.Arrivals.Count <small>@(Model.Arrivals.Count == 1 ? "booking" : "bookings")</small></div>
+                    <div class="md-timeline" role="img" aria-label="Today's bookings from @Clock(Model.WindowStart) to @Clock(Model.WindowEnd)">
+                        @foreach (var r in Model.Arrivals)
+                        {
+                            <span class="@ArrivalClass(r.reservationStatus)" style="left: @Pos(r.reservationDateTime)"
+                                  title="@r.reservationDateTime.ToString("HH:mm", inv) @(r.Customer?.custName ?? "Guest") · @ArrivalWord(r.reservationStatus)"></span>
+                        }
+                    </div>
+                    <div class="md-timeline-scale"><span>@Clock(Model.WindowStart)</span><span>@Clock(mid)</span><span>@Clock(Model.WindowEnd)</span></div>
+                    <ul class="md-dot-legend">
+                        <li><i class="is-seated"></i>Arrived @Model.Arrivals.Count(r => r.reservationStatus is "Seated" or "Completed")</li>
+                        <li><i class="is-expected"></i>Expected @Model.Arrivals.Count(r => r.reservationStatus == ReservationStatus.Confirmed)</li>
+                        <li><i class="is-pending"></i>Pending @Model.Arrivals.Count(r => r.reservationStatus == ReservationStatus.Pending)</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+
+        @* Recent activity: latest 3 events. It shares a row with Collected tonight,
+           so both cards (h-100) end on the same bottom line. *@
+        <div class="col-md-6 col-xxl-3">
+            <section class="md-card h-100 md-live">
+                <div class="md-card-header">
+                    <span class="md-card-label">Recent activity</span>
+                    <a class="md-card-link" href="/Admin/Monitor">View all</a>
+                </div>
+                @* Latest bookings, orders and payments, newest first (DashboardModel.RecentActivity).
+                   Edge colour: booking = its status · order placed = yellow · payment paid green / refunded grey / failed red.
+                   The code (shown first) opens it on Monitor. *@
+                <ul class="md-list md-list-compact">
+                    @foreach (var a in Model.RecentActivity)
+                    {
+                        <li class="md-list-row @a.Css">
+                            <div class="md-list-main">
+                                @* Code first (left), then the event text *@
+                                <span class="md-list-title"><a class="md-list-code" href="@a.Link">@a.Code</a>@a.Title</span>
+                                <span class="md-list-meta">@RestaurantManagementSystem.Pages.Admin.DashboardModel.Ago(a.When) · @a.Meta</span>
+                            </div>
+                        </li>
+                    }
+                    @if (Model.RecentActivity.Count == 0)
+                    {
+                        <li class="md-list-row"><div class="md-list-main"><span class="md-list-meta">No activity yet.</span></div></li>
+                    }
+                </ul>
+            </section>
+        </div>
+
+        @* Collected tonight: progress vs expected *@
+        <div class="col-md-6 col-xxl-3">
+            <section class="md-card h-100 md-live">
+                <div class="md-card-header"><span class="md-card-label">Collected tonight</span></div>
+                <div class="md-card-body">
+                    <div class="md-live-value">RM 450.08</div>
+                    <div class="md-kpi-progress" aria-label="21% of RM 2,100 expected tonight"><i style="width: 21%"></i></div>
+                    <div class="md-stat-note">21% of RM 2,100 expected tonight</div>
+                    <div class="md-live-pending"><i class="bi bi-receipt"></i>1 bill pending · RM 386.00</div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+@* =====================================================
+   Sales & trends
+   ===================================================== *@
+<div class="d-none" data-pane="trends">
+    <div class="row md-grid md-section">
+        @* ---------- Daily sales ---------- *@
+        <div class="col-xl-8">
+            <section class="md-card h-100">
+                <div class="md-card-header">
+                    <span class="md-card-label">Daily sales · <span data-period-label data-with-year>@(Model.Month > 0 && Model.Day == 0 ? Model.PeriodLabel + " " + Model.Year : Model.PeriodLabel)</span></span>
+
+                </div>
+                <div class="md-card-body">
+                    <div class="md-chart"><canvas id="salesChart" aria-label="Daily sales chart" role="img"></canvas></div>
+                    <p class="md-chart-note">RM thousands, net of tax. <span class="md-swatch"></span>Highlighted: today (partial).</p>
+                </div>
+            </section>
+        </div>
+
+        @* ---------- Peak dining hours ---------- *@
+        <div class="col-xl-4">
+            <section class="md-card h-100">
+                @* Bookings by start hour in the period (Cancelled / Declined left out); drawn by admin-dashboard.js from data-labels / data-values *@
+                @{
+                    var busiest = Model.PeakValues.Count > 0 ? Model.PeakLabels[Model.PeakValues.IndexOf(Model.PeakValues.Max())] : null;
+                }
+                <div class="md-card-header"><span class="md-card-label">Peak dining hours · <span data-period-label>@Model.PeriodLabel</span></span></div>
+                <div class="md-card-body">
+                    @if (Model.PeakValues.Count > 0)
+                    {
+                        <div class="md-chart"><canvas id="peakChart" aria-label="Peak dining hours chart" role="img"
+                                data-labels="@System.Text.Json.JsonSerializer.Serialize(Model.PeakLabels)"
+                                data-values="@System.Text.Json.JsonSerializer.Serialize(Model.PeakValues)"></canvas></div>
+                        <p class="md-chart-note">Reservations by start hour. Busiest: <b>@busiest</b>.</p>
+                    }
+                    else
+                    {
+                        <p class="md-empty">No reservations in this period.</p>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div class="row md-grid md-section">
+        @* ---------- Top menu items: ranked list (2/3 width) ----------
+           Rows are drawn by admin-dashboard.js from the example data there.
+           Real data: OrderItem quantity (portions) and quantity × Menu.menuPrice (revenue), grouped by menuID. *@
+        <div class="col-xl-8">
+            <section class="md-card h-100">
+                <div class="md-card-header md-card-header-plain">
+                    <span class="md-card-label">Top menu items</span>
+                </div>
+                @* Category tabs (left) + rank by Portions / Revenue (right) *@
+                <div class="md-rank-filter">
+                    <nav class="md-tabs" aria-label="Category" id="rankCategory">
+                        <button type="button" class="active" data-category="All">All</button>
+                        <button type="button" data-category="Starters">Starters</button>
+                        <button type="button" data-category="Mains">Mains</button>
+                        <button type="button" data-category="Desserts">Desserts</button>
+                        <button type="button" data-category="Beverages">Beverages</button>
+                    </nav>
+                    <div class="md-segment md-segment-sm" role="group" aria-label="Rank by" id="rankMetric">
+                        <button type="button" class="active" data-metric="portions">Portions</button>
+                        <button type="button" data-metric="revenue">Revenue</button>
+                    </div>
+                </div>
+                <div class="md-rank-row md-rank-head" aria-hidden="true">
+                    <span>#</span><span>Dish</span><span></span><span id="rankValueHead">Sold</span><span>Trend</span>
+                </div>
+                <ol class="md-rank-list" id="rankList"></ol>
+            </section>
+        </div>
+
+        @* ---------- Right column (1/3): utilization + reservations ---------- *@
+        <div class="col-xl-4 d-flex flex-column gap-3">
+            <section class="md-card">
+                @* Share of tables in service that had at least one Seated / Completed booking in the period *@
+                <div class="md-card-header"><span class="md-card-label">Table utilization by area</span></div>
+                <div class="md-card-body">
+                    <div class="md-summary"><span class="md-summary-value">@(Model.TablesInService > 0 ? Math.Round(Model.TablesUsed * 100.0 / Model.TablesInService) : 0)%</span><span>@Model.TablesUsed of @Model.TablesInService tables used</span></div>
+                    @foreach (var a in Model.Utilization)
+                    {
+                        var w = Pct(a.Count, a.Total);
+                        <div class="md-meter"><span>@a.Area</span><div class="md-meter-bar"><i style="width: @w"></i></div><b>@(a.Total > 0 ? Math.Round(a.Count * 100.0 / a.Total) : 0)%</b></div>
+                    }
+                </div>
+            </section>
+
+            <section class="md-card flex-grow-1">
+                @* Every status in the period (statuses with no bookings are left out of the legend) *@
+                @{
+                    var cancelledShare = Model.ResTotal > 0 ? Model.StatusCounts[ReservationStatus.Cancelled] * 100.0 / Model.ResTotal : 0;
+                    var statusRows = Model.StatusCounts.Where(s => s.Value > 0).ToList();
+                }
+                <div class="md-card-header"><span class="md-card-label">Reservations by status · <span data-period-label>@Model.PeriodLabel</span></span></div>
+                <div class="md-card-body">
+                    <div class="md-summary"><span class="md-summary-value">@Model.ResTotal</span><span>@cancelledShare.ToString("0.#", inv)% cancelled</span></div>
+                    <div class="md-stack" role="img" aria-label="@string.Join(", ", statusRows.Select(s => s.Key + " " + s.Value))">
+                        @foreach (var s in statusRows)
+                        {
+                            <i class="@StaffStatusClass(s.Key)" style="width: @Pct(s.Value, Model.ResTotal)"></i>
+                        }
+                    </div>
+                    <ul class="md-legend">
+                        @foreach (var s in statusRows)
+                        {
+                            <li><i class="@StaffStatusClass(s.Key)"></i>@s.Key <b>@s.Value</b></li>
+                        }
+                        @if (statusRows.Count == 0)
+                        {
+                            <li>No reservations in this period</li>
+                        }
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="~/js/admin-dashboard.js" asp-append-version="true"></script>
+}
