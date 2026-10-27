@@ -4216,7 +4216,8 @@ button.md-signout {
     justify-content: center;
     font-family: var(--md-font-heading);
     font-variant-numeric: lining-nums;
-    font-size: 1rem;
+    font-size: .85rem;              /* fits the area code + number, e.g. I01 or OD01 */
+    letter-spacing: -.02em;
 }
 
 .md-order {

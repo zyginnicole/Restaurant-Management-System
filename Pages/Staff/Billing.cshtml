@@ -16,7 +16,8 @@
 
     string Rm(decimal v) => "RM " + v.ToString("#,##0.00");
     string Pill(string state) => state == "awaiting" ? "is-served" : state == "open" ? "is-preparing" : "is-completed";
-    string Tag(string? table) => table == null ? "TA" : (table.Length > 2 ? table[2..] : table);
+    // badge: the table number without its dash ("I-01" -> "I01"), so the area code stays visible
+    string Tag(string? table) => table == null ? "TA" : table.Replace("-", "");
 }
 
 @* Message after recording a payment (TempData["StaffMessage"]) *@
@@ -102,6 +103,7 @@
             @* ---------- Paid: the receipt ---------- *@
             var receipt = new ReceiptView
             {
+                ServiceChargePct = Model.ServicePct, SstPct = Model.SstPct,
                 ReceiptNo = b.ReceiptNo ?? "", OrderCode = b.Codes, IsDineIn = dineIn,
                 ReservationCode = b.Res, TableCode = b.Table, PickupTime = b.Pickup, CustomerName = b.Name,
                 Items = b.Items.Select(i => new ReceiptLine { Quantity = i.Qty, Name = i.Name, UnitPrice = i.Price, Note = i.Remark, PromoCode = i.Promo, Discount = i.Discount }).ToList(),
@@ -223,27 +225,25 @@
                         </div>
                         <div class="md-card-body">
                             <span class="md-label">Payment method</span>
-                            @* Payment.paymentMethod: Cash, Card, E-Wallet (Online Banking is for online payments) *@
-                            <div class="md-choice mb-3" role="radiogroup" aria-label="Payment method">
-                                <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash" checked />
-                                <label for="payCash">Cash</label>
-                                <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Card" />
-                                <label for="payCard">Card</label>
-                                <input type="radio" class="btn-check" name="paymentMethod" id="payWallet" value="E-Wallet" />
-                                <label for="payWallet">E-Wallet</label>
-                            </div>
-                            <div class="row g-3 mb-3" data-pay="Cash">
-                                <div class="col-sm-6">
-                                    <label class="md-label" for="amountReceived">Amount received (RM)</label>
-                                    <input class="form-control md-input" id="amountReceived" name="amountReceived" type="number" min="0" step="0.01" value="@b.Total.ToString("0.00", inv)" />
+                            @* Payment.paymentMethod: only the counter methods switched on in Admin > Settings (the restaurant is cashless;
+                               Online Banking is for online payments) *@
+                            @if (Model.CounterMethods.Count == 0)
+                            {
+                                <p class="md-note-box md-note-box-danger mb-3">No counter payment method is switched on. Please ask an admin to turn on Card or E-Wallet in Settings.</p>
+                            }
+                            else
+                            {
+                                <div class="md-choice mb-3" role="radiogroup" aria-label="Payment method">
+                                    @foreach (var method in Model.CounterMethods)
+                                    {
+                                        var methodId = method == "Card" ? "payCard" : "payWallet";
+                                        <input type="radio" class="btn-check" name="paymentMethod" id="@methodId" value="@method" checked="@(method == Model.CounterMethods[0])" />
+                                        <label for="@methodId">@method</label>
+                                    }
                                 </div>
-                                <div class="col-sm-6">
-                                    <span class="md-label">Change due</span>
-                                    <div class="md-bill-change" data-bill="change">RM 0.00</div>
-                                </div>
-                            </div>
-                            <p class="md-hint mb-3 d-none" data-pay="Card">Take the card payment on the terminal, then confirm here.</p>
-                            <p class="md-hint mb-3 d-none" data-pay="E-Wallet">Ask the guest to scan the DuitNow QR code, then confirm here once it shows as paid.</p>
+                            }
+                            <p class="md-hint mb-3 @(Model.CounterMethods.FirstOrDefault() == "Card" ? "" : "d-none")" data-pay="Card">Take the card payment on the terminal, then confirm here.</p>
+                            <p class="md-hint mb-3 @(Model.CounterMethods.FirstOrDefault() == "E-Wallet" ? "" : "d-none")" data-pay="E-Wallet">Ask the guest to scan the DuitNow QR code, then confirm here once it shows as paid.</p>
                             <p class="md-note-box md-note-box-info mb-3">
                                 Confirming payment issues the receipt@(b.Codes.Contains(',') ? " for all " + b.Codes.Split(',').Length + " orders" : "")@(dineIn ? $", frees table {b.Table}" : "") and completes the order.
                             </p>
@@ -270,7 +270,6 @@
             var panel = document.getElementById('billPanel');
             var day = 'tonight';
             var rm = function (n) { return 'RM ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
-            var r2 = function (n) { return Math.round(n * 100) / 100; };
 
             // Tabs: Tonight / Yesterday / All
             function applyTab() {
@@ -305,17 +304,6 @@
                 q('sst').textContent = rm(parseFloat(option.dataset.sst) || 0);
                 var total = parseFloat(option.dataset.total) || 0;
                 q('total').textContent = rm(total);
-                var received = document.getElementById('amountReceived');
-                if (received) { received.dataset.total = total; received.value = total.toFixed(2); updateChange(); }
-            }
-
-            // Cash: change due
-            function updateChange() {
-                var received = document.getElementById('amountReceived'), out = panel.querySelector('[data-bill="change"]');
-                if (!received || !out) return;
-                var change = r2((parseFloat(received.value) || 0) - parseFloat(received.dataset.total || 0));
-                out.textContent = change < 0 ? 'Short by ' + rm(-change) : rm(change);
-                out.classList.toggle('is-short', change < 0);
             }
 
             // Show a bill on the right (from its template) and wire up its controls
@@ -330,12 +318,6 @@
                 var select = document.getElementById('promotionSelect');
                 if (select && window.mdSelect) window.mdSelect(select);
                 if (select) select.addEventListener('change', recalc);
-                var received = document.getElementById('amountReceived');
-                if (received) {
-                    received.dataset.total = received.value;
-                    received.addEventListener('input', updateChange);
-                    updateChange();
-                }
                 panel.querySelectorAll('input[name="paymentMethod"]').forEach(function (r) {
                     r.addEventListener('change', function () {
                         panel.querySelectorAll('[data-pay]').forEach(function (el) { el.classList.toggle('d-none', el.dataset.pay !== r.value); });

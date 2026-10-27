@@ -118,6 +118,8 @@ namespace RestaurantManagementSystem.Pages.Admin
             name = name?.Trim();
             if (string.IsNullOrWhiteSpace(name) || price <= 0)
                 return Fail("Please enter a dish name and a price above 0.");
+            if (name.Length > 100)
+                return Fail("The dish name can be at most 100 characters.");
             if (!await _db.MenuCategories.AnyAsync(c => c.categoryID == categoryId))
                 return Fail("Please choose a category.");
 

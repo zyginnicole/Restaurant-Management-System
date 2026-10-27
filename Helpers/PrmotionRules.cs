@@ -65,8 +65,8 @@ namespace RestaurantManagementSystem.Helpers
         }
 
         // null = can be used right now. Otherwise a short reason to show to people.
-        // checkBirthday: false for the admin page (no customer there).
-        public static string? NotAvailableReason(Promotion p, DateTime now, DateTime? birthday, bool checkBirthday = true)
+        // checkBirthday: false for the admin page (no customer there). forStaff: worded for staff, not the customer.
+        public static string? NotAvailableReason(Promotion p, DateTime now, DateTime? birthday, bool checkBirthday = true, bool forStaff = false)
         {
             if (!p.promoActive) return "Not active";
             if (p.validUntil.HasValue && p.validUntil.Value.Date < now.Date)
@@ -76,7 +76,9 @@ namespace RestaurantManagementSystem.Helpers
             if (!IsDayAllowed(p, now.DayOfWeek)) return "Available " + DaysText(p);
             if (!IsTimeAllowed(p, now.TimeOfDay)) return "Available " + TimeText(p);
             if (checkBirthday && p.birthdayOnly && !IsBirthdayMonth(birthday, now))
-                return birthday.HasValue ? "Birthday month only" : "Birthday month only (add your birthday in your profile)";
+                return birthday.HasValue ? "Birthday month only"
+                     : forStaff ? "Birthday month only (this customer has no birthday saved)"
+                     : "Birthday month only (add your birthday in your profile)";
             return null;
         }
 
@@ -98,25 +100,31 @@ namespace RestaurantManagementSystem.Helpers
         public static DateTimeOffset? UsageWindowStart(Promotion p, DateTime now) =>
             p.limitResetsYearly ? MalaysiaClock.StartOf(new DateTime(now.Year, 1, 1)) : (DateTimeOffset?)null;
 
-        // null = OK, otherwise the message to show the customer.
+        // null = OK, otherwise the message to show the customer (or staff, when forStaff is true).
         //   orderSubtotal  = the whole order before any discount
         //   customerUses   = this customer's earlier uses (see UsageWindowStart)
         //   totalUses      = everyone's earlier uses (orders that are not Cancelled)
-        public static string? CheckUsage(Promotion p, string? orderType, decimal orderSubtotal, int customerUses, int totalUses)
+        public static string? CheckUsage(Promotion p, string? orderType, decimal orderSubtotal, int customerUses, int totalUses,
+            bool forStaff = false)
         {
             if (!OrderTypeAllowed(p, orderType))
                 return p.orderType == DineIn ? "This promotion is for dine-in orders only." : "This promotion is for takeaway orders only.";
 
             if (p.minSpend.HasValue && orderSubtotal < p.minSpend.Value)
-                return $"Spend at least RM {p.minSpend.Value:0.00} to use this promotion.";
+                return forStaff
+                    ? $"The bill must be at least RM {p.minSpend.Value:0.00} for this promotion."
+                    : $"Spend at least RM {p.minSpend.Value:0.00} to use this promotion.";
 
             if (p.maxTotalUses.HasValue && totalUses >= p.maxTotalUses.Value)
                 return "This promotion has been fully redeemed.";
 
             if (p.maxUsesPerCustomer.HasValue && customerUses >= p.maxUsesPerCustomer.Value)
+            {
+                string who = forStaff ? "This customer has" : "You have";
                 return p.limitResetsYearly
-                    ? "You have already used this promotion this year."
-                    : "You have already used this promotion.";
+                    ? $"{who} already used this promotion this year."
+                    : $"{who} already used this promotion.";
+            }
 
             return null;
         }

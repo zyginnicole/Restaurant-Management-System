@@ -55,7 +55,7 @@
                 @foreach (var o in orders.OrderBy(o => Array.IndexOf(priority, o.Status)))
                 {
                     <li class="md-order md-staff-order @OrderClass(o.Status)" data-group="@Group(o.Status)" data-code="@o.Code">
-                        <span class="md-table-badge">@(o.Table != null ? (o.Table.Length > 2 ? o.Table[2..] : o.Table) : "TA")</span>
+                        <span class="md-table-badge">@(o.Table != null ? o.Table.Replace("-", "") : "TA")</span>@* "I-01" -> "I01": keeps the area code *@
                         <div class="md-order-main">
                             <button type="button" class="md-staff-order-btn stretched-link" data-show-order="@o.Code">@(o.Table ?? "Takeaway") · @o.Name</button>
                             <span class="md-guest-meta">@o.Code · @o.Items.Sum(i => i.Qty) items@(o.Pickup != null ? " · pick-up " + o.Pickup : "")</span>

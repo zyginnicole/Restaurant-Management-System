@@ -53,17 +53,18 @@ namespace RestaurantManagementSystem.Services
         // null = this buyer may use the promotion now. Otherwise the reason.
         //   orderType / subtotal: null on the Menu page (no order yet) → those two checks are skipped
         //   billOrderIds: orders being paid right now, not counted as earlier uses
+        //   forStaff: word the reason for staff ("This customer has ...") instead of the customer ("You have ...")
         public async Task<string?> WhyNotAsync(Promotion p, PromoBuyer buyer, DateTime now,
-            string? orderType = null, decimal? subtotal = null, ICollection<int>? billOrderIds = null)
+            string? orderType = null, decimal? subtotal = null, ICollection<int>? billOrderIds = null, bool forStaff = false)
         {
-            string? why = PromotionRules.NotAvailableReason(p, now, buyer.Birthday);
+            string? why = PromotionRules.NotAvailableReason(p, now, buyer.Birthday, forStaff: forStaff);
             if (why != null) return why;
 
             if (PromotionRules.MembersOnly(p) && !buyer.IsMember)
                 return "For members with an account only";
 
             var (customerUses, totalUses) = await CountUsesAsync(p, buyer, now, billOrderIds);
-            return PromotionRules.CheckUsage(p, orderType ?? p.orderType, subtotal ?? decimal.MaxValue, customerUses, totalUses);
+            return PromotionRules.CheckUsage(p, orderType ?? p.orderType, subtotal ?? decimal.MaxValue, customerUses, totalUses, forStaff);
         }
 
         // The promotions this buyer may use on this order right now

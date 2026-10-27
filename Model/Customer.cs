@@ -21,7 +21,7 @@ namespace RestaurantManagementSystem.Model
         [DataType(DataType.Password)]
         public string custPassword { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "Phone number is required!")]
         [MaxLength(11, ErrorMessage = "Maximum 11 digits including the leading 0.")]
         public string custPhone { get; set; }
 

@@ -57,6 +57,13 @@ namespace RestaurantManagementSystem.Pages.Staff
         public List<string> DiningTables { get; set; } = new();          // tables still dining (dine-in, not served yet)
         public int CoversTonight { get; set; }                           // guests of today's reservations that are seated
 
+        // Counter payment methods switched on in Admin > Settings ("Card", "E-Wallet"); FPX is for online payments only
+        public List<string> CounterMethods { get; set; } = new();
+
+        // Rates from Admin > Settings, for the receipts of paid bills
+        public decimal ServicePct { get; set; } = 10m;
+        public decimal SstPct { get; set; } = 6m;
+
         public class BillRow
         {
             public string Code { get; set; } = string.Empty;             // "ORD-0083" – lowest order on the bill (posted as orderId)
@@ -119,6 +126,9 @@ namespace RestaurantManagementSystem.Pages.Staff
             var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
             decimal servicePct = settings?.serviceChargePct ?? 10m;
             decimal sstPct = settings?.sstPct ?? 6m;
+            CounterMethods = AcceptedMethods(settings).Where(m => m != "FPX").ToList();
+            ServicePct = servicePct;
+            SstPct = sstPct;
 
             // ---- every order that can have a bill (Cancelled ones have none) ----
             var orders = (await _context.Orders.AsNoTracking()
@@ -201,14 +211,14 @@ namespace RestaurantManagementSystem.Pages.Staff
             decimal sstPct = settings?.sstPct ?? 6m;
 
             //1. payment method (Admin > Settings can switch methods off)
-            bool methodOk = paymentMethod switch
+            var accepted = AcceptedMethods(settings);
+            if (paymentMethod == null || !accepted.Contains(paymentMethod))
             {
-                "Card" => settings?.acceptCard ?? true,
-                "FPX" => settings?.acceptFpx ?? true,
-                "E-Wallet" => settings?.acceptEwallet ?? true,
-                _ => false
-            };
-            if (!methodOk) return Done("Choose a payment method that is accepted (Card, Online Banking or E-Wallet).", orderId);
+                var names = accepted.Select(m => m == "FPX" ? "Online Banking" : m).ToList();
+                return Done(names.Count == 0
+                    ? "No payment method is switched on. Please ask an admin to turn one on in Settings."
+                    : $"Choose a payment method that is accepted ({string.Join(", ", names)}).", orderId);
+            }
 
             //2. the order and its bill
             var order = await _context.Orders.Include(o => o.Payment).FirstOrDefaultAsync(o => o.orderID == ParseId(orderId));
@@ -488,7 +498,7 @@ namespace RestaurantManagementSystem.Pages.Staff
             var buyer = await _promotions.GetBuyerAsync(first.custID);
             string orderType = first.tableID != null ? PromotionRules.DineIn : PromotionRules.Takeaway;
             decimal gross = lines.Sum(oi => oi.unitPrice * oi.quantity);
-            return await _promotions.WhyNotAsync(p, buyer, now, orderType, gross, bill.Select(o => o.orderID).ToList());
+            return await _promotions.WhyNotAsync(p, buyer, now, orderType, gross, bill.Select(o => o.orderID).ToList(), forStaff: true);
         }
 
         // ---------- helpers ----------
@@ -500,6 +510,16 @@ namespace RestaurantManagementSystem.Pages.Staff
                 .Include(o => o.OrderItems).ThenInclude(oi => oi.Menu);
 
         private static bool IsPaid(Order o) => o.Payment?.paymentStatus == "Paid";
+
+        // Payment methods switched on in Admin > Settings (all of them if the settings row is missing)
+        private static List<string> AcceptedMethods(SystemSetting? s)
+        {
+            var list = new List<string>();
+            if (s?.acceptCard ?? true) list.Add("Card");
+            if (s?.acceptFpx ?? true) list.Add("FPX");
+            if (s?.acceptEwallet ?? true) list.Add("E-Wallet");
+            return list;
+        }
 
         private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 

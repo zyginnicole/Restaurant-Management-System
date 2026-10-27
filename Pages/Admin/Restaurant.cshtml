@@ -41,7 +41,7 @@
                             <h3 class="a-area-name">@a.Name</h3>
                             <input type="checkbox" class="a-switch area-active" autocomplete="off" data-id="@a.Id" @(a.Active ? "checked" : "") data-on="Active" data-off="Inactive" aria-label="@a.Name active" />
                         </div>
-                        <div class="a-area-meta">@a.TableCount tables<br /><span title="Covers = the total number of guests this area can seat at once (sum of its tables' pax)">@a.Covers covers</span></div>
+                        <div class="a-area-meta">@a.TableCount @(a.TableCount == 1 ? "table" : "tables") ·<span title="Every table in this area starts with this code">@a.Code-01, @a.Code-02 …</span><br /><span title="Covers = the total number of guests this area can seat at once (sum of its tables' pax)">@a.Covers covers</span></div>
                         <span class="a-badge @(a.Active ? "active" : "inactive")" data-switch-text>@(a.Active ? "Active" : "Inactive")</span>
                         <div class="d-flex gap-1 mt-2">
                             <button type="button" class="a-icon-btn" data-bs-toggle="modal" data-bs-target="#areaModal" data-json="@a.Json" aria-label="Edit @a.Name"><i class="bi bi-pencil"></i></button>
@@ -216,7 +216,7 @@
             <div class="modal-body">
                 <div class="mb-3"><label class="a-label" for="aName">Area name</label><input id="aName" name="name" class="form-control a-input" maxlength="50" required placeholder="e.g. Wine Cellar" /></div>
                 <div class="mb-3"><label class="a-label" for="aDesc">Description</label><textarea id="aDesc" name="description" class="form-control a-input" rows="2" maxlength="200"></textarea></div>
-                @* Only when adding: the area is created with this many tables (T-01, T-02 ...) *@
+                @* Only when adding: the area is created with this many tables, numbered with the area's code (e.g. G-01, G-02 for "Garden") *@
                 <div id="areaTablesBlock" class="row g-3 mb-3">
                     <div class="col-6"><label class="a-label" for="aTables">Number of tables</label><input id="aTables" name="tableCount" type="number" min="0" max="99" value="0" class="form-control a-input" /></div>
                     <div class="col-6"><label class="a-label" for="aSeats">Seats per table (pax)</label><input id="aSeats" name="seatsPerTable" type="number" min="1" max="20" value="4" class="form-control a-input" /></div>
@@ -248,7 +248,7 @@
                     <div class="col-6">
                         <label class="a-label" for="tArea">Dining area</label>
                         <select id="tArea" name="areaId" class="form-select a-input" required>
-                            @foreach (var a in Model.Areas) { <option value="@a.Id">@a.Name</option> }
+                            @foreach (var a in Model.Areas) { <option value="@a.Id" data-code="@a.Code">@a.Name</option> }
                         </select>
                     </div>
                     <div class="col-6">
@@ -344,7 +344,9 @@
                 if (current && current.dataset.areaId === areaId) { $('tNumber').value = current.dataset.number; return; }
                 let max = 0;
                 tiles().forEach(t => { if (t.dataset.areaId === areaId) max = Math.max(max, numberPart(t.dataset.number)); });
-                $('tNumber').value = max >= 99 ? '' : 'T-' + String(max + 1).padStart(2, '0');
+                const option = $('tArea').selectedOptions[0];
+                const code = option ? option.dataset.code : '';
+                $('tNumber').value = max >= 99 || !code ? '' : code + '-' + String(max + 1).padStart(2, '0');
             }
             $('tArea').addEventListener('change', previewNumber);
 
