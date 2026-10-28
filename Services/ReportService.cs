@@ -1,6 +1,7 @@
-using System.Globalization; //helps to deal with regional standards (e.g. diff date formats)
 using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Model;
+using System.Globalization; //helps to deal with regional standards (e.g. diff date formats)
 
 namespace RestaurantManagementSystem.Services;
 
@@ -101,7 +102,9 @@ public class ReportService
         foreach (var c in counts.Where(c => c.Stars >= 1 && c.Stars <= 5))
         {
             k.StarCounts[c.Stars] = c.Count;
-            k.StarSharePercent[c.Stars] = (int)Math.Round(c.Count * 100.0 / k.ReviewCount);
+            k.StarSharePercent[c.Stars] = k.ReviewCount == 0
+                ? 0
+                : (int)Math.Round(c.Count * 100.0 / k.ReviewCount);
         }
         return k;
     }
@@ -113,7 +116,25 @@ public class ReportService
     private static double Change(int current, int previous) =>
         previous == 0 ? 0 : Math.Round((double)((current - previous) / (double)previous * 100), 1);
 
-  
+    //normalizes incoming date inputs to prevent timezone issues
+    private static DateTimeOffset Off(DateTime value)
+    {
+        return new DateTimeOffset(value);
+    }
+
+    //filters and returns a queryable list of reservations that fall wthin the specified date range
+    private IQueryable<Reservation> ReservationsIn(DateRange range)
+    {
+        return _db.Reservations.Where(r =>
+            r.reservationDateTime >= range.Start &&
+            r.reservationDateTime < range.End);
+    }
+
+    // Calculates and returns the total revenue asynchronously for the given date range.
+    private Task<decimal> RevenueAsync(DateRange range)
+    {
+        return RevenueBetweenAsync(range.Start, range.End);
+    }
 
     public async Task<SummaryDto> GetSummaryAsync(DateRange r)
     {
@@ -123,13 +144,13 @@ public class ReportService
         decimal previousRevenue = await RevenueBetweenAsync(previousStart, r.Start);
         double change = previousRevenue == 0 ? 0 : (double)((revenue - previousRevenue) / previousRevenue * 100);
 
-        DateTimeOffset fromDate = new(r.Start);
-        DateTimeOffset toDate = new(r.End);
+        DateTimeOffset fromAt = Off(r.Start);
+        DateTimeOffset toAt = Off(r.End);
         DateTimeOffset weekAgo = new(DateTime.Today.AddDays(-7));
 
         var reservations = _db.Reservations
             .Where(x => x.reservationDateTime >= r.Start && x.reservationDateTime < r.End);
-        var ratings = _db.Feedbacks.Where(f => f.feedbackDate >= fromDate && f.feedbackDate < toDate);
+        var ratings = _db.Feedbacks.Where(f => f.feedbackDate >= fromAt && f.feedbackDate < toAt);
 
         return new SummaryDto
         {
@@ -194,13 +215,12 @@ public class ReportService
                 .Where(r => (r.reservationStatus == "Pending" || r.reservationStatus == "Confirmed") && r.reservationDateTime > now)
                 .Select(r => (DateTime?)r.reservationDateTime).FirstOrDefault(),
             Feed = todays.Take(8).Select(r => new FeedItem(
-                r.reservationDateTime,
-                "R-" + r.reservationID.ToString("0000"),
-                r.Customer?.custName ?? "Guest",
-                r.partySize,
-                r.DiningTable?.tableNumber ?? "-",
-                r.reservationStatus)).ToList()
-        };
+                 r.reservationDateTime,
+                    r.Customer?.custName ?? "Guest",
+                    r.partySize,
+                    r.DiningTable?.tableNumber ?? "-",
+                    r.reservationStatus)).ToList()
+            };
     }
 
     // 4. TABLE UTILISATION per dining area (Indoor / Outdoor / VIP)
@@ -253,13 +273,13 @@ public class ReportService
     // ------------------------------------------------------------------
     // 6. POPULAR MENU ITEMS: total quantity sold per item (also used by the chatbot)
     // ------------------------------------------------------------------
-    public async Task<List<NameValue>> GetTopItemsAsync(DateRange r, int take = 5)
+    public async Task<List<TopItem>> GetTopItemsAsync(DateRange r, int take = 5)
     {
         DateTimeOffset fromDate = new(r.Start);
         DateTimeOffset toDate = new(r.End);
 
         var rows = await _db.OrderItems
-            .Where(i => i.Order!.orderDateTime >= fromAt && i.Order.orderDateTime < toAt
+            .Where(i => i.Order!.orderDateTime >= fromDate && i.Order.orderDateTime < toDate
                         && i.Order.orderStatus != "Cancelled")
             .GroupBy(i => i.Menu!.menuName)
             .Select(g => new { Name = g.Key, Quantity = g.Sum(i => i.quantity), Revenue = g.Sum(i => i.quantity * i.unitPrice) })

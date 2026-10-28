@@ -19,45 +19,26 @@
     string Q(string key) => Request.Query[key].ToString();
 
     // =====================================================
-    // Statistic report – period Monthly (From/To = months) or Yearly (From/To = years)
-    // Example data – later from the database (see ReportsModel)
+    // Statistic report – values are loaded by ReportsModel from ReportService.
     // =====================================================
     string sPeriod = tab == "statistic" && Q("period") == "yearly" ? "yearly" : "monthly";
-    var months = new[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep" };            // 2026 so far
-    decimal[] monthRevenue = { 118400, 112250, 125600, 121300, 130450, 127900, 135200, 132480, 148390 };
-    int[] monthBookings    = { 268, 251, 284, 279, 296, 288, 305, 294, 312 };
-    int[] monthNewCust     = { 41, 36, 44, 39, 47, 43, 52, 49, 51 };
-    var years = new[] { 2024, 2025, 2026 };
-    decimal[] yearRevenue  = { 1318600, 1462300, 1151970 };
-    int[] yearBookings     = { 2980, 3255, 2577 };
-    int[] yearNewCust      = { 412, 455, 402 };
+    var months = Model.StatisticRevenue.Select(x => x.Name).ToArray();
+    var years = Enumerable.Range(DateTime.Today.Year - 2, 3).ToArray();
 
     string sFrom, sTo;
     string[] chartLabels; decimal[] chartValues; int[] newCustBars; int bookings, newCust; decimal revenue; string range, compareText; int deltaRev, deltaRes;
-    if (sPeriod == "monthly")
-    {
-        sFrom = tab == "statistic" && Q("from").Length == 7 ? Q("from") : "2026-01";
-        sTo = tab == "statistic" && Q("to").Length == 7 ? Q("to") : "2026-09";
-        int a = Math.Clamp(int.Parse(sFrom[5..]) - 1, 0, 8), b = Math.Clamp(int.Parse(sTo[5..]) - 1, a, 8);
-        chartLabels = months[a..(b + 1)];
-        chartValues = monthRevenue[a..(b + 1)];
-        revenue = chartValues.Sum(); bookings = monthBookings[a..(b + 1)].Sum(); newCustBars = monthNewCust[a..(b + 1)]; newCust = newCustBars.Sum();
-        range = a == b ? $"{months[a]} 2026" : $"{months[a]} – {months[b]} 2026";
-        compareText = "vs previous " + (b - a + 1 == 1 ? "month" : $"{b - a + 1} months");
-        deltaRev = 9; deltaRes = 6;
-    }
-    else
-    {
-        sFrom = tab == "statistic" && Q("from").Length == 4 ? Q("from") : "2024";
-        sTo = tab == "statistic" && Q("to").Length == 4 ? Q("to") : "2026";
-        int a = Math.Clamp(int.Parse(sFrom) - 2024, 0, 2), b = Math.Clamp(int.Parse(sTo) - 2024, a, 2);
-        chartLabels = years[a..(b + 1)].Select(y => y == 2026 ? "2026 (to Sep)" : y.ToString()).ToArray();
-        chartValues = yearRevenue[a..(b + 1)];
-        revenue = chartValues.Sum(); bookings = yearBookings[a..(b + 1)].Sum(); newCustBars = yearNewCust[a..(b + 1)]; newCust = newCustBars.Sum();
-        range = a == b ? years[a].ToString() : $"{years[a]} – {years[b]}";
-        compareText = "vs previous " + (b - a + 1 == 1 ? "year" : $"{b - a + 1} years");
-        deltaRev = 11; deltaRes = 9;
-    }
+    sFrom = Q("from");
+    sTo = Q("to");
+    chartLabels = Model.StatisticRevenue.Select(x => x.Name).ToArray();
+    chartValues = Model.StatisticRevenue.Select(x => (decimal)x.Value).ToArray();
+    newCustBars = Model.StatisticNewCustomers.Select(x => (int)x.Value).ToArray();
+    revenue = Model.StatisticKpis.Revenue;
+    bookings = Model.StatisticKpis.Reservations;
+    newCust = Model.StatisticKpis.NewCustomers;
+    range = Model.SelectedRange.Label;
+    compareText = "vs previous period";
+    deltaRev = (int)Math.Round(Model.StatisticKpis.RevenueChangePercent);
+    deltaRes = (int)Math.Round(Model.StatisticKpis.ReservationsChangePercent);
     // Reservations by status for the range (shares of the bookings)
     int completed = (int)Math.Round(bookings * 0.859), cancelled = (int)Math.Round(bookings * 0.083), noShow = (int)Math.Round(bookings * 0.029);
     int upcoming = bookings - completed - cancelled - noShow;
@@ -70,32 +51,32 @@
         ("Caviar & Soft Egg", "Starters", 849, 72165)
     };
 
-    // =====================================================
-    // Sales report – period Daily / Monthly, From–To dates (example data 1–15 Sep 2026)
-    // =====================================================
-    string period = tab == "sales" && Q("period") == "monthly" ? "monthly" : "daily";
-    string from = tab == "sales" && Q("from").Length == 10 ? Q("from") : "2026-09-01";
-    string to = tab == "sales" && Q("to").Length == 10 ? Q("to") : "2026-09-15";
-    DateTime fromDate = DateTime.TryParse(from, out var f) ? f : new DateTime(2026, 9, 1);
-    DateTime toDate = DateTime.TryParse(to, out var t2) ? t2 : new DateTime(2026, 9, 15);
-    string salesRange = fromDate.Month == toDate.Month && fromDate.Year == toDate.Year
-        ? $"{fromDate.Day}–{toDate.ToString("d MMMM yyyy", inv)}"
-        : $"{fromDate.ToString("d MMM", inv)} – {toDate.ToString("d MMMM yyyy", inv)}";
-
-    int[] orders = { 24, 27, 22, 31, 35, 38, 30, 25, 26, 21, 32, 39, 41, 29, 27 };
-    int[] covers = { 62, 70, 55, 84, 96, 104, 82, 66, 71, 57, 88, 107, 112, 80, 73 };
-    decimal[] net = { 7180, 8090, 6390, 9760, 11180, 12620, 10070, 7920, 8410, 6880, 10480, 12930, 13390, 9600, 8790 };
-    var rows = new List<string[]>();
-    foreach (var g in Enumerable.Range(0, 15).GroupBy(i => period == "monthly" ? 0 : i))
+    string period = Model.SelectedPeriod;
+    string from = Model.SelectedRange.Start.ToString("yyyy-MM-dd");
+    string to = Model.SelectedRange.End.AddDays(-1).ToString("yyyy-MM-dd");
+    string salesRange = Model.SelectedRange.Label;
+    string salesFile = $"MaisonDoree-sales-{Model.SelectedRange.Start:yyyyMMdd}-to-{Model.SelectedRange.End.AddDays(-1):yyyyMMdd}";
+    string[] head = { "Period", "Orders", "Covers", "Net sales", "Service charge", "SST", "Total" };
+    var rows = Model.Sales.Rows.Select(r => new[]
     {
-        decimal n = g.Sum(i => net[i]), sc = Math.Round(n * 0.10m, 2), sst = Math.Round((n + sc) * 0.06m, 2);
-        string label = g.Count() == 1 ? $"{g.First() + 1} Sep 2026" : "September 2026";
-        rows.Add(new[] { label, g.Sum(i => orders[i]).ToString(), g.Sum(i => covers[i]).ToString(), Rm(n), Rm(sc), Rm(sst), Rm(n + sc + sst) });
-    }
-    decimal tn = net.Sum(), tsc = Math.Round(tn * 0.10m, 2), tsst = Math.Round((tn + tsc) * 0.06m, 2);
-    string[] head = { "Date", "Orders", "Covers", "Net sales", "Service charge 10%", "SST 6%", "Total" };
-    string[] total = { "Total", orders.Sum().ToString(), covers.Sum().ToString(), Rm(tn), Rm(tsc), Rm(tsst), Rm(tn + tsc + tsst) };
-    string salesFile = $"MaisonDoree-sales-{from}-to-{to}";
+        r.Label,
+        r.Orders.ToString(),
+        r.Covers.ToString(),
+        Rm(r.NetSales),
+        Rm(r.ServiceCharge),
+        Rm(r.Sst),
+        Rm(r.Total)
+    }).ToList();
+    string[] total =
+    {
+        "Total",
+        Model.Sales.TotalOrders.ToString(),
+        Model.Sales.TotalCovers.ToString(),
+        Rm(Model.Sales.TotalNetSales),
+        Rm(Model.Sales.TotalServiceCharge),
+        Rm(Model.Sales.TotalSst),
+        Rm(Model.Sales.GrandTotal)
+    };
 }
 
 @* ---------- Tabs: Statistic report | Sales report (same style as the Dashboard tabs) ---------- *@

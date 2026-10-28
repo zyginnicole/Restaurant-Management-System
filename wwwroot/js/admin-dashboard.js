@@ -47,9 +47,10 @@
             y: { grid: { color: grid }, border: { display: false }, beginAtZero: true }
         };
 
-        // Daily sales, RM thousands (16 Sep = today, partial)
-        var sales = [7.18, 8.09, 6.39, 9.76, 11.18, 12.62, 10.07, 7.92, 8.41, 6.88, 10.48, 12.93, 13.39, 9.60, 8.79, 4.60];
-        var days = sales.map(function (_, i) { return String(i + 1); });
+        var salesCanvas = document.getElementById('salesChart');
+        if (!salesCanvas) return;
+        var sales = JSON.parse(salesCanvas.dataset.values || '[]');
+        var days = JSON.parse(salesCanvas.dataset.labels || '[]');
 
         new Chart(document.getElementById('salesChart'), {
             type: 'bar',
@@ -108,18 +109,15 @@
     var list = document.getElementById('rankList');
     if (!list) return;
 
-    var items = [
-        { name: 'Wagyu Beef Tenderloin', category: 'Mains', portions: 212, revenue: 35616, trend: 12 },
-        { name: 'Pan-Seared Sea Bass', category: 'Mains', portions: 187, revenue: 18326, trend: 4 },
-        { name: 'Lobster Thermidor', category: 'Mains', portions: 149, revenue: 19072, trend: -6 },
-        { name: 'Chocolate Fondant', category: 'Desserts', portions: 138, revenue: 4968, trend: 9 },
-        { name: 'Caviar & Soft Egg', category: 'Starters', portions: 96, revenue: 8160, trend: 0 },
-        { name: 'Duck à l\'Orange', category: 'Mains', portions: 90, revenue: 8280, trend: 3 },
-        { name: 'Oyster Selection', category: 'Starters', portions: 84, revenue: 5712, trend: -2 },
-        { name: 'Château Margaux 2018 · glass', category: 'Beverages', portions: 80, revenue: 9600, trend: 7 },
-        { name: 'Mille-Feuille', category: 'Desserts', portions: 72, revenue: 2304, trend: 5 },
-        { name: 'Sparkling Water', category: 'Beverages', portions: 70, revenue: 1260, trend: 1 }
-    ];
+    var items = JSON.parse(list.dataset.items || '[]').map(function (item) {
+        return {
+            name: item.name,
+            category: 'All',
+            portions: Number(item.sold || 0),
+            revenue: Number(item.sold || 0),
+            trend: 0
+        };
+    });
 
     var metric = 'portions';
     var category = 'All';

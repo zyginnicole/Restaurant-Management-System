@@ -22,11 +22,13 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         private readonly ApplicationDbContext _context;
         private readonly PromotionService _promotions;
+        private readonly NotificationService _notifications;
 
-        public PaymentModel(ApplicationDbContext context, PromotionService promotions)
+        public PaymentModel(ApplicationDbContext context, PromotionService promotions, NotificationService notifications)
         {
             _context = context;
             _promotions = promotions;
+            _notifications = notifications;
         }
 
         // ---------- What the page shows ----------
@@ -185,6 +187,18 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             //one SaveChanges = all payments and order updates succeed or fail together
             await _context.SaveChangesAsync();
+
+            foreach (var paidOrder in _billOrders)
+            {
+                await _notifications.SendAsync(
+                    paidOrder.custID,
+                    "Payment",
+                    paid ? "Payment received" : "Payment failed",
+                    paid
+                        ? $"Payment for ORD-{paidOrder.orderID:0000} was received successfully."
+                        : $"Payment for ORD-{paidOrder.orderID:0000} could not be completed.",
+                    paid ? "/Customer/History" : "/Customer/Payment");
+            }
 
             if (!paid)
             {

@@ -21,12 +21,14 @@ namespace RestaurantManagementSystem.Pages.Staff
         private readonly ApplicationDbContext _db;
         private readonly ReservationService _reservations;
         private readonly SettingsService _settings;
+        private readonly NotificationService _notifications;
 
-        public ReservationsModel(ApplicationDbContext db, ReservationService reservations, SettingsService settings)
+        public ReservationsModel(ApplicationDbContext db, ReservationService reservations, SettingsService settings, NotificationService notifications)
         {
             _db = db;
             _reservations = reservations;
             _settings = settings;
+            _notifications = notifications;
         }
 
         // Page to go back to after an action ("/Staff/Dashboard" when the pop-up was used there). Local URLs only.
@@ -145,6 +147,8 @@ namespace RestaurantManagementSystem.Pages.Staff
         {
             var error = await SaveFormFirstAsync(reservationId, reservationDate, reservationTime, partySize, tableId)
                         ?? await _reservations.ConfirmAsync(reservationId, StaffId());
+            if (error == null)
+                await NotifyReservationConfirmedAsync(reservationId);
             return Done(error, $"{Code(reservationId)} confirmed.");
         }
 
@@ -191,6 +195,21 @@ namespace RestaurantManagementSystem.Pages.Staff
         {
             SetMessage(error, success);
             return Url.IsLocalUrl(ReturnUrl) ? LocalRedirect(ReturnUrl!) : RedirectToPage();
+        }
+
+        private async Task NotifyReservationConfirmedAsync(int reservationId)
+        {
+            var reservation = await _db.Reservations.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.reservationID == reservationId);
+            if (reservation == null) return;
+
+            await _notifications.SendAsync(
+                reservation.custID,
+                "Reservation",
+                "Reservation confirmed",
+                $"Your reservation for {reservation.partySize} guests on " +
+                $"{reservation.reservationDateTime:dd MMM yyyy, HH:mm} is confirmed.",
+                "/Customer/Reservations");
         }
     }
 }

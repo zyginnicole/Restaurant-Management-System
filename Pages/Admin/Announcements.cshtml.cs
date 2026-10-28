@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Admin
 {
@@ -23,10 +24,12 @@ namespace RestaurantManagementSystem.Pages.Admin
         public static readonly string[] AudienceValues = { "All", "Customers", "Staff" };
 
         private readonly ApplicationDbContext _db;
+        private readonly NotificationService _notifications;
 
-        public AnnouncementsModel(ApplicationDbContext db)
+        public AnnouncementsModel(ApplicationDbContext db, NotificationService notifications)
         {
             _db = db;
+            _notifications = notifications;
         }
 
         public List<Announcement> Items { get; set; } = new();
@@ -83,6 +86,14 @@ namespace RestaurantManagementSystem.Pages.Admin
             item.targetAudience = targetAudience!;
             item.isPinned = isPinned;
             await _db.SaveChangesAsync();
+
+            if (announcementId == null && (item.targetAudience == "All" || item.targetAudience == "Customers"))
+            {
+                await _notifications.SendAdminAnnouncementAsync(
+                    item.announcementTitle,
+                    item.announcementMessage,
+                    "/Customer/Notifications");
+            }
 
             TempData["AdminMessage"] = announcementId == null ? $"\"{title}\" posted." : $"\"{title}\" updated.";
             return RedirectToPage();

@@ -352,19 +352,40 @@
     toggle.addEventListener('click', function () { setChat(true); });
     document.getElementById('chatClose').addEventListener('click', function () { setChat(false); });
 
-    // Shows the customer's message in the panel. The assistant's reply is for the team to connect later.
-    document.getElementById('chatForm').addEventListener('submit', function (event) {
+    document.getElementById('chatForm').addEventListener('submit', async function (event) {
         event.preventDefault();
         var input = document.getElementById('chatText');
         var text = input.value.trim();
         if (!text) return;
 
+        var body = document.getElementById('chatBody');
         var message = document.createElement('div');
         message.className = 'md-chat-msg user';
         message.textContent = text;
-        var body = document.getElementById('chatBody');
         body.appendChild(message);
-        body.scrollTop = body.scrollHeight;
         input.value = '';
+
+        var reply = document.createElement('div');
+        reply.className = 'md-chat-msg bot';
+        reply.textContent = 'Thinking...';
+        body.appendChild(reply);
+        body.scrollTop = body.scrollHeight;
+
+        try {
+            var response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text })
+            });
+
+            if (!response.ok) throw new Error('Chat request failed.');
+            var data = await response.json();
+            reply.textContent = data.reply || 'I could not generate a reply.';
+        } catch (error) {
+            console.error(error);
+            reply.textContent = 'The assistant is temporarily unavailable.';
+        }
+
+        body.scrollTop = body.scrollHeight;
     });
 })();

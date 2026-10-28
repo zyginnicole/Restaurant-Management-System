@@ -1,6 +1,7 @@
 ﻿@page
 @model RestaurantManagementSystem.Pages.Admin.DashboardModel
 @using RestaurantManagementSystem.Services
+@using System.Text.Json
 @{
     ViewData["Title"] = "Dashboard";
     ViewData["Module"] = "Admin";
@@ -77,11 +78,11 @@
             <div class="md-stat md-kpi">
                 <span class="md-label">Revenue · <span data-period-label>@Model.PeriodLabel</span></span>
                 <div class="md-kpi-top">
-                    <div class="md-stat-value">RM 148,390</div>
+                    <div class="md-stat-value">RM @Model.Analytics.Revenue.ToString("N2")</div>
                 </div>
-                <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>12% vs August</div>
-                <div class="md-kpi-progress" aria-label="93% of the RM 160,000 target"><i style="width: 93%"></i></div>
-                <div class="md-stat-note">93% of RM 160,000 target</div>
+                <div class="md-kpi-delta @(Model.Analytics.RevenueChangePercent >= 0 ? "is-up" : "is-down")"><i class="bi @(Model.Analytics.RevenueChangePercent >= 0 ? "bi-arrow-up-right" : "bi-arrow-down-right")"></i>@Math.Abs(Model.Analytics.RevenueChangePercent).ToString("0.#")% vs @Model.PreviousLabel</div>
+                <div class="md-kpi-progress" aria-label="Revenue for the selected period"><i style="width: 100%"></i></div>
+                <div class="md-stat-note">Paid revenue in selected period</div>
             </div>
         </div>
         <div class="col-6 col-xl-3">
@@ -109,28 +110,27 @@
             <div class="md-stat md-kpi">
                 <span class="md-label">Registered customers</span>
                 <div class="md-kpi-top">
-                    <div class="md-stat-value">847</div>
+                    <div class="md-stat-value">@Model.Analytics.Customers</div>
                 </div>
-                <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>7 new this week</div>
-                <div class="md-stat-note">51 new in the last 10 weeks</div>
+                <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>@Model.Analytics.NewCustomers new in period</div>
+                <div class="md-stat-note">Registered customers</div>
             </div>
         </div>
         <div class="col-6 col-xl-3">
             <div class="md-stat md-kpi">
                 <span class="md-label">Average rating</span>
                 <div class="md-kpi-top">
-                    <div class="md-stat-value">4.7 / 5</div>
+                    <div class="md-stat-value">@Model.Analytics.AverageRating.ToString("0.0") / 5</div>
                     @* Gold stars filled to the rating: width = rating ÷ 5 *@
-                    <span class="md-stars" aria-label="4.7 out of 5 stars"><span class="md-stars-fill" style="width: 94%">★★★★★</span>★★★★★</span>
+                    <span class="md-stars" aria-label="@Model.Analytics.AverageRating.ToString("0.0") out of 5 stars"><span class="md-stars-fill" style="width: @(Model.Analytics.AverageRating / 5 * 100)%">★★★★★</span>★★★★★</span>
                 </div>
                 <div class="md-rating-bars" aria-label="Rating distribution">
-                    <div><span>5★</span><i><b style="width: 78%"></b></i><em>78%</em></div>
-                    <div><span>4★</span><i><b style="width: 15%"></b></i><em>15%</em></div>
-                    <div><span>3★</span><i><b style="width: 4%"></b></i><em>4%</em></div>
-                    <div><span>2★</span><i><b style="width: 2%"></b></i><em>2%</em></div>
-                    <div><span>1★</span><i><b style="width: 1%"></b></i><em>1%</em></div>
+                    @for (var star = 5; star >= 1; star--)
+                    {
+                        <div><span>@star★</span><i><b style="width: @Model.Analytics.StarSharePercent[star]%"></b></i><em>@Model.Analytics.StarSharePercent[star]%</em></div>
+                    }
                 </div>
-                <div class="md-stat-note">126 reviews · 3 need follow-up</div>
+                <div class="md-stat-note">@Model.Analytics.ReviewCount reviews</div>
             </div>
         </div>
     </div>
@@ -229,10 +229,9 @@
             <section class="md-card h-100 md-live">
                 <div class="md-card-header"><span class="md-card-label">Collected tonight</span></div>
                 <div class="md-card-body">
-                    <div class="md-live-value">RM 450.08</div>
-                    <div class="md-kpi-progress" aria-label="21% of RM 2,100 expected tonight"><i style="width: 21%"></i></div>
-                    <div class="md-stat-note">21% of RM 2,100 expected tonight</div>
-                    <div class="md-live-pending"><i class="bi bi-receipt"></i>1 bill pending · RM 386.00</div>
+                    <div class="md-live-value">RM @Model.Analytics.Revenue.ToString("N2")</div>
+                    <div class="md-kpi-progress" aria-label="Collected revenue in selected period"><i style="width: 100%"></i></div>
+                    <div class="md-stat-note">Paid revenue in selected period</div>
                 </div>
             </section>
         </div>
@@ -252,7 +251,9 @@
 
                 </div>
                 <div class="md-card-body">
-                    <div class="md-chart"><canvas id="salesChart" aria-label="Daily sales chart" role="img"></canvas></div>
+                    <div class="md-chart"><canvas id="salesChart" aria-label="Daily sales chart" role="img"
+                        data-labels='@Html.Raw(JsonSerializer.Serialize(Model.DailySales.Select(x => x.Name)))'
+                        data-values='@Html.Raw(JsonSerializer.Serialize(Model.DailySales.Select(x => x.Value / 1000)))'></canvas></div>
                     <p class="md-chart-note">RM thousands, net of tax. <span class="md-swatch"></span>Highlighted: today (partial).</p>
                 </div>
             </section>
@@ -309,7 +310,7 @@
                 <div class="md-rank-row md-rank-head" aria-hidden="true">
                     <span>#</span><span>Dish</span><span></span><span id="rankValueHead">Sold</span><span>Trend</span>
                 </div>
-                <ol class="md-rank-list" id="rankList"></ol>
+                <ol class="md-rank-list" id="rankList" data-items='@Html.Raw(JsonSerializer.Serialize(Model.TopItems.Select(x => new { name = x.Name, sold = x.Quantity })))'></ol>
             </section>
         </div>
 

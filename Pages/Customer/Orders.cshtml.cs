@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using RestaurantManagementSystem.Data;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Model;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
@@ -18,10 +19,12 @@ namespace RestaurantManagementSystem.Pages.Customer
         private static readonly string[] OpenStatuses = { "Order placed", "Preparing", "Served" };
 
         private readonly ApplicationDbContext _context;
+        private readonly NotificationService _notifications;
 
-        public OrdersModel(ApplicationDbContext context)
+        public OrdersModel(ApplicationDbContext context, NotificationService notifications)
         {
             _context = context;
+            _notifications = notifications;
         }
 
         public List<OrderDisplayItem> OpenOrders { get; set; } = new();
@@ -126,6 +129,13 @@ namespace RestaurantManagementSystem.Pages.Customer
             }
 
             await _context.SaveChangesAsync();
+
+            await _notifications.SendAsync(
+                order.custID,
+                "Order",
+                "Order cancelled",
+                $"{code} has been cancelled.",
+                "/Customer/History");
 
             TempData["OrderMessage"] = refunded
                 ? $"{code} has been cancelled. Your payment will be refunded to your card within 3–5 working days."

@@ -27,11 +27,13 @@ namespace RestaurantManagementSystem.Pages.Staff
 
         private readonly ApplicationDbContext _context;
         private readonly PromotionService _promotions;
+        private readonly NotificationService _notifications;
 
-        public OrdersModel(ApplicationDbContext context, PromotionService promotions)
+        public OrdersModel(ApplicationDbContext context, PromotionService promotions, NotificationService notifications)
         {
             _context = context;
             _promotions = promotions;
+            _notifications = notifications;
         }
 
         // ---------- What the page shows (names match Orders.cshtml) ----------
@@ -363,6 +365,7 @@ namespace RestaurantManagementSystem.Pages.Staff
             order.orderStatus = "Preparing";
             order.staffID = staffId;
             await _context.SaveChangesAsync();
+            await NotifyOrderStatusAsync(order);
 
             return Done($"{code} accepted. The kitchen is preparing it.", code);
         }
@@ -381,6 +384,7 @@ namespace RestaurantManagementSystem.Pages.Staff
 
             order.orderStatus = "Served";
             await _context.SaveChangesAsync();
+            await NotifyOrderStatusAsync(order);
 
             return Done($"{code} marked as served.", code);
         }
@@ -403,8 +407,19 @@ namespace RestaurantManagementSystem.Pages.Staff
             if (refunded) order.Payment!.paymentStatus = "Refunded";
 
             await _context.SaveChangesAsync();
+            await NotifyOrderStatusAsync(order);
 
             return Done(refunded ? $"{code} cancelled. The payment is refunded to the guest." : $"{code} cancelled.", code);
+        }
+
+        private Task NotifyOrderStatusAsync(Order order)
+        {
+            return _notifications.SendAsync(
+                order.custID,
+                "Order",
+                "Order update",
+                $"ORD-{order.orderID:0000} is now {order.orderStatus}.",
+                "/Customer/Orders");
         }
 
         // ---------- helpers ----------
