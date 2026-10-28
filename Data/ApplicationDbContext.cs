@@ -19,7 +19,7 @@ namespace RestaurantManagementSystem.Data
         public DbSet<Feedback> Feedbacks { get; set; }
         public DbSet<Promotion> Promotions { get; set; }
         public DbSet<Announcement> Announcements { get; set; }
-        public DbSet<NotificationLog> NotificationLogs { get; set; }
+        public DbSet<Notification> NotificationLogs { get; set; }
 
         public DbSet<Restaurant> Restaurants { get; set; }
         public DbSet<OperatingHour> OperatingHours { get; set; }
