@@ -77,6 +77,12 @@
             flex: 0 0 auto;
             white-space: nowrap;
         }
+
+    /* Opening hours list in the "can't place an order" pop-up */
+    .md-hours-list { list-style: none; margin: 0; padding: 0; }
+    .md-hours-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .45rem 0; border-bottom: 1px dashed rgba(0, 0, 0, .14); font-size: .95rem; }
+    .md-hours-list li:last-child { border-bottom: 0; }
+    .md-hours-list li.is-today { font-weight: 700; }
 </style>
 <div class="md-menu-toolbar">
     <nav class="md-tabs" aria-label="Menu categories">
@@ -115,7 +121,7 @@
             <button type="button" class="md-chip md-chip-clear d-none" data-clear-tags>Clear</button>
         </div>
     }
-    <p class="md-allergen-note">Allergen information is entered by the restaurant and may not be complete. Cross-contact can happen. Please tell our staff about any severe allergy.</p>
+    <p class="md-allergen-note">Allergen information is entered by the restaurant and may not be complete. Cross-contamination might happen. Please inform our staff about any severe allergies.</p>
 </div>
 
 @* =====================================================
@@ -252,12 +258,64 @@
     </form>
 </section>
 
+@* ---------- Pop-up: ordering is closed (outside opening hours) ----------
+   Opens when the customer clicks the header Cart button or the floating cart icon (script below).
+   Same pop-up style as _NotificationPopup / _ConfirmPopup. Text and hours come from MenuModel. *@
+@if (Model.OrderingClosed)
+{
+    <div class="modal fade md-popup" id="orderingClosedPopup" tabindex="-1" aria-labelledby="orderingClosedTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <span class="md-eyebrow">Ordering unavailable</span>
+                        <h2 class="modal-title md-popup-title" id="orderingClosedTitle">We can't take orders right now</h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="md-popup-message mb-3">@Model.ClosedMessage</p>
+                    <span class="md-label">Opening hours</span>
+                    <ul class="md-hours-list">
+                        @foreach (var row in Model.OpeningHours)
+                        {
+                            <li class="@(row.IsToday ? "is-today" : "")"><span>@row.Day@(row.IsToday ? " (today)" : "")</span><span>@row.Text</span></li>
+                        }
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-md-dark" data-bs-dismiss="modal">Got it</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @section Scripts {
     @* Antiforgery token + the saved cart (dish name -> id, id -> quantity) read by menu.js *@
     @Html.AntiForgeryToken()
     <script>window.MD_CART = @Json.Serialize(new { ids = Model.DishIds, quantities = Model.CartQuantities });</script>
     <script>window.MD_USER = @Json.Serialize(new { allergies = Model.CustomerAllergies });</script>
     <script src="~/js/menu.js" asp-append-version="true"></script>
+    @if (Model.OrderingClosed)
+    {
+        <script>
+            (function () {
+                var popup = document.getElementById('orderingClosedPopup');
+                if (!popup || !window.bootstrap) return;
+
+                // Header Cart button and the floating cart icon: no checkout while we are closed,
+                // so show the pop-up instead (capture phase = runs before the link is followed)
+                document.addEventListener('click', function (event) {
+                    var cart = event.target.closest('.md-cart-btn, #cartFab');
+                    if (!cart) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    window.bootstrap.Modal.getOrCreateInstance(popup).show();
+                }, true);
+            })();
+        </script>
+    }
     <script>
         (function () {
             const tabs = document.querySelector('.md-tabs');

@@ -19,8 +19,8 @@ namespace RestaurantManagementSystem.Pages.Staff
     //  - Service charge and SST are added on the bill (Billing); the order list shows the subtotal after promotions.
     public class OrdersModel : PageModel
     {
-        // A guest is "seated" once staff have seated the reservation (Reservation.cs: Completed = guests seated)
-        private static readonly string[] SeatedStatuses = { "Seated", "Completed" };
+        // A guest is "seated" once staff have seated the reservation (Completed = bill already paid, so not included)
+        private static readonly string[] SeatedStatuses = { "Seated" };
         private const int MaxQuantity = 20;
 
         private readonly ApplicationDbContext _context;
