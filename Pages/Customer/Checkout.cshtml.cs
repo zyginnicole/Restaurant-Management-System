@@ -60,7 +60,8 @@ namespace RestaurantManagementSystem.Pages.Customer
         public List<string> RemovedNotices { get; set; } = new();
         public List<PickupOption> PickupOptions { get; set; } = new();
         public List<DiningTable> AvailableTables { get; set; } = new();
-        public bool HasReservation { get; set; }
+        public bool HasReservation { get; set; }                  // a reservation today (Pending / Confirmed / Seated)
+        public bool CanDineIn { get; set; }                       // only when the reservation is Seated
         public decimal ServiceChargePct { get; set; } = 10m;
         public decimal SstPct { get; set; } = 6m;
         public string? CustomerPhone { get; set; }
@@ -70,19 +71,20 @@ namespace RestaurantManagementSystem.Pages.Customer
             int? custId = CurrentCustomerId();
             if (custId == null) return RedirectToPage("/Customer/Login");
 
-            await LoadPageAsync(custId.Value);
+            // The menu is locked without a reservation today, so there is nothing to check out
+            var access = await ReservationAccess.CheckAsync(_context, custId.Value);
+            if (!access.HasReservation) return RedirectToPage("/Customer/Menu");
 
-            // Check if customer has a valid active reservation for today
-            var reservation = await GetTodayReservationAsync(custId.Value);
-            if (reservation != null)
+            await LoadPageAsync(custId.Value, access);
+
+            // Dine-in only once the guest is Seated (at that table); otherwise takeaway only
+            if (access.CanDineIn)
             {
-                TableId = reservation.tableID;
-                HasReservation = true;
+                TableId = access.Seated!.tableID;
                 OrderType = "DineIn";
             }
             else
             {
-                HasReservation = false;
                 OrderType = "Takeaway";
             }
 
@@ -94,10 +96,21 @@ namespace RestaurantManagementSystem.Pages.Customer
             int? custId = CurrentCustomerId();
             if (custId == null) return RedirectToPage("/Customer/Login");
 
+            // Only guests with a reservation today can order; dine-in also needs the reservation to be Seated
+            var access = await ReservationAccess.CheckAsync(_context, custId.Value);
+            if (!access.HasReservation)
+            {
+                return await FailAsync(custId.Value, "You need a reservation for today before you can place an order.");
+            }
+
             bool dineIn = OrderType == "DineIn";
             if (!dineIn && OrderType != "Takeaway")
             {
                 return await FailAsync(custId.Value, "Please choose takeaway or dine-in.");
+            }
+            if (dineIn && !access.CanDineIn)
+            {
+                return await FailAsync(custId.Value, "Dine-in is available once our staff have seated you at your table. Please choose takeaway for now.");
             }
 
             // 1. Sync session cart with posted items
@@ -156,27 +169,17 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             if (dineIn)
             {
-                // Verify reservation for today
-                var reservation = await GetTodayReservationAsync(custId.Value);
-                if (reservation == null)
-                {
-                    return await FailAsync(custId.Value, "Dine-in is only available for guests with a reservation today.");
-                }
-
-                if (TableId == null)
-                {
-                    return await FailAsync(custId.Value, "Please select your table number.");
-                }
-
+                // the table is the one the guest is seated at (it cannot be changed)
+                var seated = access.Seated!;
                 table = await _context.DiningTables.AsNoTracking()
-                    .FirstOrDefaultAsync(t => t.tableID == TableId && t.tableStatus != "Maintenance");
+                    .FirstOrDefaultAsync(t => t.tableID == seated.tableID && t.tableStatus != "Maintenance");
 
                 if (table == null)
                 {
-                    return await FailAsync(custId.Value, "The selected table is currently unavailable.");
+                    return await FailAsync(custId.Value, "Your table is currently unavailable. Please ask our staff for help.");
                 }
 
-                ownReservationId = reservation.reservationID;
+                ownReservationId = seated.reservationID;
             }
             else
             {
@@ -264,23 +267,11 @@ namespace RestaurantManagementSystem.Pages.Customer
                 : null;
         }
 
-        private async Task<Reservation?> GetTodayReservationAsync(int custId)
+        private async Task LoadPageAsync(int custId, OrderingAccess? access = null)
         {
-            var today = DateTime.Today;
-            var validStatuses = new[] { "Pending", "Confirmed", "Completed" };
-
-            return await _context.Reservations.AsNoTracking()
-                .Where(r => r.custID == custId
-                         && r.reservationDateTime >= today && r.reservationDateTime < today.AddDays(1)
-                         && validStatuses.Contains(r.reservationStatus))
-                .OrderBy(r => r.reservationDateTime)
-                .FirstOrDefaultAsync();
-        }
-
-        private async Task LoadPageAsync(int custId)
-        {
-            var reservation = await GetTodayReservationAsync(custId);
-            HasReservation = reservation != null;
+            access ??= await ReservationAccess.CheckAsync(_context, custId);
+            HasReservation = access.HasReservation;
+            CanDineIn = access.CanDineIn;
 
             await LoadCartAsync();
 
@@ -288,9 +279,11 @@ namespace RestaurantManagementSystem.Pages.Customer
             ServiceChargePct = settings?.serviceChargePct ?? 10m;
             SstPct = settings?.sstPct ?? 6m;
 
+            // dine-in is only for the table the guest is seated at (none when not seated)
+            int seatedTableId = access.Seated?.tableID ?? 0;
             AvailableTables = await _context.DiningTables.AsNoTracking()
                 .Include(t => t.DiningArea)
-                .Where(t => t.tableStatus != "Maintenance")
+                .Where(t => t.tableID == seatedTableId && t.tableStatus != "Maintenance")
                 .OrderBy(t => t.areaID).ThenBy(t => t.tableNumber)
                 .ToListAsync();
 

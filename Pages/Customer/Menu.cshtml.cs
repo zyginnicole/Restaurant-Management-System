@@ -34,6 +34,19 @@ namespace RestaurantManagementSystem.Pages.Customer
         // promoID -> why it can't be used right now (wrong day / time, birthday month...). Promotions not listed here are usable now.
         public Dictionary<int, string> PromoUnavailable { get; set; } = new();
 
+        // ---------- Opening hours: while the restaurant is closed the menu is browse-only ----------
+        // The Cart buttons then open a pop-up with this message and the weekly hours instead of Checkout.
+        public bool OrderingClosed { get; set; }
+        public string ClosedMessage { get; set; } = string.Empty;
+        public List<HoursRow> OpeningHours { get; set; } = new();       // Monday ... Sunday
+
+        public class HoursRow
+        {
+            public string Day { get; set; } = string.Empty;
+            public string Text { get; set; } = string.Empty;            // "12:00 – 22:30" or "Closed"
+            public bool IsToday { get; set; }
+        }
+
         // ---------- Cart (kept in the session, see Helpers/Cart.cs) ----------
         public int CartCount { get; set; }                                  // total quantity, for the header button
         public decimal CartSubtotal { get; set; }                           // from database prices
@@ -107,6 +120,8 @@ namespace RestaurantManagementSystem.Pages.Customer
                 DishIds.TryAdd(dish.menuName, dish.menuID);
             }
 
+            await LoadOpeningHoursAsync();
+
             return Page();
         }
 
@@ -132,6 +147,67 @@ namespace RestaurantManagementSystem.Pages.Customer
             int saved = HttpContext.Session.GetCart().FirstOrDefault(i => i.MenuId == menuId)?.Quantity ?? 0;
 
             return new JsonResult(new { ok = true, quantity = saved, count = summary.Count, total = summary.Subtotal });
+        }
+
+        // Reads the weekly opening hours (Admin > Restaurant > Operating Hours) and works out whether
+        // the restaurant is open right now. No hours saved yet = nothing is locked.
+        private async Task LoadOpeningHoursAsync()
+        {
+            var restaurant = await _context.Restaurants.AsNoTracking().OrderBy(r => r.restaurantID).FirstOrDefaultAsync();
+            if (restaurant == null) return;
+
+            var hours = await _context.OperatingHours.AsNoTracking()
+                .Where(h => h.restaurantID == restaurant.restaurantID)
+                .ToListAsync();
+            if (hours.Count == 0) return;
+
+            DayOfWeek[] week =
+            {
+                DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday,
+                DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+            };
+
+            var now = DateTime.Now;
+            string Time(TimeSpan t) => t.ToString(@"hh\:mm");
+
+            OpeningHours = week.Select(d =>
+            {
+                var h = hours.FirstOrDefault(x => x.dayOfWeek == d);
+                return new HoursRow
+                {
+                    Day = d.ToString(),
+                    Text = h == null || h.isClosed ? "Closed" : Time(h.openTime) + " – " + Time(h.closeTime),
+                    IsToday = d == now.DayOfWeek
+                };
+            }).ToList();
+
+            var today = hours.FirstOrDefault(x => x.dayOfWeek == now.DayOfWeek);
+            bool open = today != null && !today.isClosed
+                        && now.TimeOfDay >= today.openTime && now.TimeOfDay <= today.closeTime;
+            if (open) return;
+
+            OrderingClosed = true;
+
+            // Before opening time today
+            if (today != null && !today.isClosed && now.TimeOfDay < today.openTime)
+            {
+                ClosedMessage = $"We open at {Time(today.openTime)} today. You can browse the menu now, and place your order once we are open.";
+                return;
+            }
+
+            // Closed for the rest of today: when do we open next?
+            for (int i = 1; i <= 7; i++)
+            {
+                var day = now.AddDays(i).DayOfWeek;
+                var next = hours.FirstOrDefault(x => x.dayOfWeek == day);
+                if (next == null || next.isClosed) continue;
+
+                string when = i == 1 ? "tomorrow" : "on " + day;
+                ClosedMessage = $"We are closed right now and open again {when} at {Time(next.openTime)}. You can still browse the menu, but orders cannot be placed until then.";
+                return;
+            }
+
+            ClosedMessage = "We are closed right now, so orders cannot be placed. You can still browse the menu.";
         }
 
         // The signed-in customer's ID, or null if not signed in as a customer

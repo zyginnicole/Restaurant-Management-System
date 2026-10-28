@@ -82,17 +82,16 @@
                     <span class="md-card-label">Order type</span>
                 </div>
                 <div class="md-card-body">
-                    <div class="md-choice mb-2" role="radiogroup" aria-label="Order type">
+                    <div class="md-choice mb-3" role="radiogroup" aria-label="Order type">
                         <input type="radio" class="btn-check" name="orderType" id="typeTakeaway" value="Takeaway" checked="@(!dineInSelected)" />
                         <label for="typeTakeaway">Takeaway</label>
-
-                        <input type="radio" class="btn-check" name="orderType" id="typeDineIn" value="DineIn" checked="@dineInSelected" disabled="@(!Model.HasReservation)" />
-                        <label for="typeDineIn" style="@(!Model.HasReservation ? "cursor: not-allowed; opacity: 0.5;" : "")">Dine-in at my table</label>
+                        <input type="radio" class="btn-check" name="orderType" id="typeDineIn" value="DineIn" checked="@dineInSelected" disabled="@(!Model.CanDineIn)" />
+                        <label for="typeDineIn" style="@(!Model.CanDineIn ? "cursor: not-allowed; opacity: 0.5;" : "")">Dine-in at my table</label>
                     </div>
 
-                    @if (!Model.HasReservation)
+                    @if (!Model.CanDineIn)
                     {
-                        <p class="md-hint mb-3">Dine-in is only available for guests with a reservation today.</p>
+                        <p class="md-hint mb-3">Dine-in opens once our staff have seated you at your table. You can order takeaway meanwhile.</p>
                     }
 
                     @* Takeaway panel *@
