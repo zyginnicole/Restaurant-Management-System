@@ -22,6 +22,10 @@ public class ReportsModel : PageModel
     public KpiSummary StatisticKpis { get; private set; } = new();
     public List<NameValue> StatisticRevenue { get; private set; } = new();
     public List<NameValue> StatisticNewCustomers { get; private set; } = new();
+    public List<NameValue> StatisticPeakHours { get; private set; } = new();
+    public List<TopItem> StatisticTopItems { get; private set; } = new();
+    public List<NameValue> StatisticUtilization { get; private set; } = new();
+    public List<NameValue> StatisticStatusBreakdown { get; private set; } = new();
 
     // Constructor initializing injected reporting and export services.
     public ReportsModel(
@@ -64,6 +68,10 @@ public class ReportsModel : PageModel
             : Granularity.Month;
         StatisticRevenue = await _reports.GetRevenueSeriesAsync(SelectedRange, granularity);
         StatisticNewCustomers = await _reports.GetNewCustomerSeriesAsync(SelectedRange, granularity);
+        StatisticPeakHours = await _reports.GetPeakHoursAsync(SelectedRange);
+        StatisticTopItems = await _reports.GetTopItemsAsync(SelectedRange, 5);
+        StatisticUtilization = await _reports.GetTableUtilizationAsync(SelectedRange);
+        StatisticStatusBreakdown = await _reports.GetStatusBreakdownAsync(SelectedRange);
     }
 
     private static DateRange StatisticRange(string? period, DateTime? from, DateTime? to)

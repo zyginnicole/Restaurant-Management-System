@@ -60,6 +60,7 @@ namespace RestaurantManagementSystem.Pages.Customer
             {
                 Category = "Announcement",
                 DataCategory = "promotion",
+                Pinned = true,
                 Title = a.announcementTitle,
                 Message = a.announcementMessage,
                 TimeText = FormatTime(a.announcementDate),
@@ -67,7 +68,8 @@ namespace RestaurantManagementSystem.Pages.Customer
             });
 
             Items = notifications.Concat(announcements)
-                .OrderByDescending(x => x.TimeSort)
+                .OrderByDescending(x => x.Pinned)
+                .ThenByDescending(x => x.TimeSort)
                 .ToList();
 
             return Page();
@@ -121,6 +123,7 @@ namespace RestaurantManagementSystem.Pages.Customer
             public string? LinkUrl { get; set; }
             public string LinkText { get; set; } = "View";
             public DateTimeOffset TimeSort { get; set; }
+            public bool Pinned { get; set; }
         }
     }
 }

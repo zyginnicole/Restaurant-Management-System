@@ -397,7 +397,8 @@ public class ReportService
                 decimal net = 0, service = 0, sst = 0, total = 0;
                 foreach (var o in g)
                 {
-                    decimal subtotal = o.OrderItems.Sum(i => i.quantity * i.unitPrice);
+                    // Net sales are after line discounts; service charge is calculated on that discounted subtotal.
+                    decimal subtotal = o.OrderItems.Sum(i => i.quantity * i.unitPrice - i.discountAmount);
                     // Dine-in = the order has a table (the rule used by the Orders and Payment pages)
                     decimal serviceCharge = o.tableID != null
                         ? Math.Round(subtotal * servicePct / 100m, 2, MidpointRounding.AwayFromZero)

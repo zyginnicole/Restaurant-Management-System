@@ -9,10 +9,12 @@ namespace RestaurantManagementSystem.Services;
 public class NotificationService
 {
     private readonly ApplicationDbContext _db;
+    private readonly ILogger<NotificationService> _logger;
 
-    public NotificationService(ApplicationDbContext db)
+    public NotificationService(ApplicationDbContext db, ILogger<NotificationService> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
     /// Sends one system notification to one customer.
@@ -23,27 +25,34 @@ public class NotificationService
         string message,
         string? linkUrl = null)
     {
-        var customerExists = await _db.Customers
-            .AnyAsync(c => c.custID == customerId);
-
-        if (!customerExists)
+        try
         {
-            return;
+            var customerExists = await _db.Customers
+                .AnyAsync(c => c.custID == customerId);
+
+            if (!customerExists)
+                return;
+
+            var notification = new Notification
+            {
+                custID = customerId,
+                notificationCategory = Limit(category, 30),
+                notificationTitle = Limit(title, 100),
+                notificationMessage = Limit(message, 1000),
+                linkUrl = LimitNullable(linkUrl, 200),
+                isRead = false,
+                notificationCreateAt = DateTimeOffset.Now
+            };
+
+            _db.NotificationLogs.Add(notification);
+            await _db.SaveChangesAsync();
         }
-
-        var notification = new Notification
+        catch (Exception ex)
         {
-            custID = customerId,
-            notificationCategory = Limit(category, 30),
-            notificationTitle = Limit(title, 100),
-            notificationMessage = Limit(message, 1000),
-            linkUrl = LimitNullable(linkUrl, 200),
-            isRead = false,
-            notificationCreateAt = DateTimeOffset.Now
-        };
-
-        _db.NotificationLogs.Add(notification);
-        await _db.SaveChangesAsync();
+            // A notification is supplementary; an order or payment must still succeed if notification storage is unavailable.
+            _db.ChangeTracker.Clear();
+            _logger.LogError(ex, "System notification could not be saved for customer {CustomerId}.", customerId);
+        }
     }
 
     /// Sends the same system notification to every customer.
@@ -54,23 +63,31 @@ public class NotificationService
         string message,
         string? linkUrl = null)
     {
-        var customerIds = await _db.Customers
-            .Select(c => c.custID)
-            .ToListAsync();
-
-        var notifications = customerIds.Select(customerId => new Notification
+        try
         {
-            custID = customerId,
-            notificationCategory = Limit(category, 30),
-            notificationTitle = Limit(title, 100),
-            notificationMessage = Limit(message, 1000),
-            linkUrl = LimitNullable(linkUrl, 200),
-            isRead = false,
-            notificationCreateAt = DateTimeOffset.Now
-        });
+            var customerIds = await _db.Customers
+                .Select(c => c.custID)
+                .ToListAsync();
 
-        _db.NotificationLogs.AddRange(notifications);
-        await _db.SaveChangesAsync();
+            var notifications = customerIds.Select(customerId => new Notification
+            {
+                custID = customerId,
+                notificationCategory = Limit(category, 30),
+                notificationTitle = Limit(title, 100),
+                notificationMessage = Limit(message, 1000),
+                linkUrl = LimitNullable(linkUrl, 200),
+                isRead = false,
+                notificationCreateAt = DateTimeOffset.Now
+            });
+
+            _db.NotificationLogs.AddRange(notifications);
+            await _db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _db.ChangeTracker.Clear();
+            _logger.LogError(ex, "Announcement notifications could not be saved.");
+        }
     }
 
     /// Returns the number of unread notifications for one customer.
