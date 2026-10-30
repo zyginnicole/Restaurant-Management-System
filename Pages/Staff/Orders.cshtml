@@ -18,8 +18,8 @@
     decimal Subtotal(IEnumerable<RestaurantManagementSystem.Pages.Staff.OrdersModel.ItemRow> items) => items.Sum(i => i.Qty * i.Price - i.Discount);   // after promotions
     string Rm(decimal value) => "RM " + value.ToString("#,##0.00");
 
-    // New order: Seated reservations (only these can get a dine-in order) and the Menu
-    var seated = Model.Seated;
+    // New order: tables (seated now + vacant for walk-ins) and the Menu
+    var tables = Model.Tables;
     var menu = Model.MenuRows;
     string[] steps = { "Order placed", "Preparing", "Served", "Completed" };
     // List order: the statuses that need staff come first
@@ -82,7 +82,7 @@
 @* =====================================================
    New order view (shown by the New order button instead of the orders view):
    left = order type and table / takeaway details, right = Order items with Add items below.
-   Posts to OnPostCreate: orderType, reservationId / guestName + guestPhone + pickupDateTime,
+   Posts to OnPostCreate: orderType, tableId (+ walkInName / walkInPhone for a walk-in) / guestName + guestPhone + pickupDateTime,
    items[i].menuId, items[i].quantity, items[i].itemRemark (rows are added by the script).
    ===================================================== *@
 <form method="post" asp-page-handler="Create" class="d-none" id="newOrder">
@@ -101,14 +101,30 @@
                         <label for="newTakeaway">Takeaway</label>
                     </div>
                     <div data-type="DineIn">
-                        <label class="md-label" for="newReservation">Seated table</label>
-                        <select class="form-select md-input" id="newReservation" name="reservationId" data-md-select>
-                            @foreach (var s in seated)
+                        <label class="md-label" for="newTable">Table</label>
+                        <select class="form-select md-input" id="newTable" name="tableId" data-md-select>
+                            @if (tables.Count == 0)
                             {
-                                <option value="@s.Res">@s.Table · @s.Name · @s.Res@(s.WalkIn ? " (walk-in)" : "")</option>
+                                <option value="" disabled selected>No table available</option>
+                            }
+                            @* Seated tables first (guests there now), then vacant tables for walk-ins.
+                               data-walkin = 1 → a guest name is needed (vacant table, or seated with nobody on record) *@
+                            @foreach (var t in tables)
+                            {
+                                <option value="@t.Id" data-walkin="@(t.Occupied && t.Guest != null ? "0" : "1")">@(t.Occupied ? "Seated" : "Vacant") · @t.Table · @t.Area · @(t.Occupied ? (t.Guest ?? "guests seated") + (t.Res != null ? " · " + t.Res : "") : "seats " + t.Capacity + " · walk-in")</option>
                             }
                         </select>
-                        <p class="md-hint mt-2 mb-0">Only tables with a seated reservation are listed, so every dine-in order links to a reservation.</p>
+                        <div class="row g-3 mt-0 d-none" id="walkInFields">
+                            <div class="col-12">
+                                <label class="md-label" for="walkInName">Guest name</label>
+                                <input class="form-control md-input" id="walkInName" name="walkInName" maxlength="100" />
+                            </div>
+                            <div class="col-12">
+                                <label class="md-label" for="walkInPhone">Phone (optional)</label>
+                                <input class="form-control md-input" id="walkInPhone" name="walkInPhone" type="tel" maxlength="20" placeholder="+60 1X-XXX XXXX" />
+                            </div>
+                        </div>
+                        <p class="md-hint mt-2 mb-0">Seated tables are listed first (guests with a reservation can also order from their own account). A vacant table is for a walk-in: enter the guest's name, and the table becomes Occupied when the order is sent.</p>
                     </div>
                     <div class="row g-3 d-none" data-type="Takeaway">
                         <div class="col-12">
@@ -376,14 +392,28 @@
                 else confirmLeave(function () { setNewOrder(false); });   // Back to orders
             });
 
+            // Walk-in guest name: shown when the chosen table is vacant (or has nobody on record)
+            var tableSelect = document.getElementById('newTable');
+            function syncWalkIn() {
+                var option = tableSelect && tableSelect.options[tableSelect.selectedIndex];
+                var dineIn = newOrder.querySelector('input[name="orderType"]:checked').value === 'DineIn';
+                var need = dineIn && !!option && option.dataset.walkin === '1';
+                document.getElementById('walkInFields').classList.toggle('d-none', !need);
+                document.getElementById('walkInName').required = need;
+            }
+            if (tableSelect) tableSelect.addEventListener('change', syncWalkIn);
+
             // Dine-in / Takeaway fields
             newOrder.querySelectorAll('input[name="orderType"]').forEach(function (r) {
                 r.addEventListener('change', function () {
                     newOrder.querySelectorAll('[data-type]').forEach(function (el) { el.classList.toggle('d-none', el.dataset.type !== r.value); });
                     document.getElementById('newGuestName').required = r.value === 'Takeaway';
                     document.getElementById('newGuestPhone').required = r.value === 'Takeaway';
+                    syncWalkIn();
                 });
             });
+
+            syncWalkIn();
 
             // Draft items: Add from the menu, − / + quantity, remark, Remove. Hidden fields items[i].* are rebuilt each time.
             var draft = [];   // { id, name, price, qty, remark }
