@@ -15,12 +15,14 @@ namespace RestaurantManagementSystem.Pages.Staff
     //    ?view=ORD-0082 shows that order on the right; ?status=placed shows the first "Order placed" order.
     //  - Order.orderStatus: Order placed → Preparing → Served → Completed (Cancelled before Served).
     //    Customers' orders arrive as "Order placed"; staff orders are sent straight to the kitchen ("Preparing").
-    //  - New order: the "Seated table" dropdown lists today's seated reservations, so every dine-in order links to a reservation.
+    //  - New order (dine-in): the Table dropdown lists tables with guests seated now (Occupied – booked or walk-in; guests
+    //    with a reservation can also order from their own account) and then the vacant tables that may take a walk-in
+    //    (Available, area open, no booking within the dining time). Ordering for a vacant table seats the walk-in:
+    //    a guest record is created from the name entered and the table becomes Occupied. The order links to the table.
     //  - Service charge and SST are added on the bill (Billing); the order list shows the subtotal after promotions.
     public class OrdersModel : PageModel
     {
-        // A guest is "seated" once staff have seated the reservation (Reservation.cs: Completed = guests seated)
-        private static readonly string[] SeatedStatuses = { "Seated", "Completed" };
+        private static readonly string[] OpenStatuses = { "Order placed", "Preparing", "Served" };
         private const int MaxQuantity = 20;
 
         private readonly ApplicationDbContext _context;
@@ -35,7 +37,7 @@ namespace RestaurantManagementSystem.Pages.Staff
         // ---------- What the page shows (names match Orders.cshtml) ----------
         public string TodayLabel { get; set; } = string.Empty;
         public List<OrderRow> Orders { get; set; } = new();
-        public List<SeatedRow> Seated { get; set; } = new();           // New order > Seated table
+        public List<TableRow> Tables { get; set; } = new();           // New order > Table: seated tables first, then vacant ones (walk-ins)
         public List<MenuRow> MenuRows { get; set; } = new();           // New order > Add items
         public List<string> Categories { get; set; } = new();          // menu category tabs
         public List<PickupOption> PickupOptions { get; set; } = new(); // New order > Takeaway pick-up
@@ -65,12 +67,16 @@ namespace RestaurantManagementSystem.Pages.Staff
             public decimal Discount { get; set; }                       // amount taken off this line
         }
 
-        public class SeatedRow
+        // One table in New order > Table
+        public class TableRow
         {
-            public string Res { get; set; } = string.Empty;             // "R-0047" (posted as reservationId)
-            public string Table { get; set; } = string.Empty;
-            public string Name { get; set; } = string.Empty;
-            public bool WalkIn { get; set; }
+            public int Id { get; set; }                                 // posted as tableId
+            public string Table { get; set; } = string.Empty;           // "I-03"
+            public string Area { get; set; } = string.Empty;            // "Indoor"
+            public int Capacity { get; set; }
+            public bool Occupied { get; set; }                          // true = guests seated now, false = vacant (walk-in)
+            public string? Guest { get; set; }                          // who is seated (null = nobody on record → ask for a name)
+            public string? Res { get; set; }                            // "R-0041" when seated from a reservation
         }
 
         public class MenuRow
@@ -139,14 +145,8 @@ namespace RestaurantManagementSystem.Pages.Staff
                 }).ToList()
             }).ToList();
 
-            // ---- New order: today's seated reservations ----
-            Seated = (await LoadSeatedAsync()).Select(r => new SeatedRow
-            {
-                Res = "R-" + r.reservationID.ToString("0000"),
-                Table = r.DiningTable?.tableNumber ?? "—",
-                Name = r.Customer?.custName ?? "Guest",
-                WalkIn = false
-            }).ToList();
+            // ---- New order: tables (seated now + vacant for walk-ins) ----
+            await LoadTablesAsync();
 
             // ---- New order: menu (only categories shown to customers) ----
             var menus = await _context.Menus.AsNoTracking()
@@ -177,12 +177,14 @@ namespace RestaurantManagementSystem.Pages.Staff
         }
 
         // ---------- New order ----------
-        // Fields: orderType "DineIn"/"Takeaway", reservationId (dine-in), guestName, guestPhone, pickupDateTime (takeaway),
+        // Fields: orderType "DineIn"/"Takeaway", tableId (dine-in) + walkInName / walkInPhone (walk-in), guestName, guestPhone, pickupDateTime (takeaway),
         // items[i].menuId, items[i].quantity, items[i].itemRemark.
         // Creates the Order (orderStatus "Preparing", staffID = signed-in staff) + OrderItems (unitPrice = current Menu price).
         public async Task<IActionResult> OnPostCreateAsync(
             string orderType,
-            string? reservationId,
+            int? tableId,
+            string? walkInName,
+            string? walkInPhone,
             string? guestName,
             string? guestPhone,
             DateTime? pickupDateTime,
@@ -214,21 +216,48 @@ namespace RestaurantManagementSystem.Pages.Staff
             //2. who the order is for
             int custId = 0;
             CustomerModel? guest = null;
-            int? tableId = null;
+            DiningTable? table = null;
             int? reservationKey = null;
             DateTime? pickup = null;
             string? contactPhone = null;
 
             if (dineIn)
             {
-                //a seated reservation of today → the customer and the table come from it
-                int resId = ParseId(reservationId);
-                var seated = (await LoadSeatedAsync()).FirstOrDefault(r => r.reservationID == resId);
-                if (seated == null) return Done("Choose a table with a seated reservation.", null);
+                //the table: seated (Occupied) → the order joins the guests' visit; vacant → seat a walk-in now
+                table = await _context.DiningTables.Include(t => t.DiningArea).FirstOrDefaultAsync(t => t.tableID == tableId);
+                if (table == null) return Done("Choose a table for the dine-in order.", null);
+                if (table.tableStatus == "Maintenance") return Done($"{table.tableNumber} is under maintenance.", null);
 
-                custId = seated.custID;
-                tableId = seated.tableID;
-                reservationKey = seated.reservationID;
+                string name = (walkInName ?? string.Empty).Trim();
+                string phone = NormalisePhone(walkInPhone);
+                if (phone.Length > 0 && (phone.Length < 10 || phone.Length > 11))
+                    return Done("Enter a valid phone number (10 to 11 digits) or leave it empty.", null);
+
+                if (table.tableStatus == "Occupied")
+                {
+                    //guests already seated: their account (reservation or earlier order) is used, so the bill stays together
+                    var (seatedCust, seatedRes) = await FindSeatedGuestAsync(table.tableID);
+                    if (seatedCust != null)
+                    {
+                        custId = seatedCust.Value;
+                        reservationKey = seatedRes;
+                    }
+                    else
+                    {
+                        //seated, but nobody on record (e.g. the table was marked Occupied by hand): treat as a walk-in guest
+                        if (name.Length == 0) return Done($"Enter the guest name for {table.tableNumber}.", null);
+                        guest = NewWalkInGuest(name, phone);
+                    }
+                }
+                else
+                {
+                    //vacant table: only if it may be given to a walk-in right now
+                    if (!await IsVacantForWalkInAsync(table)) return Done($"{table.tableNumber} is not available for walk-ins right now.", null);
+                    if (name.Length == 0) return Done("Enter the guest name for the walk-in.", null);
+
+                    guest = NewWalkInGuest(name, phone);
+                    table.tableStatus = "Occupied";             // taking the order seats the walk-in (saved together with the order)
+                }
             }
             else
             {
@@ -283,7 +312,7 @@ namespace RestaurantManagementSystem.Pages.Staff
             {
                 custID = custId,
                 reservationID = reservationKey,
-                tableID = tableId,
+                tableID = table?.tableID,
                 staffID = staffId,
                 pickupDateTime = pickup,
                 contactPhone = contactPhone,
@@ -411,19 +440,118 @@ namespace RestaurantManagementSystem.Pages.Staff
                 .FirstOrDefaultAsync(o => o.orderID == id);
         }
 
-        // Today's seated reservations (the only ones that can get a dine-in order)
-        private async Task<List<Reservation>> LoadSeatedAsync()
+        // ---------- tables for New order ----------
+
+        // Tables with a booking (Pending / Confirmed) that overlaps the next dining time: not free for a walk-in
+        private async Task<HashSet<int>> TablesWithBookingAsync(List<int> tableIds)
+        {
+            var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
+            int diningMinutes = settings?.diningMinutes ?? 120;
+            var now = DateTime.Now;
+            var from = now.AddMinutes(-diningMinutes);
+            var until = now.AddMinutes(diningMinutes);
+
+            var ids = await _context.Reservations.AsNoTracking()
+                .Where(r => tableIds.Contains(r.tableID)
+                         && (r.reservationStatus == "Pending" || r.reservationStatus == "Confirmed")
+                         && r.reservationDateTime > from && r.reservationDateTime < until)
+                .Select(r => r.tableID)
+                .ToListAsync();
+            return ids.ToHashSet();
+        }
+
+        // Seated tables first (guests there now), then vacant tables that may take a walk-in
+        private async Task LoadTablesAsync()
+        {
+            var tables = await _context.DiningTables.AsNoTracking()
+                .Include(t => t.DiningArea)
+                .OrderBy(t => t.areaID).ThenBy(t => t.tableNumber)
+                .ToListAsync();
+
+            var today = DateTime.Today;
+            var openStatuses = OpenStatuses;
+            var occupiedIds = tables.Where(t => t.tableStatus == "Occupied").Select(t => t.tableID).ToList();
+
+            // who is seated: a Seated reservation of today, otherwise the customer of the table's open order
+            var seatedRes = await _context.Reservations.AsNoTracking()
+                .Include(r => r.Customer)
+                .Where(r => occupiedIds.Contains(r.tableID) && r.reservationStatus == "Seated"
+                         && r.reservationDateTime >= today && r.reservationDateTime < today.AddDays(1))
+                .OrderByDescending(r => r.reservationDateTime)
+                .ToListAsync();
+            var openOrders = await _context.Orders.AsNoTracking()
+                .Include(o => o.Customer)
+                .Where(o => o.tableID != null && occupiedIds.Contains(o.tableID.Value) && openStatuses.Contains(o.orderStatus))
+                .OrderByDescending(o => o.orderDateTime)
+                .ToListAsync();
+
+            var vacantIds = tables
+                .Where(t => t.tableStatus == "Available" && t.DiningArea?.areaActive != false)
+                .Select(t => t.tableID).ToList();
+            var booked = await TablesWithBookingAsync(vacantIds);
+
+            TableRow Row(DiningTable t, bool occupied)
+            {
+                var res = seatedRes.FirstOrDefault(r => r.tableID == t.tableID);
+                var order = openOrders.FirstOrDefault(o => o.tableID == t.tableID);
+                return new TableRow
+                {
+                    Id = t.tableID,
+                    Table = t.tableNumber,
+                    Area = t.DiningArea?.areaName ?? "",
+                    Capacity = t.tableCapacity,
+                    Occupied = occupied,
+                    Guest = occupied ? (res?.Customer?.custName ?? order?.Customer?.custName) : null,
+                    Res = occupied && res != null ? "R-" + res.reservationID.ToString("0000") : null
+                };
+            }
+
+            Tables = tables.Where(t => t.tableStatus == "Occupied").Select(t => Row(t, true))
+                .Concat(tables.Where(t => vacantIds.Contains(t.tableID) && !booked.Contains(t.tableID)).Select(t => Row(t, false)))
+                .ToList();
+        }
+
+        // The customer seated at an Occupied table: today's Seated reservation, else the customer of its latest open order
+        private async Task<(int? CustId, int? ResId)> FindSeatedGuestAsync(int tableId)
         {
             var today = DateTime.Today;
-            var statuses = SeatedStatuses;
+            var openStatuses = OpenStatuses;
 
-            return await _context.Reservations.AsNoTracking()
-                .Include(r => r.Customer)
-                .Include(r => r.DiningTable)
-                .Where(r => r.reservationDateTime >= today && r.reservationDateTime < today.AddDays(1)
-                         && statuses.Contains(r.reservationStatus))
-                .OrderBy(r => r.reservationDateTime)
-                .ToListAsync();
+            var res = await _context.Reservations.AsNoTracking()
+                .Where(r => r.tableID == tableId && r.reservationStatus == "Seated"
+                         && r.reservationDateTime >= today && r.reservationDateTime < today.AddDays(1))
+                .OrderByDescending(r => r.reservationDateTime)
+                .FirstOrDefaultAsync();
+            if (res != null) return (res.custID, res.reservationID);
+
+            var order = await _context.Orders.AsNoTracking()
+                .Where(o => o.tableID == tableId && openStatuses.Contains(o.orderStatus))
+                .OrderByDescending(o => o.orderDateTime)
+                .FirstOrDefaultAsync();
+            return order != null ? (order.custID, order.reservationID) : (null, null);
+        }
+
+        // Checked again on the server: the table is free (Available, area open) and has no booking in the next dining time
+        private async Task<bool> IsVacantForWalkInAsync(DiningTable table)
+        {
+            if (table.tableStatus != "Available" || table.DiningArea?.areaActive == false) return false;
+            var booked = await TablesWithBookingAsync(new List<int> { table.tableID });
+            return !booked.Contains(table.tableID);
+        }
+
+        // custID is required and a walk-in has no account: a guest record is created from the name (and phone) entered.
+        // Phone is optional for dine-in, so a placeholder keeps the required column filled.
+        private CustomerModel NewWalkInGuest(string name, string phone)
+        {
+            var guest = new CustomerModel
+            {
+                custName = name.Length > 100 ? name.Substring(0, 100) : name,
+                custEmail = $"walkin-{Guid.NewGuid():N}@guest.local",
+                custPassword = "!" + Guid.NewGuid().ToString("N"),
+                custPhone = phone.Length > 0 ? phone : "0000000000"
+            };
+            _context.Customers.Add(guest);
+            return guest;
         }
 
         private IActionResult Done(string message, string? orderCode)

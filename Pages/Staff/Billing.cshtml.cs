@@ -21,11 +21,15 @@ namespace RestaurantManagementSystem.Pages.Staff
     //      Paid             = Payment.paymentStatus "Paid" (takeaway: usually paid online on the Payment page)
     //  - Totals: subtotal after promotions, + service charge (dine-in only) + SST on (that + service charge).
     //    Rates come from Admin > Settings, rounded per order exactly like Checkout / Payment, so the numbers match.
-    //  - Promotions: the dropdown lists promotions the bill's customer may use right now (PromotionService: day, time,
-    //    birthday month, members only, order type, minimum spend, usage limits) that apply to dishes on the bill that
-    //    have no promotion yet. A birthday promotion is never combined with another one on the same bill.
+    //  - Promotions already applied at Checkout / staff New order are saved on the OrderItem lines
+    //    (promoCode, promoID, discountAmount); Billing keeps them and shows them as "Promo ... (included above)".
+    //  - Promotions on the bill: the dropdown lists promotions the bill's customer may use right now (PromotionService:
+    //    day, time, birthday month, members only, order type, minimum spend on the WHOLE bill, usage limits) that apply to
+    //    dishes on the bill that have no promotion yet. A birthday promotion is never combined with another one on the same bill.
+    //    Like Checkout, the best eligible auto-apply promotion is pre-selected (e.g. two orders that each were under the
+    //    minimum spend but together reach it). Staff can still change it to None or another promotion.
     //    The chosen one is saved on those OrderItem lines (promoCode, promoID, discountAmount).
-    //    Usage limits are checked again right before the payment is recorded.
+    //    Every rule and the usage limits are checked again on the server right before the payment is recorded.
     //  - Paying: one Payment per order (same time and method), orders → Completed, the table → Available, all in
     //    one SaveChanges. The reservation process already ended when the guests were seated (the table became
     //    Occupied on DiningTable), so the reservation is only touched if it is still marked "Seated".
@@ -86,6 +90,8 @@ namespace RestaurantManagementSystem.Pages.Staff
             public string? Phone { get; set; }                           // takeaway contact phone (Order.contactPhone)
             public bool CanCollect { get; set; }                         // paid takeaway that is ready: "Mark collected"
             public decimal Subtotal { get; set; }                        // after promotions already on the lines
+            public decimal AppliedDiscount { get; set; }                 // promotions already saved on the lines (Checkout / staff order)
+            public string AppliedCodes { get; set; } = string.Empty;     // "WEEKEND15, DESSERT1"
             public decimal Service { get; set; }
             public decimal Sst { get; set; }
             public decimal Total { get; set; }
@@ -109,6 +115,8 @@ namespace RestaurantManagementSystem.Pages.Staff
         {
             public string Id { get; set; } = string.Empty;               // Promotion.promoID
             public string Title { get; set; } = string.Empty;
+            public bool Auto { get; set; }                               // the promotion has autoApply switched on
+            public bool Selected { get; set; }                           // pre-selected in the dropdown
             public decimal Discount { get; set; }
             public decimal Service { get; set; }
             public decimal Sst { get; set; }
@@ -162,6 +170,7 @@ namespace RestaurantManagementSystem.Pages.Staff
                 var offer = new List<Promotion>();
                 if (canPay)
                 {
+                    // same rules as Checkout, checked on the WHOLE bill (minimum spend uses the combined subtotal)
                     foreach (var p in promotions)
                     {
                         if (await WhyNotOnBillAsync(p, g, birthdayIds, promoNow) == null) offer.Add(p);
@@ -199,7 +208,7 @@ namespace RestaurantManagementSystem.Pages.Staff
         // ---------- Record payment ----------
         // Fields: orderId (any order on the bill), paymentMethod ("Card" / "FPX" / "E-Wallet"),
         // promotionId (optional).
-        // → one Payment per order on the bill (paymentAmount = that order's total, "Paid", same time),
+        // → one Payment per order (paymentAmount = that order's total, "Paid", same time),
         //   Order.orderStatus "Completed", DiningTable.tableStatus "Available". One SaveChanges.
         public async Task<IActionResult> OnPostPayAsync(string orderId, string? paymentMethod, int? promotionId)
         {
@@ -410,6 +419,13 @@ namespace RestaurantManagementSystem.Pages.Staff
                     }).ToList()
             };
 
+            // promotions already applied at Checkout / staff New order (saved on the lines, already inside the subtotal)
+            bill.AppliedDiscount = bill.Items.Sum(i => i.Discount);
+            bill.AppliedCodes = string.Join(", ", bill.Items
+                .Where(i => !string.IsNullOrEmpty(i.Promo) && i.Discount > 0)
+                .Select(i => i.Promo!)
+                .Distinct());
+
             if (payment != null)
             {
                 bill.PaidWith = paidOnline ? payment.paymentMethod + " (online)" : payment.paymentMethod;
@@ -422,9 +438,10 @@ namespace RestaurantManagementSystem.Pages.Staff
             // Promotion dropdown: each promotion that applies, with the totals it would give
             if (state == "awaiting")
             {
-                bill.Promos.Add(new BillPromo { Id = "", Title = "None", Discount = 0m, Service = bill.Service, Sst = bill.Sst, Total = bill.Total });
+                var none = new BillPromo { Id = "", Title = "None", Discount = 0m, Service = bill.Service, Sst = bill.Sst, Total = bill.Total };
+                bill.Promos.Add(none);
 
-                foreach (var promo in promotions)
+                foreach (var promo in promotions)       // already filtered by WhyNotOnBillAsync in OnGetAsync
                 {
                     var plan = PlanPromotion(promo, group);
                     if (plan.Count == 0) continue;
@@ -433,13 +450,19 @@ namespace RestaurantManagementSystem.Pages.Staff
                     bill.Promos.Add(new BillPromo
                     {
                         Id = promo.promoID.ToString(),
-                        Title = $"{promo.promoTitle} · {promo.promoLabel}",
+                        Title = $"{promo.promoTitle} · {promo.promoLabel}" + (promo.autoApply ? " (auto-applied)" : ""),
+                        Auto = promo.autoApply,
                         Discount = plan.Values.Sum(v => v.Discount),
                         Service = withPromo.Sum(p => p.Service),
                         Sst = withPromo.Sum(p => p.Sst),
                         Total = withPromo.Sum(p => p.Total)
                     });
                 }
+
+                // Same as Checkout: an eligible auto-apply promotion is applied by default (the best one).
+                // Staff can still change it to None / another promotion before confirming.
+                var best = bill.Promos.Where(p => p.Auto && p.Discount > 0m).OrderByDescending(p => p.Discount).FirstOrDefault();
+                (best ?? none).Selected = true;
             }
 
             return bill;
@@ -497,7 +520,7 @@ namespace RestaurantManagementSystem.Pages.Staff
             var first = bill.OrderBy(o => o.orderID).First();
             var buyer = await _promotions.GetBuyerAsync(first.custID);
             string orderType = first.tableID != null ? PromotionRules.DineIn : PromotionRules.Takeaway;
-            decimal gross = lines.Sum(oi => oi.unitPrice * oi.quantity);
+            decimal gross = lines.Sum(oi => oi.unitPrice * oi.quantity);     // minimum spend = whole bill before discounts
             return await _promotions.WhyNotAsync(p, buyer, now, orderType, gross, bill.Select(o => o.orderID).ToList(), forStaff: true);
         }
 
