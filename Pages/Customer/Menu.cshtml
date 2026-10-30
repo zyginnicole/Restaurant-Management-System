@@ -313,6 +313,11 @@
                     event.stopPropagation();
                     window.bootstrap.Modal.getOrCreateInstance(popup).show();
                 }, true);
+
+                // Sent back from Checkout (e.g. its URL was typed while we are closed): show the pop-up straight away
+                if (new URLSearchParams(window.location.search).has('closed')) {
+                    window.bootstrap.Modal.getOrCreateInstance(popup).show();
+                }
             })();
         </script>
     }

@@ -10,7 +10,7 @@ namespace RestaurantManagementSystem.Pages.Customer
 {
     public class CheckoutModel : PageModel
     {
-        private const int MaxQuantity = CartSessionExtensions.MaxQuantity;
+        public const int MaxQuantity = CartSessionExtensions.MaxQuantity;
         private const int PrepMinutes = 30;
 
         private readonly ApplicationDbContext _context;
@@ -76,9 +76,13 @@ namespace RestaurantManagementSystem.Pages.Customer
             int? custId = CurrentCustomerId();
             if (custId == null) return RedirectToPage("/Customer/Login");
 
-            // The menu is locked without a reservation today, so there is nothing to check out
+            // Checkout is only reached through the Menu's Cart buttons, so typing the URL can't skip them:
+            // closed → back to the Menu with its "we can't take orders right now" pop-up; empty cart → nothing to check out
+            if (!await RestaurantHours.IsOpenAsync(_context)) return RedirectToPage("/Customer/Menu", new { closed = 1 });
+            if (!HttpContext.Session.GetCart().Any(i => i.Quantity > 0)) return RedirectToPage("/Customer/Menu");
+
+            // Walk-in customers (no reservation today) can still order takeaway
             var access = await ReservationAccess.CheckAsync(_context, custId.Value);
-            if (!access.HasReservation) return RedirectToPage("/Customer/Menu");
 
             await LoadPageAsync(custId.Value, access);
 
@@ -101,12 +105,13 @@ namespace RestaurantManagementSystem.Pages.Customer
             int? custId = CurrentCustomerId();
             if (custId == null) return RedirectToPage("/Customer/Login");
 
-            // Only guests with a reservation today can order; dine-in also needs the reservation to be Seated
-            var access = await ReservationAccess.CheckAsync(_context, custId.Value);
-            if (!access.HasReservation)
+            if (!await RestaurantHours.IsOpenAsync(_context))
             {
-                return await FailAsync(custId.Value, "You need a reservation for today before you can place an order.");
+                return await FailAsync(custId.Value, "We are closed right now, so orders cannot be placed. Please order within opening hours.");
             }
+
+            // Anyone can order takeaway (walk-ins included); dine-in needs a reservation today that is Seated
+            var access = await ReservationAccess.CheckAsync(_context, custId.Value);
 
             bool dineIn = OrderType == "DineIn";
             if (!dineIn && OrderType != "Takeaway")
@@ -268,6 +273,30 @@ namespace RestaurantManagementSystem.Pages.Customer
                 : RedirectToPage("/Customer/Payment", new { orderId = order.orderID });
         }
 
+        // Called by the page script when a quantity or the order type changes: ?handler=Price
+        // Prices the posted quantities with the same promotion rules as placing the order (PromotionService),
+        // so the preview always shows what the order will really get. Nothing is saved.
+        public async Task<IActionResult> OnPostPriceAsync()
+        {
+            int? custId = CurrentCustomerId();
+            if (custId == null) return Unauthorized();
+
+            var access = await ReservationAccess.CheckAsync(_context, custId.Value);
+            string orderType = OrderType == "DineIn" && access.CanDineIn ? "DineIn" : "Takeaway";
+
+            var ids = Items.Select(i => i.MenuId).Distinct().ToList();
+            var menus = await _context.Menus.AsNoTracking()
+                .Where(m => ids.Contains(m.menuID))
+                .ToDictionaryAsync(m => m.menuID);
+
+            var lines = Items
+                .Where(i => menus.ContainsKey(i.MenuId))
+                .Select(i => new CartItem { MenuId = i.MenuId, Quantity = Math.Clamp(i.Quantity, 0, MaxQuantity) })
+                .ToList();
+
+            return new JsonResult(await PriceLinesAsync(custId.Value, orderType, lines, menus));
+        }
+
         private int? CurrentCustomerId()
         {
             return HttpContext.Session.IsSignedInAs(UserRoles.Customer)
@@ -282,7 +311,7 @@ namespace RestaurantManagementSystem.Pages.Customer
             CanDineIn = access.CanDineIn;
 
             // the order type the cart is priced for: what was posted, otherwise the page's default
-            string orderType = Request.Method == "POST" ? OrderType : (HasReservation ? "DineIn" : "Takeaway");
+            string orderType = Request.Method == "POST" ? OrderType : (CanDineIn ? "DineIn" : "Takeaway");
             await LoadCartAsync(custId, orderType);
 
             var settings = await _context.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
@@ -331,22 +360,31 @@ namespace RestaurantManagementSystem.Pages.Customer
                 kept.Add(line);
             }
 
-            // same server-side rules as placing the order
+            CartLines = await PriceLinesAsync(custId, orderType, kept, menus);
+
+            if (kept.Count != cart.Count) HttpContext.Session.SaveCart(kept);
+        }
+
+        // Cart lines with the promotions they get: the same server-side rules as placing the order
+        // (PromotionService: day, time, birthday, members only, order type, minimum spend, usage limits, best per line)
+        private async Task<List<CartDisplayLine>> PriceLinesAsync(int custId, string orderType, List<CartItem> lines, Dictionary<int, Menu> menus)
+        {
             var buyer = await _promotions.GetBuyerAsync(custId);
             var appliedLines = await _promotions.PriceNewOrderAsync(buyer, orderType,
-                kept.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList());
+                lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList());
             var appliedIds = appliedLines.Where(a => a != null).Select(a => a!.PromoId).ToList();
             var promoRules = await _context.Promotions.AsNoTracking()
                 .Where(p => appliedIds.Contains(p.promoID))
                 .ToDictionaryAsync(p => p.promoID);
 
-            for (int i = 0; i < kept.Count; i++)
+            var result = new List<CartDisplayLine>();
+            for (int i = 0; i < lines.Count; i++)
             {
-                var line = kept[i];
+                var line = lines[i];
                 var menu = menus[line.MenuId];
                 var applied = appliedLines[i];
                 var rule = applied != null && promoRules.TryGetValue(applied.PromoId, out var r) ? r : null;
-                CartLines.Add(new CartDisplayLine
+                result.Add(new CartDisplayLine
                 {
                     MenuId = menu.menuID,
                     Name = menu.menuName,
@@ -363,8 +401,7 @@ namespace RestaurantManagementSystem.Pages.Customer
                     PromoOrderType = rule?.orderType is PromotionRules.DineIn or PromotionRules.Takeaway ? rule.orderType : null
                 });
             }
-
-            if (kept.Count != cart.Count) HttpContext.Session.SaveCart(kept);
+            return result;
         }
 
         private async Task LoadPickupOptionsAsync()

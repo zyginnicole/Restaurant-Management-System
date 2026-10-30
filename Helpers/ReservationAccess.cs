@@ -4,8 +4,8 @@ using RestaurantManagementSystem.Model;
 
 namespace RestaurantManagementSystem.Helpers
 {
-    // What a customer may do on Menu / Checkout today:
-    //  - HasReservation: a reservation today (Pending, Confirmed or Seated) → the menu is open and they can order takeaway
+    // What a customer may do at Checkout today (takeaway is open to everyone, walk-ins included):
+    //  - HasReservation: a reservation today (Pending, Confirmed or Seated)
     //  - Seated:         that reservation has status "Seated" (staff seated the guests) → dine-in is allowed, at that table
     public record OrderingAccess(bool HasReservation, Reservation? Seated)
     {
@@ -36,7 +36,7 @@ namespace RestaurantManagementSystem.Helpers
             return new OrderingAccess(list.Count > 0, list.FirstOrDefault(r => r.reservationStatus == "Seated"));
         }
 
-        // The customer's earliest reservation for today, or null = the menu stays locked (Menu)
+        // The customer's earliest reservation for today, or null = none
         public static Task<Reservation?> FindTodayAsync(ApplicationDbContext db, int custId)
         {
             return TodayQuery(db, custId).FirstOrDefaultAsync();

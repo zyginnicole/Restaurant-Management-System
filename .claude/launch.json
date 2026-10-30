@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rms",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--no-build", "--launch-profile", "http"],
+      "port": 5189
+    }
+  ]
+}
