@@ -173,18 +173,24 @@
                 <div class="md-card-body">
                     <dl class="md-sum md-bill-sum mb-0">
                         <div><dt>Subtotal</dt><dd>@Rm(b.Subtotal)</dd></div>
+                        @* Promotions the guest already got at Checkout / when staff entered the order (already inside the subtotal) *@
+                        @if (b.AppliedDiscount > 0)
+                        {
+                            <div style="font-size:.92em; opacity:.8;"><dt>Promo @b.AppliedCodes (included above)</dt><dd>&minus;@Rm(b.AppliedDiscount)</dd></div>
+                        }
                         @if (b.State == "awaiting")
                         {
                             <div class="md-bill-promo">
                                 <dt><label for="promotionSelect">Promotion</label></dt>
                                 <dd>
                                     @* The dropdown is left out of the PDF; the PDF shows the chosen promotion as text.
-                                       Every option carries the bill totals it gives (worked out by BillingModel). *@
+                                       Every option carries the bill totals it gives (worked out by BillingModel).
+                                       The best eligible auto-apply promotion is pre-selected, like Checkout. *@
                                     <div data-html2canvas-ignore>
                                         <select class="form-select md-input" id="promotionSelect" name="promotionId" form="payForm" data-md-select>
                                             @foreach (var p in b.Promos)
                                             {
-                                                <option value="@p.Id"
+                                                <option value="@p.Id" selected="@p.Selected"
                                                         data-discount="@p.Discount.ToString("0.00", inv)"
                                                         data-service="@p.Service.ToString("0.00", inv)"
                                                         data-sst="@p.Sst.ToString("0.00", inv)"
@@ -317,7 +323,10 @@
 
                 var select = document.getElementById('promotionSelect');
                 if (select && window.mdSelect) window.mdSelect(select);
-                if (select) select.addEventListener('change', recalc);
+                if (select) {
+                    select.addEventListener('change', recalc);
+                    recalc();   // the server renders the "None" totals: show the pre-selected (auto-applied) promotion's totals
+                }
                 panel.querySelectorAll('input[name="paymentMethod"]').forEach(function (r) {
                     r.addEventListener('change', function () {
                         panel.querySelectorAll('[data-pay]').forEach(function (el) { el.classList.toggle('d-none', el.dataset.pay !== r.value); });
