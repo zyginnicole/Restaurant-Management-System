@@ -137,37 +137,6 @@ public class ReportService
         return RevenueBetweenAsync(range.Start, range.End);
     }
 
-    public async Task<SummaryDto> GetSummaryAsync(DateRange r)
-    {
-        // The "previous period" is the same number of days directly before the selected period.
-        var previousStart = r.Start - (r.End - r.Start);
-        decimal revenue = await RevenueBetweenAsync(r.Start, r.End);
-        decimal previousRevenue = await RevenueBetweenAsync(previousStart, r.Start);
-        double change = previousRevenue == 0 ? 0 : (double)((revenue - previousRevenue) / previousRevenue * 100);
-
-        DateTimeOffset fromAt = Off(r.Start);
-        DateTimeOffset toAt = Off(r.End);
-        DateTimeOffset weekAgo = new(DateTime.Today.AddDays(-7));
-
-        var reservations = _db.Reservations
-            .Where(x => x.reservationDateTime >= r.Start && x.reservationDateTime < r.End);
-        var ratings = _db.Feedbacks.Where(f => f.feedbackDate >= fromAt && f.feedbackDate < toAt);
-
-        return new SummaryDto
-        {
-            Revenue = revenue,
-            RevenueChangePercent = Math.Round(change, 1),
-            Reservations = await reservations.CountAsync(),
-            Completed = await reservations.CountAsync(x => x.reservationStatus == "Completed"),
-            Cancelled = await reservations.CountAsync(x => x.reservationStatus == "Cancelled"),
-            Customers = await _db.Customers.CountAsync(),
-            NewCustomersThisWeek = await _db.Customers.CountAsync(c => c.custCreateAt >= weekAgo),
-            // (double?) lets Average return null when there are no ratings, instead of crashing
-            AverageRating = Math.Round(await ratings.AverageAsync(f => (double?)f.rating) ?? 0, 1),
-            ReviewCount = await ratings.CountAsync()
-        };
-    }
-
     // Total of all PAID payments in a period. Only paid money counts as revenue.
     private async Task<decimal> RevenueBetweenAsync(DateTime start, DateTime end)
     {
@@ -179,52 +148,7 @@ public class ReportService
             .SumAsync(p => (decimal?)p.paymentAmount) ?? 0;   // (decimal?) so an empty table gives 0, not an error
     }
 
-    // ------------------------------------------------------------------
-    // 3. LIVE OPERATIONS (today only)
-    //    The team's models have no "Seated" status, so "seated" uses DiningTable.tableStatus == "Occupied".
-    // ------------------------------------------------------------------
-    public async Task<LiveSnapshot> GetLiveAsync()
-    {
-        var today = DateTime.Today;
-        var tomorrow = today.AddDays(1);
-        var now = DateTime.Now;
-
-        // Today's reservations except cancelled ones (a restaurant has a few dozen at most, so loading them is fine)
-        var todays = await _db.Reservations.AsNoTracking()
-            .Include(r => r.Customer)
-            .Include(r => r.DiningTable)
-            .Where(r => r.reservationDateTime >= today && r.reservationDateTime < tomorrow
-                        && r.reservationStatus != "Cancelled")
-            .OrderBy(r => r.reservationDateTime)
-            .ToListAsync();
-
-        // "Seated" = staff marked the reservation Seated, or it is confirmed and its table is marked Occupied
-        var seated = todays.Where(r => r.reservationStatus == "Seated"
-                                    || (r.reservationStatus == "Confirmed" && r.DiningTable?.tableStatus == "Occupied")).ToList();
-
-        var occupiedTableIds = await _db.DiningTables
-            .Where(t => t.tableStatus == "Occupied").Select(t => t.tableID).ToListAsync();
-
-        return new LiveSnapshot
-        {
-            TotalTables = await _db.DiningTables.CountAsync(),
-            TablesSeated = seated.Select(r => r.tableID).Union(occupiedTableIds).Distinct().Count(),
-            GuestsSeated = seated.Sum(r => r.partySize),
-            CoversBooked = todays.Sum(r => r.partySize),
-            PendingApprovals = todays.Count(r => r.reservationStatus == "Pending"),
-            NextArrival = todays
-                .Where(r => (r.reservationStatus == "Pending" || r.reservationStatus == "Confirmed") && r.reservationDateTime > now)
-                .Select(r => (DateTime?)r.reservationDateTime).FirstOrDefault(),
-            Feed = todays.Take(8).Select(r => new FeedItem(
-                 r.reservationDateTime,
-                    r.Customer?.custName ?? "Guest",
-                    r.partySize,
-                    r.DiningTable?.tableNumber ?? "-",
-                    r.reservationStatus)).ToList()
-            };
-    }
-
-    // 4. TABLE UTILISATION per dining area (Indoor / Outdoor / VIP)
+    // 3. TABLE UTILISATION per dining area (Indoor / Outdoor / VIP)
     //    utilisation % = (reservations x 2 hours) / (tables x days x 10 open hours) x 100
     public async Task<List<NameValue>> GetTableUtilizationAsync(DateRange r)
     {

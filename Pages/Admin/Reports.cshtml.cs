@@ -186,7 +186,6 @@ public class ReportsModel : PageModel
         {
             Period = period?.Equals("yearly", StringComparison.OrdinalIgnoreCase) == true ? "yearly" : "monthly",
             Range = range,
-            PreviousRange = previous,
             Kpis = await _reports.GetKpisAsync(range, previous),
             RevenueSeries = await _reports.GetRevenueSeriesAsync(range, granularity),
             NewCustomerSeries = await _reports.GetNewCustomerSeriesAsync(range, granularity),
