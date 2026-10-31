@@ -16,7 +16,10 @@ public record DailyRow(DateTime Date, int Reservations, int Orders, decimal Reve
 public record NameValue(string Name, double Value);
 
 //One row of the "Top Menu Items" quantity sold and quantity x unit price
-public record TopItem(string Name, int Quantity, decimal Revenue);
+public record TopItem(string Name, int Quantity, decimal Revenue)
+{
+    public string Category { get; init; } = "Menu";
+}
 
 // One line in the "Live Reservation Feed".
 public record FeedItem(DateTime Time, string Customer, int Guests, string Table, string Status);
@@ -45,6 +48,7 @@ public class KpiSummary
     public int NewCustomers { get; set; }
     public int PreviousNewCustomers { get; set; }
     public double NewCustomersChangePercent { get; set; }
+    public int PromoOptInCustomers { get; set; }
 
     // Ratings in the period. StarCounts / StarSharePercent use the star number as the index (1 to 5; index 0 unused).
     public double AverageRating { get; set; }

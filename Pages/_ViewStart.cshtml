@@ -8,4 +8,7 @@
     var settings = await Db.SystemSettings.AsNoTracking().FirstOrDefaultAsync();
     ViewData["Brand"] = settings?.restaurantName ?? "Maison Laurent";
     ViewData["BrandTagline"] = settings?.tagline ?? "";
+    ViewData["SystemAddress"] = settings?.address ?? "";
+    ViewData["SystemPhone"] = settings?.phone ?? "";
+    ViewData["SystemEmail"] = settings?.email ?? "";
 }

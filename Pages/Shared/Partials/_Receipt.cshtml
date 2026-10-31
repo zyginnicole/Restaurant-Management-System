@@ -11,12 +11,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Abel&display=swap" rel="stylesheet" />
 
 <div class="md-receipt" id="receiptPaper">
-    @* Restaurant details – fixed text (no restaurant table in the database) *@
+    @* Restaurant details come from Admin > Settings through the shared layout. *@
     <div class="md-receipt-head">
         <div class="md-receipt-brand">@ViewData["Brand"]</div>
-        <div>Fine dining · Est. 1998</div>
-        <div>12 Jalan Bukit Bintang, Kuala Lumpur</div>
-        <div>www.maisondoree.com</div>
+        <div>@(ViewData["BrandTagline"] ?? "Fine dining")</div>
+        <div>@(ViewData["SystemAddress"] ?? "")</div>
+        <div>@(ViewData["SystemPhone"] ?? "") · @(ViewData["SystemEmail"] ?? "")</div>
     </div>
 
     <hr class="md-receipt-line" />

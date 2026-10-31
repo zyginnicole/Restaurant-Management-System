@@ -238,18 +238,10 @@
         <button type="button" class="btn-close btn-close-white md-chat-close" id="chatClose" aria-label="Close chat"></button>
     </div>
     <div class="md-chat-body" id="chatBody">
-        @* Example conversation from the design *@
-        <div class="md-chat-msg user">Is there a table for 4 this Sunday at 8pm?</div>
         <div class="md-chat-msg bot">
-            Sunday 27 Sep at 20:00 is full for 4 guests. The nearest free times are <strong>19:45</strong> (Outdoor) and <strong>20:30</strong> (Indoor).
-        </div>
-        <div class="md-chat-actions">
-            <a class="btn btn-md-outline" href="/Customer/Reservations">Book 19:45</a>
-            <a class="btn btn-md-outline" href="/Customer/Reservations">Book 20:30</a>
-        </div>
-        <div class="md-chat-msg user">Do you have vegetarian mains?</div>
-        <div class="md-chat-msg bot">
-            Yes — the Garden Amuse starter, and the chef can prepare a vegetarian tasting menu with 24 hours' notice.
+            Hi! I can help you find dishes, recommendations and promotions, check opening hours,
+            or guide you to reservations, orders and notifications. Try asking “What are your mains?”
+            or “Show vegetarian dishes”.
         </div>
     </div>
     <form class="md-chat-input" id="chatForm">
@@ -297,6 +289,7 @@
     <script>window.MD_CART = @Json.Serialize(new { ids = Model.DishIds, quantities = Model.CartQuantities });</script>
     <script>window.MD_USER = @Json.Serialize(new { allergies = Model.CustomerAllergies });</script>
     <script src="~/js/menu.js" asp-append-version="true"></script>
+    <script src="~/js/chatbot.js" asp-append-version="true"></script>
     @if (Model.OrderingClosed)
     {
         <script>

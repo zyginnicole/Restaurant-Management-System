@@ -1,5 +1,6 @@
 @page
 @model RestaurantManagementSystem.Pages.Admin.ReportsModel
+@using System.Text.Json
 @{
     ViewData["Title"] = "Reports";
     ViewData["Module"] = "Admin";
@@ -11,6 +12,8 @@
     Layout = "_DashboardLayout";
 
     var inv = System.Globalization.CultureInfo.InvariantCulture;
+    string systemName = ViewData["Brand"]?.ToString() ?? "Restaurant";
+    string fileBrand = string.Concat(systemName.Trim().Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) ? '-' : c)).Replace(' ', '-');
     string Rm(decimal v) => "RM " + v.ToString("N2", inv);
     string Rm0(decimal v) => "RM " + v.ToString("N0", inv);
 
@@ -22,8 +25,9 @@
     // Statistic report – values are loaded by ReportsModel from ReportService.
     // =====================================================
     string sPeriod = tab == "statistic" && Q("period") == "yearly" ? "yearly" : "monthly";
-    var months = Model.StatisticRevenue.Select(x => x.Name).ToArray();
     var years = Enumerable.Range(DateTime.Today.Year - 2, 3).ToArray();
+    var minMonth = new DateTime(DateTime.Today.Year - 2, 1, 1).ToString("yyyy-MM", inv);
+    var maxMonth = DateTime.Today.ToString("yyyy-MM", inv);
 
     string sFrom, sTo;
     string[] chartLabels; decimal[] chartValues; int[] newCustBars; int bookings, newCust; decimal revenue; string range, compareText; int deltaRev, deltaRes;
@@ -39,23 +43,30 @@
     compareText = "vs previous period";
     deltaRev = (int)Math.Round(Model.StatisticKpis.RevenueChangePercent);
     deltaRes = (int)Math.Round(Model.StatisticKpis.ReservationsChangePercent);
-    // Reservations by status for the range (shares of the bookings)
-    int completed = (int)Math.Round(bookings * 0.859), cancelled = (int)Math.Round(bookings * 0.083), noShow = (int)Math.Round(bookings * 0.029);
-    int upcoming = bookings - completed - cancelled - noShow;
-    string Pct(int part) => (part * 100m / bookings).ToString("0.0", inv);
-    // Top 5 menu items for the range (portions and revenue = quantity × unitPrice)
-    var topItems = new (string Name, string Category, int Portions, decimal Revenue)[]
-    {
-        ("Wagyu Beef Tenderloin", "Mains", 1874, 314832), ("Pan-Seared Sea Bass", "Mains", 1652, 161896),
-        ("Lobster Thermidor", "Mains", 1318, 168704), ("Valrhona Chocolate Fondant", "Desserts", 1221, 46398),
-        ("Caviar & Soft Egg", "Starters", 849, 72165)
-    };
+    // Reservation shares come from the database status breakdown.
+    var statusCounts = Model.StatisticStatusBreakdown
+        .ToDictionary(x => x.Name, x => (int)x.Value);
+    int StatusCount(string status) => statusCounts.GetValueOrDefault(status);
+    int completed = StatusCount("Completed");
+    int cancelled = StatusCount("Cancelled");
+    int noShow = StatusCount("No-show");
+    int upcoming = StatusCount("Pending") + StatusCount("Confirmed") + StatusCount("Seated");
+    string Pct(int part) => bookings == 0
+        ? "0.0"
+        : (part * 100m / bookings).ToString("0.0", inv);
+    int chartCount = Math.Max(1, chartValues.Length);
+    int newCustomerChartCount = Math.Max(1, newCustBars.Length);
+    // Top 5 menu items for the range, calculated by ReportService.
+    var topItems = Model.StatisticTopItems;
 
     string period = Model.SelectedPeriod;
     string from = Model.SelectedRange.Start.ToString("yyyy-MM-dd");
     string to = Model.SelectedRange.End.AddDays(-1).ToString("yyyy-MM-dd");
     string salesRange = Model.SelectedRange.Label;
-    string salesFile = $"MaisonDoree-sales-{Model.SelectedRange.Start:yyyyMMdd}-to-{Model.SelectedRange.End.AddDays(-1):yyyyMMdd}";
+    string salesFile = $"{fileBrand}-sales-{Model.SelectedRange.Start:yyyyMMdd}-to-{Model.SelectedRange.End.AddDays(-1):yyyyMMdd}";
+    string statisticFile = $"{fileBrand}-statistics-{Model.SelectedRange.Start:yyyyMMdd}-to-{Model.SelectedRange.End.AddDays(-1):yyyyMMdd}";
+    string statisticPdfFallback = $"/Admin/Reports?handler=Export&format=pdf&range=custom&from={from}&to={to}&period={sPeriod}&tab=statistic";
+    string salesPdfFallback = $"/Admin/Reports?handler=Export&format=pdf&range=custom&from={from}&to={to}&period={period}";
     string[] head = { "Period", "Orders", "Covers", "Net sales", "Service charge", "SST", "Total" };
     var rows = Model.Sales.Rows.Select(r => new[]
     {
@@ -80,38 +91,49 @@
 }
 
 @* ---------- Tabs: Statistic report | Sales report (same style as the Dashboard tabs) ---------- *@
-<div class="md-tabbar">
+<div class="md-tabbar md-report-tabsbar">
     <nav class="md-tabs md-page-tabs" aria-label="Report" id="reportTabs">
         <button type="button" class="@(tab == "statistic" ? "active" : "")" data-tab="statistic">Statistic report</button>
         <button type="button" class="@(tab == "sales" ? "active" : "")" data-tab="sales">Sales report</button>
     </nav>
+    @if (tab == "statistic")
+    {
+        <button type="button" class="btn md-btn-round md-btn-outline md-report-btn"
+                data-pdf-target="#statReport"
+                data-pdf-name="@statisticFile"
+                data-pdf-fallback="@statisticPdfFallback"
+                data-pdf-server="true">
+            <i class="bi bi-file-earmark-pdf me-2"></i>Download PDF
+        </button>
+    }
 </div>
 
 @* =====================================================
    Statistic report
    ===================================================== *@
 <div class="@(tab == "statistic" ? "" : "d-none")" data-pane="statistic">
-    @* ---------- Choices bar (GET form: ?tab=statistic&period=monthly&from=2026-01&to=2026-09) ---------- *@
+
+    @* ---------- Choices bar (GET form: tab=statistic, period and month range) ---------- *@
     <section class="md-card md-section md-report-builder">
             <form class="md-card-body" method="get" id="statForm">
                 <input type="hidden" name="tab" value="statistic" />
                 <input type="hidden" name="period" id="statPeriod" value="@sPeriod" />
-                <div class="row g-3 align-items-end">
+                <div class="row g-3 align-items-end md-report-filter-row">
                     @* From – To: months (Monthly) or years (Yearly) *@
                     <div class="col-6 col-lg-3" data-period-field="monthly">
                         <label class="md-label" for="statFromMonth">From</label>
-                        <input type="month" class="form-control md-input" id="statFromMonth" name="from" min="2026-01" max="2026-09" value="@(sPeriod == "monthly" ? sFrom : "2026-01")" required />
+                        <input type="month" class="form-control md-input" id="statFromMonth" name="from" min="@minMonth" max="@maxMonth" value="@(sPeriod == "monthly" && !string.IsNullOrWhiteSpace(sFrom) ? sFrom : minMonth)" required />
                     </div>
                     <div class="col-6 col-lg-3" data-period-field="monthly">
                         <label class="md-label" for="statToMonth">To</label>
-                        <input type="month" class="form-control md-input" id="statToMonth" name="to" min="2026-01" max="2026-09" value="@(sPeriod == "monthly" ? sTo : "2026-09")" required />
+                        <input type="month" class="form-control md-input" id="statToMonth" name="to" min="@minMonth" max="@maxMonth" value="@(sPeriod == "monthly" && !string.IsNullOrWhiteSpace(sTo) ? sTo : maxMonth)" required />
                     </div>
                     <div class="col-6 col-lg-3" data-period-field="yearly">
                         <label class="md-label" for="statFromYear">From</label>
                         <select class="form-select md-input" id="statFromYear" name="from" data-md-select>
                             @foreach (var y in years)
                             {
-                                <option selected="@(sPeriod == "yearly" && sFrom == y.ToString() || sPeriod != "yearly" && y == 2024)">@y</option>
+                                <option selected="@(sPeriod == "yearly" && sFrom == y.ToString() || sPeriod != "yearly" && y == DateTime.Today.Year - 2)">@y</option>
                             }
                         </select>
                     </div>
@@ -120,7 +142,7 @@
                         <select class="form-select md-input" id="statToYear" name="to" data-md-select>
                             @foreach (var y in years)
                             {
-                                <option selected="@(sPeriod == "yearly" && sTo == y.ToString() || sPeriod != "yearly" && y == 2026)">@y</option>
+                                <option selected="@(sPeriod == "yearly" && sTo == y.ToString() || sPeriod != "yearly" && y == DateTime.Today.Year)">@y</option>
                             }
                         </select>
                     </div>
@@ -132,8 +154,7 @@
                         </div>
                     </div>
                     <div class="col-md-6 col-lg-3 md-report-actions">
-                        <button type="submit" class="btn btn-md-dark"><i class="bi bi-bar-chart me-2"></i>Generate report</button>
-                        <button type="button" class="btn md-btn-round md-btn-outline" data-pdf-target="#statReport" data-pdf-name="MaisonDoree-statistics-@sFrom-to-@sTo"><i class="bi bi-file-earmark-pdf me-2"></i>Download PDF</button>
+                        <button type="submit" class="btn btn-md-dark md-report-btn"><i class="bi bi-bar-chart me-2"></i>Generate report</button>
                     </div>
                 </div>
             </form>
@@ -141,50 +162,62 @@
 
     @* ---------- The statistic report (also what the PDF saves) ---------- *@
     <div id="statReport">
-        <p class="md-pdf-only md-report-pdf-head mb-3">Maison Dorée · Statistic report · @range</p>
+        <p class="md-pdf-only md-report-pdf-head mb-3">@systemName · Statistic report · @range</p>
 
         @* KPI cards as long horizontal rows, stacked:
            figure (label · value · change vs the previous period) | visual | breakdown *@
         @{
             string per = sPeriod == "monthly" ? "month" : "year";
-            int hi = Array.IndexOf(chartValues, chartValues.Max()), lo = Array.IndexOf(chartValues, chartValues.Min());
-            int reviews = sPeriod == "monthly" ? 1102 : 3860;
+            bool hasChartData = chartValues.Length > 0;
+            int hi = hasChartData ? Array.IndexOf(chartValues, chartValues.Max()) : -1;
+            int lo = hasChartData ? Array.IndexOf(chartValues, chartValues.Min()) : -1;
+            int highRatingPercent = Model.StatisticKpis.StarSharePercent[4]
+                + Model.StatisticKpis.StarSharePercent[5];
+            int lowRatingPercent = Model.StatisticKpis.StarSharePercent[1]
+                + Model.StatisticKpis.StarSharePercent[2];
         }
         <div class="md-kpi-rows md-section">
             @* ---------- Revenue ---------- *@
-            <div class="md-stat md-kpi-wide">
-                <div class="md-kpi-main">
+            <div class="md-stat md-kpi-wide md-kpi-revenue">
+                <div class="md-kpi-content">
+                    <div class="md-kpi-main">
                     <span class="md-label">Revenue · @range</span>
                     <div class="md-stat-value">@Rm0(revenue)</div>
                     <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>@deltaRev% @compareText</div>
-                </div>
-                <div class="md-kpi-visual">
-                    @* Bars: revenue per month / year, labelled *@
-                    <div class="md-kpi-columns" role="img" aria-label="Revenue per @per">
-                        @for (int i = 0; i < chartValues.Length; i++)
-                        {
-                            <div class="@(i == hi ? "is-top" : "")" title="@chartLabels[i]: @Rm0(chartValues[i])">
-                                <i style="height: @((int)Math.Round(chartValues[i] / chartValues.Max() * 100))%"></i>
-                                <span>@chartLabels[i].Replace(" (to Sep)", "")</span>
-                            </div>
-                        }
+                    </div>
+                    <div class="md-kpi-visual">
+                    @* A taller line chart makes the trend easier to read than compressed bars. *@
+                    <div class="md-kpi-line-chart" role="img" aria-label="Revenue trend per @per">
+                        <canvas id="revenueKpiChart"
+                                data-labels="@string.Join("|", chartLabels)"
+                                data-values="@string.Join("|", chartValues.Select(v => (v / 1000).ToString("0.##", inv)))"></canvas>
+                    </div>
                     </div>
                 </div>
                 <dl class="md-kpi-facts">
-                    <div><dt>Average per @per</dt><dd>@Rm0(Math.Round(revenue / chartValues.Length))</dd></div>
-                    <div><dt>Highest</dt><dd>@chartLabels[hi] · @Rm0(chartValues[hi])</dd></div>
-                    <div><dt>Lowest</dt><dd>@chartLabels[lo] · @Rm0(chartValues[lo])</dd></div>
+                    <div><dt>Average per @per</dt><dd>@Rm0(Math.Round(revenue / chartCount))</dd></div>
+                    @if (hasChartData)
+                    {
+                        <div><dt>Highest</dt><dd>@chartLabels[hi] · @Rm0(chartValues[hi])</dd></div>
+                        <div><dt>Lowest</dt><dd>@chartLabels[lo] · @Rm0(chartValues[lo])</dd></div>
+                    }
+                    else
+                    {
+                        <div><dt>Highest</dt><dd>No data</dd></div>
+                        <div><dt>Lowest</dt><dd>No data</dd></div>
+                    }
                 </dl>
             </div>
 
             @* ---------- Reservations ---------- *@
-            <div class="md-stat md-kpi-wide">
-                <div class="md-kpi-main">
+            <div class="md-stat md-kpi-wide md-kpi-reservations">
+                <div class="md-kpi-content">
+                    <div class="md-kpi-main">
                     <span class="md-label">Reservations · @range</span>
                     <div class="md-stat-value">@bookings.ToString("N0", inv)</div>
                     <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>@deltaRes% @compareText</div>
-                </div>
-                <div class="md-kpi-visual">
+                    </div>
+                    <div class="md-kpi-visual">
                     <div class="md-stack md-kpi-stack-wide" role="img" aria-label="@completed completed, @cancelled cancelled, @noShow no-shows, @upcoming upcoming">
                         <i class="is-completed" style="width: @Pct(completed)%"></i>
                         <i class="is-cancelled" style="width: @Pct(cancelled)%"></i>
@@ -197,59 +230,60 @@
                         <li><i class="is-pending"></i>No-show <b>@Pct(noShow)%</b></li>
                         <li><i class="is-confirmed"></i>Upcoming <b>@Pct(upcoming)%</b></li>
                     </ul>
+                    </div>
                 </div>
                 <dl class="md-kpi-facts">
                     <div><dt>Completed</dt><dd>@completed.ToString("N0", inv)</dd></div>
                     <div><dt>Cancelled · No-show</dt><dd>@cancelled · @noShow</dd></div>
-                    <div><dt>Average per @per</dt><dd>@((bookings / chartValues.Length).ToString("N0", inv))</dd></div>
+                    <div><dt>Average per @per</dt><dd>@((bookings / chartCount).ToString("N0", inv))</dd></div>
                 </dl>
             </div>
 
             @* ---------- Registered customers ---------- *@
             <div class="md-stat md-kpi-wide">
-                <div class="md-kpi-main">
+                <div class="md-kpi-content">
+                    <div class="md-kpi-main">
                     <span class="md-label">Registered customers</span>
-                    <div class="md-stat-value">847</div>
+                    <div class="md-stat-value">@Model.StatisticKpis.Customers.ToString("N0", inv)</div>
                     <div class="md-kpi-delta is-up"><i class="bi bi-arrow-up-right"></i>@newCust new in @range</div>
-                </div>
-                <div class="md-kpi-visual">
-                    @* Bars: new sign-ups per month / year, labelled *@
-                    <div class="md-kpi-columns is-teal" role="img" aria-label="New customers per @per">
-                        @for (int i = 0; i < newCustBars.Length; i++)
-                        {
-                            <div title="@chartLabels[i]: @newCustBars[i] new">
-                                <i style="height: @(newCustBars[i] * 100 / newCustBars.Max())%"></i>
-                                <span>@chartLabels[i].Replace(" (to Sep)", "")</span>
-                            </div>
-                        }
+                    </div>
+                    <div class="md-kpi-visual">
+                    @* New sign-ups use the same readable line-chart treatment as revenue. *@
+                    <div class="md-kpi-line-chart" role="img" aria-label="New customers per @per">
+                        <canvas id="newCustomersKpiChart"
+                                data-labels="@string.Join("|", chartLabels)"
+                                data-values="@string.Join("|", newCustBars)"></canvas>
+                    </div>
                     </div>
                 </div>
                 <dl class="md-kpi-facts">
                     <div><dt>New in range</dt><dd>@newCust</dd></div>
-                    <div><dt>Average new per @per</dt><dd>@(newCust / newCustBars.Length)</dd></div>
-                    <div><dt>Promo opt-in</dt><dd>612 (72%)</dd></div>
+                    <div><dt>Average new per @per</dt><dd>@(newCust / newCustomerChartCount)</dd></div>
+                    <div><dt>Promo opt-in</dt><dd>@Model.StatisticKpis.PromoOptInCustomers (@(Model.StatisticKpis.Customers == 0 ? 0 : Math.Round(Model.StatisticKpis.PromoOptInCustomers * 100.0 / Model.StatisticKpis.Customers))%)</dd></div>
                 </dl>
             </div>
 
             @* ---------- Average rating ---------- *@
             <div class="md-stat md-kpi-wide">
-                <div class="md-kpi-main">
+                <div class="md-kpi-content">
+                    <div class="md-kpi-main">
                     <span class="md-label">Average rating</span>
-                    <div class="md-stat-value">4.7 / 5</div>
-                    <span class="md-stars" aria-label="4.7 out of 5 stars"><span class="md-stars-fill" style="width: 94%">★★★★★</span>★★★★★</span>
-                </div>
-                <div class="md-kpi-visual">
-                    <ul class="md-dist-bars md-kpi-dist" aria-label="Rating distribution">
-                        @foreach (var d in new (int Stars, int Percent)[] { (5, 78), (4, 15), (3, 4), (2, 2), (1, 1) })
+                    <div class="md-stat-value">@Model.StatisticKpis.AverageRating.ToString("0.0", inv) / 5</div>
+                    <span class="md-stars" aria-label="@Model.StatisticKpis.AverageRating.ToString("0.0", inv) out of 5 stars"><span class="md-stars-fill" style="width: @(Model.StatisticKpis.AverageRating / 5 * 100)%">★★★★★</span>★★★★★</span>
+                    </div>
+                    <div class="md-kpi-visual">
+                    <div class="md-rating-bars" aria-label="Rating distribution">
+                        @for (var star = 5; star >= 1; star--)
                         {
-                            <li><span>@d.Stars @(d.Stars == 1 ? "star" : "stars")</span><div class="md-dist-track"><i style="width: @d.Percent%"></i></div><b>@d.Percent%</b></li>
+                            <div><span>@star★</span><i><b style="width: @Model.StatisticKpis.StarSharePercent[star]%"></b></i><em>@Model.StatisticKpis.StarSharePercent[star]%</em></div>
                         }
-                    </ul>
+                    </div>
+                    </div>
                 </div>
                 <dl class="md-kpi-facts">
-                    <div><dt>Reviews</dt><dd>@reviews.ToString("N0", inv)</dd></div>
-                    <div><dt>4 stars or more</dt><dd>93%</dd></div>
-                    <div><dt>Low ratings (2 stars or less)</dt><dd>3%</dd></div>
+                    <div><dt>Reviews</dt><dd>@Model.StatisticKpis.ReviewCount.ToString("N0", inv)</dd></div>
+                    <div><dt>4 stars or more</dt><dd>@highRatingPercent%</dd></div>
+                    <div><dt>Low ratings (2 stars or less)</dt><dd>@lowRatingPercent%</dd></div>
                 </dl>
             </div>
         </div>
@@ -268,7 +302,16 @@
             </div>
             <div class="col-xl-4">
                 <section class="md-card h-100">
-                    <div class="md-card-header"><span class="md-card-label">Peak dining hours</span></div>
+                    <div class="md-card-header">
+                        <span class="md-card-label">Peak dining hours</span>
+                        <label class="md-chart-filter" for="reportPeakTimeFormat">
+                            <span>Time</span>
+                            <select id="reportPeakTimeFormat" class="form-select md-chart-format" aria-label="Peak dining hour time format">
+                                <option value="12">12-hour</option>
+                                <option value="24" selected>24-hour</option>
+                            </select>
+                        </label>
+                    </div>
                     <div class="md-card-body">
                         <div class="md-chart"><canvas id="peakChart" aria-label="Peak dining hours chart" role="img"></canvas></div>
                         <p class="md-chart-note">Reservations by start hour, @range. Busiest: <b>20:00</b>.</p>
@@ -286,15 +329,15 @@
                         <span>#</span><span>Dish</span><span></span><span>Sold</span><span>Revenue</span>
                     </div>
                     <ol class="md-rank-list">
-                        @{ int rank = 0; int maxPortions = topItems.Max(i => i.Portions); }
+                        @{ int rank = 0; int maxPortions = topItems.Count == 0 ? 0 : topItems.Max(i => i.Quantity); }
                         @foreach (var i in topItems)
                         {
                             rank++;
                             <li class="md-rank-row @(rank == 1 ? "is-top" : "")">
                                 <span class="md-rank-no">@rank</span>
                                 <span class="md-rank-dish"><span class="md-rank-name">@i.Name</span><span class="md-rank-meta">@i.Category</span></span>
-                                <span class="md-rank-bar"><i style="width: @(i.Portions * 100 / maxPortions)%"></i></span>
-                                <span class="md-rank-value">@i.Portions.ToString("N0", inv)</span>
+                                <span class="md-rank-bar"><i style="width: @(maxPortions == 0 ? 0 : i.Quantity * 100 / maxPortions)%"></i></span>
+                                <span class="md-rank-value">@i.Quantity.ToString("N0", inv)</span>
                                 <span class="md-trend">@Rm0(i.Revenue)</span>
                             </li>
                         }
@@ -306,10 +349,11 @@
                 <section class="md-card">
                     <div class="md-card-header"><span class="md-card-label">Table utilization by area</span></div>
                     <div class="md-card-body">
-                        <div class="md-summary"><span class="md-summary-value">68%</span><span>Seated hours ÷ open hours</span></div>
-                        <div class="md-meter"><span>Indoor</span><div class="md-meter-bar"><i style="width: 74%"></i></div><b>74%</b></div>
-                        <div class="md-meter"><span>Outdoor</span><div class="md-meter-bar"><i style="width: 61%"></i></div><b>61%</b></div>
-                        <div class="md-meter"><span>VIP</span><div class="md-meter-bar"><i style="width: 43%"></i></div><b>43%</b></div>
+                        <div class="md-summary"><span class="md-summary-value">@(Model.StatisticUtilization.Count == 0 ? 0 : Math.Round(Model.StatisticUtilization.Average(x => x.Value)))%</span><span>Seated hours ÷ open hours</span></div>
+                        @foreach (var area in Model.StatisticUtilization)
+                        {
+                            <div class="md-meter"><span>@area.Name</span><div class="md-meter-bar"><i style="width: @area.Value.ToString("0", inv)%"></i></div><b>@area.Value.ToString("0", inv)%</b></div>
+                        }
                     </div>
                 </section>
                 <section class="md-card flex-grow-1">
@@ -339,7 +383,7 @@
    Sales report
    ===================================================== *@
 <div class="@(tab == "sales" ? "" : "d-none")" data-pane="sales">
-    @* ---------- Choices bar (GET form: ?tab=sales&period=daily&from=2026-09-01&to=2026-09-15) ---------- *@
+    @* ---------- Choices bar (GET form: tab=sales, period and date range) ---------- *@
     <section class="md-card md-section md-report-builder">
         <form class="md-card-body" method="get" id="salesForm">
             <input type="hidden" name="tab" value="sales" />
@@ -361,22 +405,34 @@
                     </div>
                 </div>
                 <div class="col-md-6 col-lg-3 md-report-actions">
-                    <button type="submit" class="btn btn-md-dark"><i class="bi bi-bar-chart me-2"></i>Generate report</button>
+                    <button type="submit" class="btn btn-md-dark md-report-btn"><i class="bi bi-bar-chart me-2"></i>Generate report</button>
                 </div>
             </div>
         </form>
+
+        @* Export buttons are shown only after the sales form has been submitted. *@
+        @if (tab == "sales" && !string.IsNullOrWhiteSpace(Q("from")) && !string.IsNullOrWhiteSpace(Q("to")))
+        {
+            <div class="md-report-tab-actions md-sales-export-actions">
+                <button type="button" class="btn md-btn-round md-btn-outline md-report-btn" id="exportCsv">
+                    <i class="bi bi-filetype-csv me-1"></i>Download CSV
+                </button>
+                <button type="button" class="btn md-btn-round btn-md-dark md-report-btn"
+                        data-pdf-target="#reportCard"
+                        data-pdf-name="@salesFile"
+                        data-pdf-fallback="@salesPdfFallback">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>Download PDF
+                </button>
+            </div>
+        }
     </section>
 
     <div>
         <section class="md-card md-section" id="reportCard">
             <div class="md-card-header">
                 <span class="md-card-label">Sales report · @period · @salesRange</span>
-                <div class="d-flex flex-wrap gap-2" data-html2canvas-ignore>
-                    <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" id="exportCsv"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
-                    <button type="button" class="btn md-btn-round md-btn-sm btn-md-dark" data-pdf-target="#reportCard" data-pdf-name="@salesFile"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
-                </div>
             </div>
-            <p class="md-pdf-only md-report-pdf-head">Maison Dorée · Sales report · @salesRange</p>
+            <p class="md-pdf-only md-report-pdf-head">@systemName · Sales report · @salesRange</p>
             <div class="table-responsive">
                 <table class="md-visit-table md-account-table md-report-table" id="reportTable" data-name="@salesFile">
                     <thead>
@@ -421,6 +477,9 @@
         (function () {
             // ---------- Tabs ----------
             var chartsDrawn = false;
+            var peakChartInstance = null;
+            var reportPeakHours = @Html.Raw(JsonSerializer.Serialize(Model.StatisticPeakHours.Select(x => x.Name)));
+            var reportPeakValues = @Html.Raw(JsonSerializer.Serialize(Model.StatisticPeakHours.Select(x => x.Value)));
             var tabs = document.querySelectorAll('#reportTabs button');
             function show(name) {
                 tabs.forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
@@ -449,36 +508,67 @@
             }
             segment('statPeriodSegment', 'statPeriod', applyStatPeriod);
             segment('salesPeriodSegment', 'salesPeriod', function (p) {
-                if (p === 'monthly') { document.getElementById('repFrom').value = '2026-09-01'; document.getElementById('repTo').value = '2026-09-30'; }
+                if (p === 'monthly') { document.getElementById('repFrom').value = '@DateTime.Today.ToString("yyyy-MM-01")'; document.getElementById('repTo').value = '@DateTime.Today.ToString("yyyy-MM-dd")'; }
             });
             applyStatPeriod(document.getElementById('statPeriod').value);
 
             // ---------- Charts (same style as the Admin Dashboard) ----------
+            function formatHourLabel(label, format) {
+                var hour = Number(String(label).split(':')[0]);
+                if (format === '24') return hour.toString().padStart(2, '0') + ':00';
+                var suffix = hour >= 12 ? 'PM' : 'AM';
+                var shownHour = hour % 12 || 12;
+                return shownHour + ':00 ' + suffix;
+            }
+
             function drawCharts() {
                 if (typeof Chart === 'undefined') return;
                 var bar = '#5165ad', highlight = '#4b9a8e', grid = '#efeae0';
                 Chart.defaults.font.family = '"Jost", "Segoe UI", sans-serif';
                 Chart.defaults.font.size = 11;
                 Chart.defaults.color = '#7a756b';
-                var axes = { x: { grid: { display: false }, border: { color: grid } }, y: { grid: { color: grid }, border: { display: false }, beginAtZero: true } };
-                function barChart(canvas, labels, values, label) {
-                    var max = Math.max.apply(null, values);
+                function lineChart(canvas, labels, values, label, yTitle) {
+                    var max = values.length ? Math.max.apply(null, values) : 0;
                     new Chart(canvas, {
-                        type: 'bar',
-                        data: { labels: labels, datasets: [{ data: values, backgroundColor: values.map(function (v) { return v === max ? highlight : bar; }), borderRadius: 2, maxBarThickness: 32 }] },
-                        options: { maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: label } } }, scales: axes }
+                        type: 'line',
+                        data: { labels: labels, datasets: [{ data: values, borderColor: bar, backgroundColor: 'rgba(81, 101, 173, .10)', pointBackgroundColor: values.map(function (v) { return v === max ? highlight : bar; }), pointBorderColor: values.map(function (v) { return v === max ? highlight : bar; }), pointRadius: 3, pointHoverRadius: 5, borderWidth: 2, tension: .25, fill: true }] },
+                        options: { maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: label } } }, scales: { x: { grid: { display: false }, border: { color: grid }, title: { display: true, text: 'Period' } }, y: { grid: { color: grid }, border: { display: false }, beginAtZero: true, title: { display: true, text: yTitle } } } }
                     });
                 }
+                var revenueKpi = document.getElementById('revenueKpiChart');
+                lineChart(revenueKpi, revenueKpi.dataset.labels.split('|'), revenueKpi.dataset.values.split('|').map(Number),
+                    function (c) { return 'RM ' + Math.round(c.raw * 1000).toLocaleString('en-MY'); }, 'Revenue (RM thousands)');
+                var newCustomersKpi = document.getElementById('newCustomersKpiChart');
+                lineChart(newCustomersKpi, newCustomersKpi.dataset.labels.split('|'), newCustomersKpi.dataset.values.split('|').map(Number),
+                    function (c) { return c.raw + ' new customers'; }, 'New customers');
                 var rev = document.getElementById('revenueChart');
-                barChart(rev, rev.dataset.labels.split('|'), rev.dataset.values.split('|').map(Number),
-                    function (c) { return 'RM ' + Math.round(c.raw * 1000).toLocaleString('en-MY'); });
-                barChart(document.getElementById('peakChart'), ['12:00', '13:00', '14:00', '18:00', '19:00', '20:00', '21:00', '22:00'],
-                    [30, 34, 12, 22, 58, 72, 36, 9], function (c) { return c.raw + ' reservations'; });
+                lineChart(rev, rev.dataset.labels.split('|'), rev.dataset.values.split('|').map(Number),
+                    function (c) { return 'RM ' + Math.round(c.raw * 1000).toLocaleString('en-MY'); }, 'Revenue (RM thousands)');
+                drawReportPeakChart();
             }
+
+            function drawReportPeakChart() {
+                var peak = document.getElementById('peakChart');
+                if (!peak || typeof Chart === 'undefined') return;
+                if (peakChartInstance) peakChartInstance.destroy();
+                var format = document.getElementById('reportPeakTimeFormat').value;
+                var labels = reportPeakHours.map(function (hour) { return formatHourLabel(hour, format); });
+                var max = reportPeakValues.length ? Math.max.apply(null, reportPeakValues) : 0;
+                peakChartInstance = new Chart(peak, {
+                    type: 'bar',
+                    data: { labels: labels, datasets: [{ data: reportPeakValues, backgroundColor: reportPeakValues.map(function (v) { return v === max ? '#4b9a8e' : '#5165ad'; }), borderRadius: 2, maxBarThickness: 32 }] },
+                    options: { maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (c) { return c.raw + ' reservations'; } } } }, scales: { x: { grid: { display: false }, title: { display: true, text: 'Time' } }, y: { grid: { color: '#efeae0' }, beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Reservations' } } } }
+                });
+            }
+
+            document.getElementById('reportPeakTimeFormat').addEventListener('change', function () {
+                if (chartsDrawn) drawReportPeakChart();
+            });
             if (!document.querySelector('[data-pane="statistic"]').classList.contains('d-none')) { drawCharts(); chartsDrawn = true; }
 
             // ---------- Sales report: CSV from the table on screen (PDF is handled by pdf-download.js) ----------
-            document.getElementById('exportCsv').addEventListener('click', function () {
+            var exportCsv = document.getElementById('exportCsv');
+            if (exportCsv) exportCsv.addEventListener('click', function () {
                 var table = document.getElementById('reportTable');
                 var lines = Array.prototype.map.call(table.querySelectorAll('tr'), function (r) {
                     return Array.prototype.map.call(r.children, function (c) { return '"' + c.textContent.trim().replace(/"/g, '""') + '"'; }).join(',');

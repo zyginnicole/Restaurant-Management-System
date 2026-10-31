@@ -14,6 +14,15 @@
     // Signed-in customer, read from the session (saved at login)
     string userName = Context.Session.GetUserName() ?? "Guest";
     string userInitials = NameFormatter.GetInitials(userName);
+    int unreadNotifications = 0;
+    int? customerId = Context.Session.IsSignedInAs(UserRoles.Customer)
+        ? Context.Session.GetUserId()
+        : null;
+    if (customerId.HasValue)
+    {
+        unreadNotifications = await Db.NotificationLogs
+            .CountAsync(n => n.custID == customerId.Value && !n.isRead);
+    }
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -30,7 +39,12 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 @* A page can add extra body classes with ViewData["BodyClass"] if it needs page-specific styling *@
-<body class="md-app @ViewData["BodyClass"]">
+<body class="md-app @ViewData["BodyClass"]"
+      data-system-name="@brand.restaurantName"
+      data-system-tagline="@brand.tagline"
+      data-system-address="@brand.address"
+      data-system-phone="@brand.phone"
+      data-system-email="@brand.email">
 
     @* Phone / tablet top bar with the menu button *@
     <header class="md-mobilebar d-lg-none">
@@ -41,7 +55,13 @@
         @* Bell hidden on the Notifications page itself (ViewData["HideBell"] = true) *@
         @if (!hideBell)
         {
-            <a class="md-bell" href="/Customer/Notifications" aria-label="Notifications"><i class="bi bi-bell"></i><span class="md-bell-dot">2</span></a>
+            <a class="md-bell" href="/Customer/Notifications" aria-label="Notifications">
+                <i class="bi bi-bell"></i>
+                @if (unreadNotifications > 0)
+                {
+                    <span class="md-bell-dot">@unreadNotifications</span>
+                }
+            </a>
         }
     </header>
 
@@ -70,7 +90,13 @@
             <a class="@NavClass("Reservations")" href="/Customer/Reservations"><i class="bi bi-calendar3"></i>Reservations</a>
             <a class="@NavClass("Orders")" href="/Customer/Orders"><i class="bi bi-receipt"></i>Orders</a>
             <a class="@NavClass("History")" href="/Customer/History"><i class="bi bi-clock-history"></i>History</a>
-            <a class="@NavClass("Notifications")" href="/Customer/Notifications"><i class="bi bi-bell"></i>Notifications<span class="md-nav-badge">2</span></a>
+            <a class="@NavClass("Notifications")" href="/Customer/Notifications">
+                <i class="bi bi-bell"></i>Notifications
+                @if (unreadNotifications > 0)
+                {
+                    <span class="md-nav-badge">@unreadNotifications</span>
+                }
+            </a>
             @* Profile is always the last menu item, for every role *@
             <a class="@NavClass("Profile")" href="/Customer/Profile"><i class="bi bi-person"></i>Profile</a>
         </nav>
@@ -100,7 +126,13 @@
                 @await RenderSectionAsync("HeaderActions", required: false)
                 @if (!hideBell)
                 {
-                    <a class="md-bell d-none d-lg-inline-flex" href="/Customer/Notifications" aria-label="Notifications"><i class="bi bi-bell"></i><span class="md-bell-dot">2</span></a>
+                    <a class="md-bell d-none d-lg-inline-flex" href="/Customer/Notifications" aria-label="Notifications">
+                        <i class="bi bi-bell"></i>
+                        @if (unreadNotifications > 0)
+                        {
+                            <span class="md-bell-dot">@unreadNotifications</span>
+                        }
+                    </a>
                 }
             </div>
         </div>

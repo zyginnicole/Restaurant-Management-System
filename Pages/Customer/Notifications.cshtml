@@ -51,7 +51,13 @@
                 </span>
 
                 <span class="md-notice-text">
-                    <span class="md-notice-title">@notification.Title</span>
+                    <span class="md-notice-title">
+                        @notification.Title
+                        @if (notification.Pinned)
+                        {
+                            <i class="bi bi-pin-angle-fill md-notice-pin" title="Pinned notification" aria-label="Pinned"></i>
+                        }
+                    </span>
                     <p>@notification.Message</p>
                     <span class="md-notice-time">@notification.TimeText</span>
                 </span>

@@ -15,6 +15,11 @@
 
     // Share of a total as a CSS width ("85.9%")
     string Pct(int part, int total) => total > 0 ? (part * 100.0 / total).ToString("0.#", inv) + "%" : "0%";
+    decimal previousRevenue = Model.Analytics.PreviousRevenue;
+    decimal revenueProgress = previousRevenue > 0
+        ? Math.Min(100m, Model.Analytics.Revenue / previousRevenue * 100m)
+        : Model.Analytics.Revenue > 0 ? 100m : 0m;
+    string revenueProgressClass = Model.Analytics.Revenue >= previousRevenue ? "is-good" : "is-low";
     // Position on the arrivals timeline (WindowStart … WindowEnd)
     string Pos(DateTime t)
     {
@@ -23,14 +28,20 @@
         return (span > 0 ? Math.Clamp(at / span * 100, 0, 100) : 0).ToString("0.##", inv) + "%";
     }
     string Clock(TimeSpan t) => t.TotalHours >= 24 ? "24:00" : DateTime.Today.Add(t).ToString("HH:mm", inv);
-    // "No-show" → "is-noshow" (same classes as the Staff pages)
-    string StaffStatusClass(string status) => RestaurantManagementSystem.Pages.Staff.StaffReservationText.StatusClass(status);
+    // Match the report palette: completed green, no-show red, upcoming blue, cancelled grey.
+    string DashboardStatusClass(string status) => status switch
+    {
+        ReservationStatus.Completed => "is-completed",
+        ReservationStatus.NoShow => "is-pending",
+        ReservationStatus.Cancelled or ReservationStatus.Declined => "is-cancelled",
+        _ => "is-confirmed"
+    };
 }
 
 @* Reservation figures come from the database (DashboardModel): Reservations KPI, Tables occupied, Arrivals today,
    Peak dining hours, Table utilization by area, Reservations by status.
-   Revenue, customers, rating, recent activity, collected tonight, daily sales and top menu items are still
-   example data from the design (orders / payments / feedback features). *@
+   Revenue, customers, rating, recent activity, collected tonight, daily sales and top menu items are loaded
+   from the database through ReportService. *@
 
 @section HeaderActions {
     <a class="btn btn-md-dark md-header-btn" href="/Admin/Reports"><i class="bi bi-download"></i>Export report</a>
@@ -81,7 +92,9 @@
                     <div class="md-stat-value">RM @Model.Analytics.Revenue.ToString("N2")</div>
                 </div>
                 <div class="md-kpi-delta @(Model.Analytics.RevenueChangePercent >= 0 ? "is-up" : "is-down")"><i class="bi @(Model.Analytics.RevenueChangePercent >= 0 ? "bi-arrow-up-right" : "bi-arrow-down-right")"></i>@Math.Abs(Model.Analytics.RevenueChangePercent).ToString("0.#")% vs @Model.PreviousLabel</div>
-                <div class="md-kpi-progress" aria-label="Revenue for the selected period"><i style="width: 100%"></i></div>
+                <div class="md-kpi-progress" aria-label="Revenue compared with @Model.PreviousLabel">
+                    <i class="@revenueProgressClass" style="width: @revenueProgress.ToString("0.##", inv)%"></i>
+                </div>
                 <div class="md-stat-note">Paid revenue in selected period</div>
             </div>
         </div>
@@ -230,7 +243,7 @@
                 <div class="md-card-header"><span class="md-card-label">Collected tonight</span></div>
                 <div class="md-card-body">
                     <div class="md-live-value">RM @Model.Analytics.Revenue.ToString("N2")</div>
-                    <div class="md-kpi-progress" aria-label="Collected revenue in selected period"><i style="width: 100%"></i></div>
+                    <div class="md-kpi-progress" aria-label="Collected revenue compared with @Model.PreviousLabel"><i class="@revenueProgressClass" style="width: @revenueProgress.ToString("0.##", inv)%"></i></div>
                     <div class="md-stat-note">Paid revenue in selected period</div>
                 </div>
             </section>
@@ -253,8 +266,8 @@
                 <div class="md-card-body">
                     <div class="md-chart"><canvas id="salesChart" aria-label="Daily sales chart" role="img"
                         data-labels='@Html.Raw(JsonSerializer.Serialize(Model.DailySales.Select(x => x.Name)))'
-                        data-values='@Html.Raw(JsonSerializer.Serialize(Model.DailySales.Select(x => x.Value / 1000)))'></canvas></div>
-                    <p class="md-chart-note">RM thousands, net of tax. <span class="md-swatch"></span>Highlighted: today (partial).</p>
+                        data-values='@Html.Raw(JsonSerializer.Serialize(Model.DailySales.Select(x => x.Value)))'></canvas></div>
+                    <p class="md-chart-note">Revenue in RM, net of tax. <span class="md-swatch"></span>Highlighted: latest day.</p>
                 </div>
             </section>
         </div>
@@ -266,7 +279,16 @@
                 @{
                     var busiest = Model.PeakValues.Count > 0 ? Model.PeakLabels[Model.PeakValues.IndexOf(Model.PeakValues.Max())] : null;
                 }
-                <div class="md-card-header"><span class="md-card-label">Peak dining hours · <span data-period-label>@Model.PeriodLabel</span></span></div>
+                <div class="md-card-header">
+                    <span class="md-card-label">Peak dining hours · <span data-period-label>@Model.PeriodLabel</span></span>
+                    <label class="md-chart-filter" for="peakTimeFormat">
+                        <span>Time</span>
+                        <select id="peakTimeFormat" class="form-select md-chart-format" aria-label="Peak dining hour time format">
+                            <option value="12">12-hour</option>
+                            <option value="24" selected>24-hour</option>
+                        </select>
+                    </label>
+                </div>
                 <div class="md-card-body">
                     @if (Model.PeakValues.Count > 0)
                     {
@@ -286,8 +308,7 @@
 
     <div class="row md-grid md-section">
         @* ---------- Top menu items: ranked list (2/3 width) ----------
-           Rows are drawn by admin-dashboard.js from the example data there.
-           Real data: OrderItem quantity (portions) and quantity × Menu.menuPrice (revenue), grouped by menuID. *@
+           Rows are drawn by admin-dashboard.js from the selected period's database data. *@
         <div class="col-xl-8">
             <section class="md-card h-100">
                 <div class="md-card-header md-card-header-plain">
@@ -310,7 +331,7 @@
                 <div class="md-rank-row md-rank-head" aria-hidden="true">
                     <span>#</span><span>Dish</span><span></span><span id="rankValueHead">Sold</span><span>Trend</span>
                 </div>
-                <ol class="md-rank-list" id="rankList" data-items='@Html.Raw(JsonSerializer.Serialize(Model.TopItems.Select(x => new { name = x.Name, sold = x.Quantity })))'></ol>
+                 <ol class="md-rank-list" id="rankList" data-items='@Html.Raw(JsonSerializer.Serialize(Model.TopItems.Select(x => new { name = x.Name, category = x.Category, sold = x.Quantity, revenue = x.Revenue })))'></ol>
             </section>
         </div>
 
@@ -341,13 +362,13 @@
                     <div class="md-stack" role="img" aria-label="@string.Join(", ", statusRows.Select(s => s.Key + " " + s.Value))">
                         @foreach (var s in statusRows)
                         {
-                            <i class="@StaffStatusClass(s.Key)" style="width: @Pct(s.Value, Model.ResTotal)"></i>
+                            <i class="@DashboardStatusClass(s.Key)" style="width: @Pct(s.Value, Model.ResTotal)"></i>
                         }
                     </div>
                     <ul class="md-legend">
                         @foreach (var s in statusRows)
                         {
-                            <li><i class="@StaffStatusClass(s.Key)"></i>@s.Key <b>@s.Value</b></li>
+                            <li><i class="@DashboardStatusClass(s.Key)"></i>@s.Key <b>@s.Value</b></li>
                         }
                         @if (statusRows.Count == 0)
                         {

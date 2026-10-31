@@ -34,7 +34,12 @@
     @await RenderSectionAsync("Styles", required: false)
 </head>
 @* A page can add extra body classes with ViewData["BodyClass"] if it needs page-specific styling *@
-<body class="md-app @ViewData["BodyClass"]">
+<body class="md-app @ViewData["BodyClass"]"
+      data-system-name="@brand.restaurantName"
+      data-system-tagline="@brand.tagline"
+      data-system-address="@brand.address"
+      data-system-phone="@brand.phone"
+      data-system-email="@brand.email">
 
     @* Phone / tablet top bar with the menu button *@
     <header class="md-mobilebar d-lg-none">
@@ -83,6 +88,7 @@
                 <a class="@NavClass("Reservations")" href="/Staff/Reservations"><i class="bi bi-calendar3"></i>Reservations</a>
                 <a class="@NavClass("Orders")" href="/Staff/Orders"><i class="bi bi-receipt"></i>Orders</a>
                 <a class="@NavClass("Billing")" href="/Staff/Billing"><i class="bi bi-credit-card"></i>Billing</a>
+                <a class="@NavClass("Notifications")" href="/Staff/Notifications"><i class="bi bi-bell"></i>Notifications</a>
                 <a class="@NavClass("Guests")" href="/Staff/Guests"><i class="bi bi-person-vcard"></i>Guests</a>
                 @* Profile is always the last menu item, for every role *@
                 <a class="@NavClass("Profile")" href="/Staff/Profile"><i class="bi bi-person"></i>My profile</a>

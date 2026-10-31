@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security;
 using System.Text;
 using ClosedXML.Excel;
 using QuestPDF.Fluent;
@@ -203,6 +204,204 @@ public class ExportService
                     });
             });
         }).GeneratePdf();
+    }
+
+    // Generates a statistic report PDF with the same summaries and chart data shown on the admin page.
+    public byte[] ToStatisticPdf(StatisticReport report, string title)
+    {
+        return Document.Create(document =>
+        {
+            document.Page(page =>
+            {
+                page.Margin(28);
+                page.Header().Column(column =>
+                {
+                    column.Item().Text(title).FontSize(18).Bold();
+                    column.Item().Text($"Generated {DateTimeOffset.Now:dd MMM yyyy HH:mm}").FontSize(9);
+                });
+
+                page.Content().PaddingVertical(12).Column(column =>
+                {
+                    column.Spacing(8);
+                    column.Item().Text("Key figures").FontSize(13).Bold();
+                    column.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn();
+                            columns.RelativeColumn();
+                            columns.RelativeColumn();
+                            columns.RelativeColumn();
+                        });
+
+                        table.Cell().Text($"Revenue\nRM {report.Kpis.Revenue:N0}").Bold();
+                        table.Cell().Text($"Reservations\n{report.Kpis.Reservations:N0}").Bold();
+                        table.Cell().Text($"Customers\n{report.Kpis.Customers:N0}").Bold();
+                        table.Cell().Text($"Average rating\n{report.Kpis.AverageRating:0.0} / 5").Bold();
+                    });
+
+                    column.Item().Text("Revenue trend").FontSize(13).Bold();
+                    column.Item().Height(155).Svg(BuildLineChart(report.RevenueSeries, "Revenue (RM)"));
+
+                    column.Item().Text("New customers").FontSize(13).Bold();
+                    column.Item().Height(135).Svg(BuildLineChart(report.NewCustomerSeries, "New customers"));
+
+                    column.Item().Text("Peak dining hours").FontSize(13).Bold();
+                    column.Item().Height(145).Svg(BuildBarChart(report.PeakHours, "Reservations"));
+
+                    column.Item().Text("Reservations by status").FontSize(13).Bold();
+                    column.Item().Height(55).Svg(BuildStackedBar(report.StatusBreakdown));
+
+                    column.Item().Text("Top menu items").FontSize(13).Bold();
+                    column.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(2);
+                        });
+                        table.Header(header =>
+                        {
+                            header.Cell().Text("Dish").Bold();
+                            header.Cell().Text("Sold").Bold();
+                            header.Cell().Text("Revenue").Bold();
+                        });
+                        foreach (var item in report.TopItems)
+                        {
+                            table.Cell().Text(item.Name);
+                            table.Cell().Text(item.Quantity.ToString("N0"));
+                            table.Cell().Text($"RM {item.Revenue:N2}");
+                        }
+                    });
+
+                    column.Item().Text("Utilization and rating distribution").FontSize(13).Bold();
+                    column.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(1);
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(1);
+                        });
+
+                        int maxRows = Math.Max(report.Utilization.Count, 5);
+                        for (int i = 0; i < maxRows; i++)
+                        {
+                            if (i < report.Utilization.Count)
+                            {
+                                table.Cell().Text(report.Utilization[i].Name);
+                                table.Cell().Text($"{report.Utilization[i].Value:0}%");
+                            }
+                            else
+                            {
+                                table.Cell().Text("");
+                                table.Cell().Text("");
+                            }
+
+                            int stars = 5 - i;
+                            table.Cell().Text($"{stars} stars");
+                            table.Cell().Text($"{report.Kpis.StarSharePercent[stars]}%");
+                        }
+                    });
+                });
+
+                page.Footer().AlignCenter().Text(text =>
+                {
+                    text.Span("Page ");
+                    text.CurrentPageNumber();
+                });
+            });
+        }).GeneratePdf();
+    }
+
+    private static string BuildLineChart(IReadOnlyList<NameValue> series, string axisLabel)
+    {
+        const double width = 720;
+        const double height = 220;
+        const double left = 48;
+        const double right = 12;
+        const double top = 16;
+        const double bottom = 42;
+        var values = series.Select(x => x.Value).ToList();
+        var max = values.Count == 0 ? 1 : Math.Max(1, values.Max());
+        var step = values.Count <= 1 ? 0 : (width - left - right) / (values.Count - 1);
+        var points = new StringBuilder();
+
+        for (int i = 0; i < values.Count; i++)
+        {
+            var x = left + i * step;
+            var y = height - bottom - values[i] / max * (height - top - bottom);
+            if (i > 0) points.Append(' ');
+            points.Append(x.ToString("0.##", CultureInfo.InvariantCulture));
+            points.Append(',');
+            points.Append(y.ToString("0.##", CultureInfo.InvariantCulture));
+        }
+
+        var svg = new StringBuilder($"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {width} {height}'>");
+        svg.Append("<rect width='100%' height='100%' fill='white'/>");
+        svg.Append($"<line x1='{left}' y1='{height - bottom}' x2='{width - right}' y2='{height - bottom}' stroke='#d8d3c8'/>");
+        svg.Append($"<line x1='{left}' y1='{top}' x2='{left}' y2='{height - bottom}' stroke='#d8d3c8'/>");
+        if (values.Count > 0)
+            svg.Append($"<polyline points='{points}' fill='none' stroke='#5165ad' stroke-width='3'/>");
+        svg.Append($"<text x='{left}' y='{height - 10}' font-size='12' fill='#6f6a61'>{Xml(axisLabel)}</text>");
+        for (int i = 0; i < series.Count; i++)
+        {
+            if (series.Count > 8 && i % Math.Max(1, series.Count / 8) != 0) continue;
+            var x = left + i * step;
+            svg.Append($"<text x='{x:0.##}' y='{height - 23}' text-anchor='middle' font-size='10' fill='#6f6a61'>{Xml(series[i].Name)}</text>");
+        }
+        svg.Append("</svg>");
+        return svg.ToString();
+    }
+
+    private static string BuildBarChart(IReadOnlyList<NameValue> series, string axisLabel)
+    {
+        const double width = 720;
+        const double height = 210;
+        const double left = 42;
+        const double bottom = 42;
+        var max = series.Count == 0 ? 1 : Math.Max(1, series.Max(x => x.Value));
+        var slot = series.Count == 0 ? width - left : (width - left - 12) / series.Count;
+        var svg = new StringBuilder($"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {width} {height}'>");
+        svg.Append("<rect width='100%' height='100%' fill='white'/>");
+        svg.Append($"<line x1='{left}' y1='{height - bottom}' x2='{width - 12}' y2='{height - bottom}' stroke='#d8d3c8'/>");
+        for (int i = 0; i < series.Count; i++)
+        {
+            var barHeight = series[i].Value / max * (height - bottom - 20);
+            var x = left + i * slot + slot * .15;
+            var y = height - bottom - barHeight;
+            svg.Append($"<rect x='{x:0.##}' y='{y:0.##}' width='{slot * .7:0.##}' height='{barHeight:0.##}' fill='#5165ad'/>");
+            svg.Append($"<text x='{x + slot * .35:0.##}' y='{height - 24}' text-anchor='middle' font-size='10' fill='#6f6a61'>{Xml(series[i].Name)}</text>");
+        }
+        svg.Append($"<text x='{left}' y='{height - 7}' font-size='12' fill='#6f6a61'>{Xml(axisLabel)}</text></svg>");
+        return svg.ToString();
+    }
+
+    private static string BuildStackedBar(IReadOnlyList<NameValue> statuses)
+    {
+        const double width = 720;
+        const double height = 80;
+        var total = Math.Max(1, statuses.Sum(x => x.Value));
+        var colors = new[] { "#4b9a8e", "#b33b46", "#c8c4ba", "#5165ad", "#8f7a5b" };
+        var svg = new StringBuilder($"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {width} {height}'>");
+        svg.Append("<rect width='100%' height='100%' fill='white'/>");
+        double x = 0;
+        for (int i = 0; i < statuses.Count; i++)
+        {
+            var w = statuses[i].Value / total * width;
+            svg.Append($"<rect x='{x:0.##}' y='10' width='{w:0.##}' height='24' fill='{colors[i % colors.Length]}'/>");
+            svg.Append($"<text x='{x + w / 2:0.##}' y='58' text-anchor='middle' font-size='10' fill='#333'>{Xml(statuses[i].Name)} {statuses[i].Value:0}</text>");
+            x += w;
+        }
+        svg.Append("</svg>");
+        return svg.ToString();
+    }
+
+    private static string Xml(string value)
+    {
+        return SecurityElement.Escape(value) ?? string.Empty;
     }
 
     // Helper: Formats decimal numbers into fixed 2-decimal invariant strings (e.g. 12.34).

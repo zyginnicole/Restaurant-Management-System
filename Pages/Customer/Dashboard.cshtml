@@ -231,36 +231,34 @@
         }
     </div>
 </div>
-<script>
-    async function refreshDashboard() {
-        const response = await fetch('/Admin/Dashboard?handler=Data&range=month');
 
-        if (!response.ok) {
-            return;
-        }
+@* The dashboard uses the same customer chatbot as the menu page. *@
+<button type="button" class="md-chat-fab" id="chatToggle" aria-expanded="false" aria-controls="chatPanel"
+        aria-label="Chat with our assistant" title="Chat with our assistant">
+    <i class="bi bi-chat-right-dots"></i>
+</button>
 
-        const data = await response.json();
+<section class="md-chat-panel d-none" id="chatPanel" aria-label="@ViewData["Brand"] assistant">
+    <div class="md-chat-header">
+        <div>
+            <div class="md-chat-title">@ViewData["Brand"] assistant</div>
+            <div class="md-chat-subtitle">Answers about bookings, menu and opening hours</div>
+        </div>
+        <button type="button" class="btn-close btn-close-white md-chat-close" id="chatClose" aria-label="Close chat"></button>
+    </div>
+    <div class="md-chat-body" id="chatBody">
+        <div class="md-chat-msg bot">
+            Hi! I can help you find dishes, recommendations and promotions, check opening hours,
+            or guide you to reservations, orders and notifications. Try asking “What are your mains?”
+            or “Show vegetarian dishes”.
+        </div>
+    </div>
+    <form class="md-chat-input" id="chatForm">
+        <input class="form-control md-input" id="chatText" type="text" placeholder="Ask about menu, booking or hours" aria-label="Message" />
+        <button type="submit" class="btn btn-md-dark">Send</button>
+    </form>
+</section>
 
-        document.querySelector('[data-dashboard-revenue]').textContent =
-            'RM ' + Number(data.summary.revenue).toLocaleString();
-
-        document.querySelector('[data-dashboard-reservations]').textContent =
-            data.summary.reservations;
-
-        document.querySelector('[data-dashboard-customers]').textContent =
-            data.summary.customers;
-
-        document.querySelector('[data-dashboard-rating]').textContent =
-            Number(data.summary.averageRating).toFixed(1) + ' / 5';
-
-        document.querySelector('[data-dashboard-tables]').textContent =
-            `${data.live.tablesSeated} / ${data.live.totalTables}`;
-
-        document.querySelector('[data-dashboard-guests]').textContent =
-            data.live.guestsSeated;
-    }
-
-    refreshDashboard();
-
-    setInterval(refreshDashboard, 30000);
-</script>
+@section Scripts {
+    <script src="~/js/chatbot.js" asp-append-version="true"></script>
+}

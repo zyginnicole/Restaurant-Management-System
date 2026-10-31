@@ -33,39 +33,66 @@ namespace RestaurantManagementSystem.Pages.Customer
                 })
                 .ToListAsync();
 
-            var notifications = notificationRows.Select(n => new NotificationView
-            {
-                NotificationId = n.notificationID,
-                Category = n.notificationCategory,
-                DataCategory = ToDataCategory(n.notificationCategory),
-                Unread = !n.isRead,
-                Title = n.notificationTitle,
-                Message = n.notificationMessage,
-                TimeText = FormatTime(n.notificationCreateAt),
-                LinkUrl = n.linkUrl,
-                TimeSort = n.notificationCreateAt
-            });
-
             var announcementRows = await _db.Announcements.AsNoTracking()
                 .Where(a => a.targetAudience == "All" || a.targetAudience == "Customers")
                 .Select(a => new
                 {
+                    a.announcementID,
                     a.announcementTitle,
                     a.announcementMessage,
-                    a.announcementDate
+                    a.announcementDate,
+                    a.isPinned
                 })
                 .ToListAsync();
 
-            var announcements = announcementRows.Select(a => new NotificationView
+            // An admin announcement is stored in Announcements and is also broadcast into
+            // NotificationLogs so each customer has read/unread state. Show the announcement
+            // once, while using the matching log only for its read state and link.
+            var announcementNotificationIds = new HashSet<int>();
+            var announcements = new List<NotificationView>();
+
+            foreach (var announcement in announcementRows)
             {
-                Category = "Announcement",
-                DataCategory = "promotion",
-                Pinned = true,
-                Title = a.announcementTitle,
-                Message = a.announcementMessage,
-                TimeText = FormatTime(a.announcementDate),
-                TimeSort = a.announcementDate
-            });
+                var matchingLogs = notificationRows
+                    .Where(n => n.notificationCategory == "General"
+                                && n.notificationTitle == announcement.announcementTitle
+                                && n.notificationMessage == announcement.announcementMessage)
+                    .OrderByDescending(n => n.notificationCreateAt)
+                    .ToList();
+
+                foreach (var log in matchingLogs)
+                    announcementNotificationIds.Add(log.notificationID);
+
+                var matchingLog = matchingLogs.FirstOrDefault();
+                announcements.Add(new NotificationView
+                {
+                    NotificationId = matchingLog?.notificationID,
+                    Category = "Announcement",
+                    DataCategory = "promotion",
+                    Pinned = announcement.isPinned,
+                    Unread = matchingLog != null && !matchingLog.isRead,
+                    Title = announcement.announcementTitle,
+                    Message = announcement.announcementMessage,
+                    TimeText = FormatTime(announcement.announcementDate),
+                    LinkUrl = matchingLog?.linkUrl ?? "/Customer/Notifications",
+                    TimeSort = announcement.announcementDate
+                });
+            }
+
+            var notifications = notificationRows
+                .Where(n => !announcementNotificationIds.Contains(n.notificationID))
+                .Select(n => new NotificationView
+                {
+                    NotificationId = n.notificationID,
+                    Category = n.notificationCategory,
+                    DataCategory = ToDataCategory(n.notificationCategory),
+                    Unread = !n.isRead,
+                    Title = n.notificationTitle,
+                    Message = n.notificationMessage,
+                    TimeText = FormatTime(n.notificationCreateAt),
+                    LinkUrl = n.linkUrl,
+                    TimeSort = n.notificationCreateAt
+                });
 
             Items = notifications.Concat(announcements)
                 .OrderByDescending(x => x.Pinned)

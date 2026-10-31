@@ -87,6 +87,7 @@ public class ReportService
         k.NewCustomers = await _db.Customers.CountAsync(c => c.custCreateAt >= fromAt && c.custCreateAt < toAt);
         k.PreviousNewCustomers = await _db.Customers.CountAsync(c => c.custCreateAt >= prevFrom && c.custCreateAt < prevTo);
         k.NewCustomersChangePercent = Change(k.NewCustomers, k.PreviousNewCustomers);
+        k.PromoOptInCustomers = await _db.Customers.CountAsync(c => c.promoOptIn);
 
         // Ratings. (double?) lets Average return null when there are no ratings instead of crashing.
         var ratings = _db.Feedbacks.Where(f => f.feedbackDate >= fromAt && f.feedbackDate < toAt);
@@ -281,13 +282,13 @@ public class ReportService
         var rows = await _db.OrderItems
             .Where(i => i.Order!.orderDateTime >= fromDate && i.Order.orderDateTime < toDate
                         && i.Order.orderStatus != "Cancelled")
-            .GroupBy(i => i.Menu!.menuName)
-            .Select(g => new { Name = g.Key, Quantity = g.Sum(i => i.quantity), Revenue = g.Sum(i => i.quantity * i.unitPrice) })
+            .GroupBy(i => new { Name = i.Menu!.menuName, Category = i.Menu.MenuCategory!.categoryName })
+            .Select(g => new { g.Key.Name, g.Key.Category, Quantity = g.Sum(i => i.quantity), Revenue = g.Sum(i => i.quantity * i.unitPrice) })
             .OrderByDescending(x => x.Quantity).ThenBy(x => x.Name)
             .Take(take)
             .ToListAsync();
 
-        return rows.Select(x => new TopItem(x.Name, x.Quantity, x.Revenue)).ToList();
+        return rows.Select(x => new TopItem(x.Name, x.Quantity, x.Revenue) { Category = x.Category }).ToList();
     }
 
     // ------------------------------------------------------------------

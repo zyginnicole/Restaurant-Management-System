@@ -1,0 +1,99 @@
+@page
+@model RestaurantManagementSystem.Pages.Staff.NotificationsModel
+@{
+    ViewData["Title"] = "Notifications";
+    ViewData["Module"] = "Staff";
+    ViewData["ActiveNav"] = "Notifications";
+    ViewData["Eyebrow"] = "Updates";
+    ViewData["Heading"] = "Notifications";
+    ViewData["Subtitle"] = "Announcements from the administrator";
+    Layout = "_DashboardLayout";
+}
+
+<section class="md-card md-section">
+    <div class="md-card-header md-notice-toolbar">
+        <nav class="md-tabs" aria-label="Filter notifications" id="staffNoticeTabs">
+            <button type="button" class="active" data-filter="all">
+                All <small data-count="all">@Model.Items.Count</small>
+            </button>
+            <button type="button" data-filter="pinned">
+                Pinned <small data-count="pinned">@Model.Items.Count(x => x.Pinned)</small>
+            </button>
+        </nav>
+    </div>
+
+    <ul class="md-notice-list" id="staffNoticeList">
+        @foreach (var notification in Model.Items)
+        {
+            <li class="md-notice" data-pinned="@notification.Pinned.ToString().ToLowerInvariant()">
+                <button type="button"
+                        class="md-notice-btn md-notice-row"
+                        data-type="Announcement"
+                        data-title="@notification.Title"
+                        data-message="@notification.Message"
+                        data-time="@notification.TimeText">
+                    <span class="md-notice-icon is-promotion">
+                        <i class="bi bi-megaphone"></i>
+                    </span>
+                    <span class="md-notice-text">
+                        <span class="md-notice-title">
+                            @notification.Title
+                            @if (notification.Pinned)
+                            {
+                                <i class="bi bi-pin-angle-fill md-notice-pin" title="Pinned notification" aria-label="Pinned"></i>
+                            }
+                        </span>
+                        <p>@notification.Message</p>
+                        <span class="md-notice-time">@notification.TimeText</span>
+                    </span>
+                </button>
+            </li>
+        }
+    </ul>
+
+    <p class="md-notice-empty d-none" id="staffNoticeEmpty">No notifications here.</p>
+</section>
+
+<partial name="~/Pages/Shared/Popups/_NotificationPopup.cshtml" />
+
+@section Scripts {
+    <script src="~/js/notifications.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var list = document.getElementById('staffNoticeList');
+            var tabs = document.querySelectorAll('#staffNoticeTabs button');
+            var current = 'all';
+
+            function refresh() {
+                var shown = 0;
+                list.querySelectorAll('.md-notice').forEach(function (item) {
+                    var show = current === 'all' || item.dataset.pinned === 'true';
+                    item.classList.toggle('d-none', !show);
+                    if (show) shown++;
+                });
+
+                tabs.forEach(function (tab) {
+                    var count = current === 'all'
+                        ? list.querySelectorAll('.md-notice').length
+                        : list.querySelectorAll('.md-notice[data-pinned="true"]').length;
+                    tab.querySelector('[data-count]').textContent =
+                        tab.dataset.filter === 'pinned'
+                            ? list.querySelectorAll('.md-notice[data-pinned="true"]').length
+                            : count;
+                });
+
+                document.getElementById('staffNoticeEmpty').classList.toggle('d-none', shown > 0);
+            }
+
+            tabs.forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    current = tab.dataset.filter;
+                    tabs.forEach(function (item) { item.classList.toggle('active', item === tab); });
+                    refresh();
+                });
+            });
+
+            refresh();
+        })();
+    </script>
+}
