@@ -1,3 +1,6 @@
+using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Helpers;
+
 namespace RestaurantManagementSystem.Services
 {
     // Runs in the background while the app is running: when it starts, and then every minute, it closes
@@ -25,6 +28,10 @@ namespace RestaurantManagementSystem.Services
                 {
                     // ReservationService uses the database, so it needs its own scope here
                     using var scope = _scopes.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    var notifications = scope.ServiceProvider.GetRequiredService<NotificationService>();
+                    await StaleOrders.CancelStaleAsync(db, notifications);
+
                     var reservations = scope.ServiceProvider.GetRequiredService<ReservationService>();
                     int closed = await reservations.CloseOverdueAsync();
                     if (closed > 0)

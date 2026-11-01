@@ -17,12 +17,18 @@ namespace RestaurantManagementSystem.Pages.Staff
         private readonly ApplicationDbContext _db;
         private readonly ReservationService _reservations;
         private readonly SettingsService _settings;
+        private readonly NotificationService _notifications;
 
-        public DashboardModel(ApplicationDbContext db, ReservationService reservations, SettingsService settings)
+        public DashboardModel(
+            ApplicationDbContext db,
+            ReservationService reservations,
+            SettingsService settings,
+            NotificationService notifications)
         {
             _db = db;
             _reservations = reservations;
             _settings = settings;
+            _notifications = notifications;
         }
 
         // Statuses shown on the dashboard (Cancelled, Declined and No-show are only on the Reservations page)
@@ -61,6 +67,8 @@ namespace RestaurantManagementSystem.Pages.Staff
 
         public async Task OnGetAsync()
         {
+            await StaleOrders.CancelStaleAsync(_db, _notifications);
+
             Settings = await _settings.GetAsync();
             StaffName = HttpContext.Session.GetUserName() ?? "";
 

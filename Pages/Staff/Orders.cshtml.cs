@@ -106,6 +106,8 @@ namespace RestaurantManagementSystem.Pages.Staff
 
         public async Task OnGetAsync()
         {
+            await StaleOrders.CancelStaleAsync(_context, _notifications);
+
             TodayLabel = DateTime.Now.ToString("dddd, d MMMM yyyy");
 
             // ---- all orders, newest first ----
