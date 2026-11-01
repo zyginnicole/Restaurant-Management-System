@@ -13,7 +13,6 @@ namespace RestaurantManagementSystem.Migrations
     [DbContext(typeof(ApplicationDbContext))]
     partial class ApplicationDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
@@ -35,7 +34,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("PromotionspromoID");
 
-                    b.ToTable("MenuPromotion");
+                    b.ToTable("MenuPromotion", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Admin", b =>
@@ -72,7 +71,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("adminEmail")
                         .IsUnique();
 
-                    b.ToTable("Admin");
+                    b.ToTable("Admin", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Announcement", b =>
@@ -110,7 +109,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("adminID");
 
-                    b.ToTable("Announcements");
+                    b.ToTable("Announcements", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.BlockedSlot", b =>
@@ -132,7 +131,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("restaurantID", "slotStart")
                         .IsUnique();
 
-                    b.ToTable("BlockedSlots");
+                    b.ToTable("BlockedSlots", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Customer", b =>
@@ -192,7 +191,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("custEmail")
                         .IsUnique();
 
-                    b.ToTable("Customer");
+                    b.ToTable("Customer", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.DiningArea", b =>
@@ -227,7 +226,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("areaName")
                         .IsUnique();
 
-                    b.ToTable("DiningAreas");
+                    b.ToTable("DiningAreas", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.DiningTable", b =>
@@ -259,7 +258,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("tableNumber")
                         .IsUnique();
 
-                    b.ToTable("Tables");
+                    b.ToTable("Tables", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Feedback", b =>
@@ -288,11 +287,12 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasKey("feedbackID");
 
-                    b.HasIndex("custID");
-
                     b.HasIndex("orderID");
 
-                    b.ToTable("Feedbacks");
+                    b.HasIndex("custID", "orderID")
+                        .IsUnique();
+
+                    b.ToTable("Feedbacks", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Menu", b =>
@@ -337,7 +337,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("categoryID");
 
-                    b.ToTable("Menus");
+                    b.ToTable("Menus", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.MenuCategory", b =>
@@ -360,7 +360,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("categoryName")
                         .IsUnique();
 
-                    b.ToTable("MenuCategories");
+                    b.ToTable("MenuCategories", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Notification", b =>
@@ -401,9 +401,9 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasKey("notificationID");
 
-                    b.HasIndex("custID");
+                    b.HasIndex("custID", "isRead");
 
-                    b.ToTable("Notifications");
+                    b.ToTable("Notifications", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.OperatingHour", b =>
@@ -434,7 +434,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("restaurantID", "dayOfWeek")
                         .IsUnique();
 
-                    b.ToTable("OperatingHours");
+                    b.ToTable("OperatingHours", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Order", b =>
@@ -484,7 +484,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("tableID");
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.OrderItem", b =>
@@ -529,7 +529,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("promoID");
 
-                    b.ToTable("OrderItems");
+                    b.ToTable("OrderItems", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Payment", b =>
@@ -562,7 +562,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("orderID")
                         .IsUnique();
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Promotion", b =>
@@ -653,7 +653,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("promoCode")
                         .IsUnique();
 
-                    b.ToTable("Promotions");
+                    b.ToTable("Promotions", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Reservation", b =>
@@ -697,7 +697,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("tableID");
 
-                    b.ToTable("Reservations");
+                    b.ToTable("Reservations", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Restaurant", b =>
@@ -726,7 +726,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasKey("restaurantID");
 
-                    b.ToTable("Restaurants");
+                    b.ToTable("Restaurants", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Staff", b =>
@@ -775,7 +775,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("staffEmail")
                         .IsUnique();
 
-                    b.ToTable("Staff");
+                    b.ToTable("Staff", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.SystemSetting", b =>
@@ -875,7 +875,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasKey("settingID");
 
-                    b.ToTable("SystemSettings");
+                    b.ToTable("SystemSettings", (string)null);
                 });
 
             modelBuilder.Entity("MenuPromotion", b =>
