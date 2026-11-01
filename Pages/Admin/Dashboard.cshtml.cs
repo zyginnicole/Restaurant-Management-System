@@ -1,87 +1,132 @@
-using System.Text.Json;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+using RestaurantManagementSystem.Data;
+using RestaurantManagementSystem.Model;
 using RestaurantManagementSystem.Services;
 
-namespace RestaurantManagementSystem.Pages.Admin
+namespace RestaurantManagementSystem.Pages.Admin;
+
+// Loads the figures and collections used by the existing admin dashboard page.
+public class DashboardModel : PageModel
 {
-    // Admin dashboard: live operations (today) and sales & trends (for the chosen date range).
-    // Access is limited to the Admin role by the folder rule in Program.cs.
-    //  - Date buttons: ?range=today | week | month (default) | custom&from=2026-09-01&to=2026-09-15
-    //  - ?handler=Live returns today's live figures as JSON, so the page can refresh them without reloading.
-    //  - ?handler=Export&format=csv|excel|pdf&range=... downloads the daily sales report for the range.
-    public class DashboardModel : PageModel
+    private readonly ApplicationDbContext _db;
+    private readonly ReservationService _reservations;
+    private readonly ReportService _reports;
+
+    public DashboardModel(ApplicationDbContext db, ReservationService reservations, ReportService reports)
     {
-        private readonly ReportService _reports;
-        private readonly ExportService _export;
+        _db = db;
+        _reservations = reservations;
+        _reports = reports;
+    }
 
-        public DashboardModel(ReportService reports, ExportService export)
+    public KpiSummary Analytics { get; private set; } = new();
+    public List<NameValue> DailySales { get; private set; } = new();
+    public List<TopItem> TopItems { get; private set; } = new();
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public int Day { get; set; }
+    public string PeriodLabel { get; set; } = "";
+    public string PreviousLabel { get; set; } = "";
+    public List<int> Years { get; set; } = new();
+    public int ResTotal { get; set; }
+    public int ResCompleted { get; set; }
+    public int ResEnded { get; set; }
+    public int ResUpcoming { get; set; }
+    public int? ResDeltaPercent { get; set; }
+    public Dictionary<string, int> StatusCounts { get; set; } = new();
+    public List<string> PeakLabels { get; set; } = new();
+    public List<int> PeakValues { get; set; } = new();
+    public record AreaCount(string Area, int Count, int Total);
+    public int TablesInService { get; set; }
+    public int TablesUsed { get; set; }
+    public List<AreaCount> Utilization { get; set; } = new();
+    public int OccupiedNow { get; set; }
+    public int GuestsNow { get; set; }
+    public List<AreaCount> OccupiedByArea { get; set; } = new();
+    public List<Reservation> Arrivals { get; set; } = new();
+    public TimeSpan WindowStart { get; set; }
+    public TimeSpan WindowEnd { get; set; }
+    public record ActivityItem(DateTimeOffset When, string Title, string Code, string Link, string Meta, string Css);
+    public List<ActivityItem> RecentActivity { get; set; } = new();
+
+    // Loads the selected period and today's live reservation information.
+    public async Task OnGetAsync(int? year, int? month, int? day)
+    {
+        var today = DateTime.Today;
+        Year = year is >= 2000 and <= 2100 ? year.Value : today.Year;
+        Month = month is >= 0 and <= 12 ? month.Value : (year == null ? today.Month : 0);
+        Day = Month > 0 && day is >= 1 && day <= DateTime.DaysInMonth(Year, Month) ? day.Value : 0;
+
+        var start = Day > 0 ? new DateTime(Year, Month, Day) :
+            Month > 0 ? new DateTime(Year, Month, 1) : new DateTime(Year, 1, 1);
+        var end = Day > 0 ? start.AddDays(1) : Month > 0 ? start.AddMonths(1) : start.AddYears(1);
+        var previousStart = Day > 0 ? start.AddDays(-1) : Month > 0 ? start.AddMonths(-1) : start.AddYears(-1);
+        PeriodLabel = Day > 0 ? start.ToString("d MMMM yyyy") : Month > 0 ? start.ToString("MMMM") : Year.ToString();
+        PreviousLabel = Day > 0 ? "the day before" : previousStart.ToString(Month > 0 ? "MMMM" : "yyyy");
+
+        var range = new DateRange(start, end, PeriodLabel);
+        Analytics = await _reports.GetKpisAsync(range, new DateRange(previousStart, start, PreviousLabel));
+        DailySales = await _reports.GetRevenueSeriesAsync(range, Granularity.Day);
+        TopItems = await _reports.GetTopItemsAsync(range, 5);
+
+        Years = await _db.Reservations.AsNoTracking().Select(r => r.reservationDateTime.Year).Distinct().ToListAsync();
+        if (!Years.Contains(today.Year)) Years.Add(today.Year);
+        if (!Years.Contains(Year)) Years.Add(Year);
+        Years = Years.OrderBy(y => y).ToList();
+
+        var reservations = await _reservations.GetBetweenAsync(start, end.AddDays(-1));
+        var previousCount = await _db.Reservations.CountAsync(r => r.reservationDateTime >= previousStart && r.reservationDateTime < start);
+        ResTotal = reservations.Count;
+        ResCompleted = reservations.Count(r => r.reservationStatus == ReservationStatus.Completed);
+        ResUpcoming = reservations.Count(r => ReservationStatus.Active.Contains(r.reservationStatus));
+        ResEnded = ResTotal - ResCompleted - ResUpcoming;
+        ResDeltaPercent = previousCount == 0 ? null : (int)Math.Round((ResTotal - previousCount) * 100.0 / previousCount);
+
+        var statuses = new[] { ReservationStatus.Completed, ReservationStatus.Seated, ReservationStatus.Confirmed,
+            ReservationStatus.Pending, ReservationStatus.Cancelled, ReservationStatus.NoShow, ReservationStatus.Declined };
+        StatusCounts = statuses.ToDictionary(s => s, s => reservations.Count(r => r.reservationStatus == s));
+
+        var peak = reservations.Where(r => r.reservationStatus != ReservationStatus.Cancelled && r.reservationStatus != ReservationStatus.Declined)
+            .GroupBy(r => r.reservationDateTime.Hour).OrderBy(g => g.Key).ToList();
+        PeakLabels = peak.Select(g => $"{g.Key:00}:00").ToList();
+        PeakValues = peak.Select(g => g.Count()).ToList();
+
+        var tables = await _db.DiningTables.AsNoTracking().Include(t => t.DiningArea)
+            .Where(t => t.tableStatus != "Maintenance" && t.DiningArea!.areaActive).ToListAsync();
+        var areas = tables.GroupBy(t => t.DiningArea!.areaName).OrderBy(g => g.Min(t => t.areaID)).ToList();
+        var usedIds = reservations.Where(r => r.reservationStatus is ReservationStatus.Completed or ReservationStatus.Seated)
+            .Select(r => r.tableID).ToHashSet();
+        TablesInService = tables.Count;
+        TablesUsed = tables.Count(t => usedIds.Contains(t.tableID));
+        Utilization = areas.Select(g => new AreaCount(g.Key, g.Count(t => usedIds.Contains(t.tableID)), g.Count())).ToList();
+
+        var todayReservations = await _reservations.GetDayAsync(today);
+        var seated = todayReservations.Where(r => r.reservationStatus == ReservationStatus.Seated).ToList();
+        var occupiedIds = seated.Select(r => r.tableID).Concat(tables.Where(t => t.tableStatus == "Occupied").Select(t => t.tableID)).ToHashSet();
+        OccupiedNow = tables.Count(t => occupiedIds.Contains(t.tableID));
+        GuestsNow = seated.Sum(r => r.partySize);
+        OccupiedByArea = areas.Select(g => new AreaCount(g.Key, g.Count(t => occupiedIds.Contains(t.tableID)), g.Count())).ToList();
+        Arrivals = todayReservations.Where(r => ReservationStatus.Active.Contains(r.reservationStatus) || r.reservationStatus == ReservationStatus.Completed)
+            .OrderBy(r => r.reservationDateTime).ToList();
+        WindowStart = TimeSpan.FromHours(18);
+        WindowEnd = TimeSpan.FromHours(22);
+        if (Arrivals.Count > 0)
         {
-            _reports = reports;
-            _export = export;
+            WindowStart = TimeSpan.FromHours(Math.Min(18, Arrivals.First().reservationDateTime.Hour));
+            WindowEnd = TimeSpan.FromHours(Math.Max(22, Arrivals.Last().reservationDateTime.Hour + 1));
         }
 
-        // ---- What the page shows (read these through "Model" in the .cshtml) ----
-        public string Range { get; set; } = "month";           // which date button is active
-        public DateTime? From { get; set; }                     // custom range inputs
-        public DateTime? To { get; set; }
-        public string RangeLabel { get; set; } = "";            // "This Month", "Today", ...
+        RecentActivity = new();
+    }
 
-        public KpiSummary Kpis { get; set; } = new();           // the four cards at the top
-        public LiveSnapshot Live { get; set; } = new();         // Live operations tab
-        public List<NameValue> Utilization { get; set; } = new();   // table utilization by area (percent)
-        public List<NameValue> DailySales { get; set; } = new();    // revenue per day (Sales & trends chart)
-        public List<NameValue> PeakHours { get; set; } = new();     // reservations per hour
-        public List<TopItem> TopItems { get; set; } = new();        // top 5 menu items
-
-        // The two charts as ready-made JSON for the page script, e.g.  const sales = @Html.Raw(Model.SalesChartJson);
-        public string SalesChartJson => ChartJson(DailySales);
-        public string PeakChartJson => ChartJson(PeakHours);
-
-        public async Task OnGetAsync(string? range, DateTime? from, DateTime? to)
-        {
-            var r = ReportService.GetRange(range, from, to);
-
-            Range = (range ?? "month").ToLower();
-            if (Range != "today" && Range != "week" && Range != "custom") Range = "month";
-            From = from;
-            To = to;
-            RangeLabel = r.Label;
-
-            Kpis = await _reports.GetKpisAsync(r, ReportService.PreviousRange(r));
-            Live = await _reports.GetLiveAsync();
-            Utilization = await _reports.GetUtilizationAsync(r);
-            DailySales = await _reports.GetRevenueSeriesAsync(r, Granularity.Day);
-            PeakHours = await _reports.GetPeakHoursAsync(r);
-            TopItems = await _reports.GetTopItemsAsync(r);
-        }
-
-        // Live operations only (cheap), for auto-refresh
-        public async Task<IActionResult> OnGetLiveAsync() => new JsonResult(await _reports.GetLiveAsync());
-
-        // Download the daily sales report for the selected range
-        public async Task<IActionResult> OnGetExportAsync(string format, string? range, DateTime? from, DateTime? to)
-        {
-            var r = ReportService.GetRange(range, from, to);
-            var report = await _reports.GetSalesReportAsync(r, monthly: false);
-            var name = $"sales-report-{r.Start:yyyyMMdd}-{r.End.AddDays(-1):yyyyMMdd}";
-
-            return format.ToLower() switch
-            {
-                // + ".CSV" forces the browser to download a .csv file.
-                "csv" => File(_export.ToCsv(report), "text/csv", name + ".csv"),
-                "excel" => File(_export.ToExcel(report),
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx"),
-                "pdf" => File(_export.ToPdf(report, "Sales Report"), "application/pdf", name + ".pdf"),
-                _ => BadRequest("Unknown format. Use csv, excel or pdf.")
-            };
-        }
-
-        private static string ChartJson(List<NameValue> series) =>
-            JsonSerializer.Serialize(new
-            {
-                labels = series.Select(s => s.Name),
-                values = series.Select(s => s.Value)
-            });
+    // Formats activity timestamps used by the dashboard view.
+    public static string Ago(DateTimeOffset when)
+    {
+        var span = DateTimeOffset.Now - when;
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} minute{(span.TotalMinutes < 2 ? "" : "s")} ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours} hour{(span.TotalHours < 2 ? "" : "s")} ago";
+        return when.ToString("d MMM, HH:mm");
     }
 }
