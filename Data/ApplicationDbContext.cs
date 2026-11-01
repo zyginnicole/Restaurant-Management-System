@@ -175,6 +175,16 @@ namespace RestaurantManagementSystem.Data
                 .HasForeignKey(f => f.orderID)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // a customer can rate each order only once
+            modelBuilder.Entity<Feedback>()
+                .HasIndex(f => new { f.custID, f.orderID })
+                .IsUnique();
+
+            // ---------- Notification ----------
+            // the bell badge and Unread tab look up a customer's unread notifications
+            modelBuilder.Entity<Notification>()
+                .HasIndex(n => new { n.custID, n.isRead });
+
             // ---------- Admin-created content ----------
             modelBuilder.Entity<Promotion>()
                 .HasOne(p => p.Admin)
