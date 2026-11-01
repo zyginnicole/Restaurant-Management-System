@@ -17,7 +17,7 @@ namespace RestaurantManagementSystem.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.14")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -220,6 +220,9 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasKey("areaID");
 
+                    b.HasIndex("areaCode")
+                        .IsUnique();
+
                     b.HasIndex("areaName")
                         .IsUnique();
 
@@ -250,7 +253,9 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasKey("tableID");
 
-                    b.HasIndex("areaID", "tableNumber")
+                    b.HasIndex("areaID");
+
+                    b.HasIndex("tableNumber")
                         .IsUnique();
 
                     b.ToTable("Tables", (string)null);
@@ -521,6 +526,8 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("menuID");
 
                     b.HasIndex("orderID");
+
+                    b.HasIndex("promoID");
 
                     b.ToTable("OrderItems", (string)null);
                 });
@@ -1016,6 +1023,11 @@ namespace RestaurantManagementSystem.Migrations
                         .HasForeignKey("orderID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("RestaurantManagementSystem.Model.Promotion", null)
+                        .WithMany()
+                        .HasForeignKey("promoID")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Menu");
 

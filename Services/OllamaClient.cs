@@ -35,7 +35,6 @@ public sealed class OllamaClient
 
         if (!response.IsSuccessStatusCode)
             return null;
-
         var result = await response.Content
             .ReadFromJsonAsync<OllamaResponse>();
 

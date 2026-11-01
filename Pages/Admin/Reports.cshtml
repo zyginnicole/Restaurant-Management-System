@@ -414,9 +414,10 @@
         @if (tab == "sales" && !string.IsNullOrWhiteSpace(Q("from")) && !string.IsNullOrWhiteSpace(Q("to")))
         {
             <div class="md-report-tab-actions md-sales-export-actions">
-                <button type="button" class="btn md-btn-round md-btn-outline md-report-btn" id="exportCsv">
-                    <i class="bi bi-filetype-csv me-1"></i>Download CSV
-                </button>
+                <a class="btn md-btn-round md-btn-outline md-report-btn"
+                   href="/Admin/Reports?handler=Export&amp;format=xlsx&amp;range=custom&amp;from=@from&amp;to=@to&amp;period=@period&amp;tab=sales">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Download Excel
+                </a>
                 <button type="button" class="btn md-btn-round btn-md-dark md-report-btn"
                         data-pdf-target="#reportCard"
                         data-pdf-name="@salesFile"
