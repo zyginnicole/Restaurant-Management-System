@@ -17,7 +17,7 @@ namespace RestaurantManagementSystem.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -34,7 +34,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("PromotionspromoID");
 
-                    b.ToTable("MenuPromotion");
+                    b.ToTable("MenuPromotion", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Admin", b =>
@@ -44,6 +44,12 @@ namespace RestaurantManagementSystem.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("adminID"));
+
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<DateTimeOffset>("adminCreateAt")
                         .HasColumnType("datetimeoffset");
@@ -65,7 +71,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("adminEmail")
                         .IsUnique();
 
-                    b.ToTable("Admin");
+                    b.ToTable("Admin", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Announcement", b =>
@@ -103,7 +109,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("adminID");
 
-                    b.ToTable("Announcements");
+                    b.ToTable("Announcements", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.BlockedSlot", b =>
@@ -125,7 +131,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("restaurantID", "slotStart")
                         .IsUnique();
 
-                    b.ToTable("BlockedSlots");
+                    b.ToTable("BlockedSlots", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Customer", b =>
@@ -136,6 +142,10 @@ namespace RestaurantManagementSystem.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("custID"));
 
+                    b.Property<string>("Allergies")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("DietaryPref")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -145,6 +155,9 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTime?>("custBirthday")
+                        .HasColumnType("date");
 
                     b.Property<DateTimeOffset>("custCreateAt")
                         .HasColumnType("datetimeoffset");
@@ -166,6 +179,10 @@ namespace RestaurantManagementSystem.Migrations
                         .HasMaxLength(11)
                         .HasColumnType("nvarchar(11)");
 
+                    b.Property<string>("kitchenNotes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<bool>("promoOptIn")
                         .HasColumnType("bit");
 
@@ -174,7 +191,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("custEmail")
                         .IsUnique();
 
-                    b.ToTable("Customer");
+                    b.ToTable("Customer", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.DiningArea", b =>
@@ -187,6 +204,11 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.Property<bool>("areaActive")
                         .HasColumnType("bit");
+
+                    b.Property<string>("areaCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
 
                     b.Property<string>("areaDescription")
                         .HasMaxLength(200)
@@ -201,7 +223,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("areaName")
                         .IsUnique();
 
-                    b.ToTable("DiningAreas");
+                    b.ToTable("DiningAreas", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.DiningTable", b =>
@@ -231,7 +253,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("areaID", "tableNumber")
                         .IsUnique();
 
-                    b.ToTable("Tables");
+                    b.ToTable("Tables", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Feedback", b =>
@@ -265,7 +287,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("custID", "orderID")
                         .IsUnique();
 
-                    b.ToTable("Feedbacks");
+                    b.ToTable("Feedbacks", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Menu", b =>
@@ -282,6 +304,12 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<bool>("isAvailable")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("isSignature")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("menuAllergens")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("menuDescription")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -297,11 +325,14 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<decimal>("menuPrice")
                         .HasColumnType("decimal(10,2)");
 
+                    b.Property<string>("menuTags")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("menuID");
 
                     b.HasIndex("categoryID");
 
-                    b.ToTable("Menus");
+                    b.ToTable("Menus", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.MenuCategory", b =>
@@ -324,7 +355,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("categoryName")
                         .IsUnique();
 
-                    b.ToTable("MenuCategories");
+                    b.ToTable("MenuCategories", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Notification", b =>
@@ -367,7 +398,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("custID", "isRead");
 
-                    b.ToTable("Notifications");
+                    b.ToTable("Notifications", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.OperatingHour", b =>
@@ -398,7 +429,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("restaurantID", "dayOfWeek")
                         .IsUnique();
 
-                    b.ToTable("OperatingHours");
+                    b.ToTable("OperatingHours", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Order", b =>
@@ -448,7 +479,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("tableID");
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.OrderItem", b =>
@@ -476,6 +507,9 @@ namespace RestaurantManagementSystem.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<int?>("promoID")
+                        .HasColumnType("int");
+
                     b.Property<int>("quantity")
                         .HasColumnType("int");
 
@@ -488,7 +522,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("orderID");
 
-                    b.ToTable("OrderItems");
+                    b.ToTable("OrderItems", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Payment", b =>
@@ -521,7 +555,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("orderID")
                         .IsUnique();
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Promotion", b =>
@@ -538,6 +572,9 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<bool>("autoApply")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("birthdayOnly")
+                        .HasColumnType("bit");
+
                     b.Property<string>("discountType")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -547,6 +584,26 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.Property<int>("endDay")
                         .HasColumnType("int");
+
+                    b.Property<TimeSpan?>("endTime")
+                        .HasColumnType("time");
+
+                    b.Property<bool>("limitResetsYearly")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("maxTotalUses")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("maxUsesPerCustomer")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("minSpend")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("orderType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<bool>("promoActive")
                         .HasColumnType("bit");
@@ -573,6 +630,9 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<int>("startDay")
                         .HasColumnType("int");
 
+                    b.Property<TimeSpan?>("startTime")
+                        .HasColumnType("time");
+
                     b.Property<DateTime?>("validFrom")
                         .HasColumnType("datetime2");
 
@@ -586,7 +646,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("promoCode")
                         .IsUnique();
 
-                    b.ToTable("Promotions");
+                    b.ToTable("Promotions", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Reservation", b =>
@@ -630,7 +690,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasIndex("tableID");
 
-                    b.ToTable("Reservations");
+                    b.ToTable("Reservations", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Restaurant", b =>
@@ -659,7 +719,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasKey("restaurantID");
 
-                    b.ToTable("Restaurants");
+                    b.ToTable("Restaurants", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.Staff", b =>
@@ -669,6 +729,12 @@ namespace RestaurantManagementSystem.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("staffID"));
+
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<bool>("staffActive")
                         .HasColumnType("bit");
@@ -702,7 +768,7 @@ namespace RestaurantManagementSystem.Migrations
                     b.HasIndex("staffEmail")
                         .IsUnique();
 
-                    b.ToTable("Staff");
+                    b.ToTable("Staff", (string)null);
                 });
 
             modelBuilder.Entity("RestaurantManagementSystem.Model.SystemSetting", b =>
@@ -714,9 +780,6 @@ namespace RestaurantManagementSystem.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("settingID"));
 
                     b.Property<bool>("acceptCard")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("acceptCash")
                         .HasColumnType("bit");
 
                     b.Property<bool>("acceptEwallet")
@@ -780,9 +843,6 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<bool>("requireSymbol")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("requireTwoStep")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("requireUpper")
                         .HasColumnType("bit");
 
@@ -808,7 +868,7 @@ namespace RestaurantManagementSystem.Migrations
 
                     b.HasKey("settingID");
 
-                    b.ToTable("SystemSettings");
+                    b.ToTable("SystemSettings", (string)null);
                 });
 
             modelBuilder.Entity("MenuPromotion", b =>
