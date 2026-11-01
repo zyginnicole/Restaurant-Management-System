@@ -47,8 +47,12 @@ public class DashboardModel : PageModel
     public List<Reservation> Arrivals { get; set; } = new();
     public TimeSpan WindowStart { get; set; }
     public TimeSpan WindowEnd { get; set; }
+    // Recent activity: the latest events from the times the database keeps —
+    // new booking (Reservation.reservationCreateAt) · order placed (Order.orderDateTime) · payment (Payment.paymentDate).
+    // Css = edge colour (md-list-row is-…), Link = where the code opens on Admin > Monitor.
     public record ActivityItem(DateTimeOffset When, string Title, string Code, string Link, string Meta, string Css);
     public List<ActivityItem> RecentActivity { get; set; } = new();
+    private const int RecentActivityCount = 4;
 
     // Loads the selected period and today's live reservation information.
     public async Task OnGetAsync(int? year, int? month, int? day)
@@ -117,7 +121,65 @@ public class DashboardModel : PageModel
             WindowEnd = TimeSpan.FromHours(Math.Max(22, Arrivals.Last().reservationDateTime.Hour + 1));
         }
 
-        RecentActivity = new();
+        RecentActivity = await LoadRecentActivityAsync();
+    }
+
+    // Latest bookings, orders and payments merged, newest first (orders and payments are only read here)
+    private async Task<List<ActivityItem>> LoadRecentActivityAsync()
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var items = new List<ActivityItem>();
+
+        var bookings = await _db.Reservations.AsNoTracking()
+            .Include(r => r.Customer)
+            .OrderByDescending(r => r.reservationCreateAt)
+            .Take(RecentActivityCount)
+            .ToListAsync();
+        foreach (var r in bookings)
+        {
+            var code = ReservationService.Code(r);
+            var day = r.reservationDateTime.Date == DateTime.Today ? "today" : r.reservationDateTime.ToString("d MMM", inv);
+            var title = (r.reservationStatus == ReservationStatus.Pending ? "Booking request: " : "New booking: ")
+                        + $"{r.Customer?.custName ?? "Guest"}, {r.partySize} {(r.partySize == 1 ? "guest" : "guests")}, {day} {r.reservationDateTime:HH:mm}";
+            var date = r.reservationDateTime.ToString("yyyy-MM-dd", inv);
+            items.Add(new ActivityItem(r.reservationCreateAt, title, code,
+                $"/Admin/Monitor?tab=reservations&from={date}&to={date}&q={code}&view={code}",
+                r.reservationStatus, Pages.Staff.StaffReservationText.StatusClass(r.reservationStatus)));
+        }
+
+        var orders = await _db.Orders.AsNoTracking()
+            .Include(o => o.DiningTable)
+            .Include(o => o.OrderItems)
+            .OrderByDescending(o => o.orderDateTime)
+            .Take(RecentActivityCount)
+            .ToListAsync();
+        foreach (var o in orders)
+        {
+            var count = o.OrderItems.Sum(i => i.quantity);
+            var where = o.DiningTable != null ? o.DiningTable.tableNumber : "Takeaway";
+            items.Add(new ActivityItem(o.orderDateTime, $"Order placed: {where}, {count} {(count == 1 ? "item" : "items")}, RM {o.totalAmount.ToString("N2", inv)}",
+                "ORD-" + o.orderID.ToString("D4"), "/Admin/Monitor?tab=orders",
+                o.tableID != null ? "Dine-in" : "Takeaway", "is-placed"));
+        }
+
+        var payments = await _db.Payments.AsNoTracking()
+            .OrderByDescending(p => p.paymentDate)
+            .Take(RecentActivityCount)
+            .ToListAsync();
+        foreach (var p in payments)
+        {
+            var (verb, css) = p.paymentStatus switch
+            {
+                "Paid" => ("Payment received", "is-completed"),
+                "Refunded" => ("Payment refunded", "is-cancelled"),
+                "Failed" => ("Payment failed", "is-pending"),
+                _ => ("Payment started", "is-placed")
+            };
+            items.Add(new ActivityItem(p.paymentDate, $"{verb}: RM {p.paymentAmount.ToString("N2", inv)}, {p.paymentMethod}",
+                "ORD-" + p.orderID.ToString("D4"), "/Admin/Monitor?tab=payments", p.paymentStatus, css));
+        }
+
+        return items.OrderByDescending(i => i.When).Take(RecentActivityCount).ToList();
     }
 
     // Formats activity timestamps used by the dashboard view.

@@ -1,116 +1,94 @@
 @page
 @model RestaurantManagementSystem.Pages.Customer.DashboardModel
 @using RestaurantManagementSystem.Helpers
+@using RestaurantManagementSystem.Services
 @{
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var hour = DateTime.Now.Hour;
+
     ViewData["Title"] = "Overview";
     ViewData["ActiveNav"] = "Overview";
-    ViewData["Eyebrow"] = "Good evening";
+    ViewData["Eyebrow"] = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
     ViewData["Heading"] = HttpContext.Session.GetUserName() ?? "Welcome";
+    Layout = "_CustomerLayout";
 
-    // Next reservations card: the customer's Pending / Confirmed (incl. Seated) reservations in the next 7 days, soonest first.
-    // Backend: replace this list with the query result. The card always has two slots:
+    // Next reservations card: the customer's Pending / Confirmed / Seated reservations in the next 7 days, soonest first
+    // (DashboardModel.NextReservations). The card always has two slots:
     //   1 reservation → top slot filled, bottom slot left blank · 2 → both slots · 3 or more → the slots scroll inside the card.
-    // UI preview only: /Customer/Dashboard?preview=2 or ?preview=3
-    var nextReservations = new List<(string Code, string Status, string Month, string Day, string DayText, string Time, int Guests, string Table)>
+    var nextReservations = Model.NextReservations.Select(r => (
+        Code: ReservationService.Code(r),
+        Status: r.reservationStatus,
+        Month: r.reservationDateTime.ToString("MMM", inv),
+        Day: r.reservationDateTime.ToString("dd", inv),
+        DayText: DayText(r.reservationDateTime),
+        Time: r.reservationDateTime.ToString("h:mm tt", inv),
+        Guests: r.partySize,
+        Table: r.DiningTable?.tableNumber + " · " + r.DiningTable?.DiningArea?.areaName
+    )).ToList();
+}
+
+@functions {
+    // "Tonight" / "Tomorrow evening" / "Sunday evening" (same wording as the Reservations page)
+    static string DayText(DateTime start)
     {
-        ("R-0041", "Confirmed", "Sep", "20", "Sunday evening", "7:30 PM", 2, "T-07 · Indoor")
-    };
-    var preview = Request.Query["preview"].ToString();
-    if (preview == "2" || preview == "3")
-    {
-        nextReservations.Insert(0, ("R-0047", "Seated", "Sep", "16", "Tonight", "7:00 PM", 3, "T-05 · Outdoor"));
-    }
-    if (preview == "3")
-    {
-        nextReservations.Add(("R-0049", "Pending", "Oct", "04", "Sunday evening", "8:00 PM", 8, "VIP"));
+        var part = start.Hour < 16 ? "lunch" : "evening";
+        if (start.Date == DateTime.Today) return start.Hour < 16 ? "Today, lunch" : "Tonight";
+        if (start.Date == DateTime.Today.AddDays(1)) return "Tomorrow " + part;
+        return start.ToString("dddd", System.Globalization.CultureInfo.InvariantCulture) + " " + part;
     }
 }
 
-@* Example data from the design. Replace with the signed-in customer's data later. *@
+@* The recommendations hero below is still example data from the design. *@
 
 @* ---------- Recommendations hero ----------
-   Same dishes as the Menu page's Recommendations tab. Replace .md-hero-photo's background
-   with the dish photo (menuImageUrl) when real photos are ready. *@
-<section id="recommendationHero" class="carousel slide md-hero md-section" data-bs-ride="carousel" data-bs-interval="6000" aria-label="Recommended dishes">
-    <div class="carousel-inner">
-        <div class="carousel-item active">
-            <a class="md-hero-slide" href="/Customer/Menu">
-                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
-                <span class="md-hero-content">
-                    <span class="md-hero-eyebrow">Based on your preferences · Mains</span>
-                    <span class="md-hero-title">Wagyu Beef Tenderloin</span>
-                    <span class="md-hero-price">RM 168.00</span>
-                </span>
-            </a>
+   Same dishes as the Menu page's Recommendations tab (RecommendationService.ToHeroSlides).
+   Hidden when there is nothing to recommend. *@
+@if (Model.HeroSlides.Count > 0)
+{
+    <section id="recommendationHero" class="carousel slide md-hero md-section" data-bs-ride="carousel" data-bs-interval="6000" aria-label="Recommended dishes">
+        <div class="carousel-inner">
+            @for (int i = 0; i < Model.HeroSlides.Count; i++)
+            {
+                var slide = Model.HeroSlides[i];
+                var eyebrow = slide.Category == "" ? slide.Label : slide.Label + " · " + slide.Category;
+                <div class="carousel-item @(i == 0 ? "active" : "")">
+                    <a class="md-hero-slide" href="/Customer/Menu">
+                        @if (!string.IsNullOrWhiteSpace(slide.ImageUrl))
+                        {
+                            <span class="md-hero-photo" aria-hidden="true" style="background-image:url('@slide.ImageUrl'); background-size:cover; background-position:center;"></span>
+                        }
+                        else
+                        {
+                            <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
+                        }
+                        <span class="md-hero-content">
+                            <span class="md-hero-eyebrow">@eyebrow</span>
+                            <span class="md-hero-title">@slide.Name</span>
+                            <span class="md-hero-price">RM @slide.Price.ToString("0.00")</span>
+                        </span>
+                    </a>
+                </div>
+            }
         </div>
-        <div class="carousel-item">
-            <a class="md-hero-slide" href="/Customer/Menu">
-                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
-                <span class="md-hero-content">
-                    <span class="md-hero-eyebrow">Based on your preferences · Mains</span>
-                    <span class="md-hero-title">Pan-Seared Sea Bass</span>
-                    <span class="md-hero-price">RM 98.00</span>
-                </span>
-            </a>
-        </div>
-        <div class="carousel-item">
-            <a class="md-hero-slide" href="/Customer/Menu">
-                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
-                <span class="md-hero-content">
-                    <span class="md-hero-eyebrow">Based on your preferences · Mains</span>
-                    <span class="md-hero-title">Duck à l'Orange</span>
-                    <span class="md-hero-price">RM 92.00</span>
-                </span>
-            </a>
-        </div>
-        <div class="carousel-item">
-            <a class="md-hero-slide" href="/Customer/Menu">
-                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
-                <span class="md-hero-content">
-                    <span class="md-hero-eyebrow">Popular selection · Desserts</span>
-                    <span class="md-hero-title">Valrhona Chocolate Fondant</span>
-                    <span class="md-hero-price">RM 36.00</span>
-                </span>
-            </a>
-        </div>
-        <div class="carousel-item">
-            <a class="md-hero-slide" href="/Customer/Menu">
-                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
-                <span class="md-hero-content">
-                    <span class="md-hero-eyebrow">Popular selection · Starters</span>
-                    <span class="md-hero-title">Caviar &amp; Soft Egg</span>
-                    <span class="md-hero-price">RM 85.00</span>
-                </span>
-            </a>
-        </div>
-        <div class="carousel-item">
-            <a class="md-hero-slide" href="/Customer/Menu">
-                <span class="md-hero-photo" aria-hidden="true">Dish photo</span>
-                <span class="md-hero-content">
-                    <span class="md-hero-eyebrow">Popular selection · Mains</span>
-                    <span class="md-hero-title">Lobster Thermidor</span>
-                    <span class="md-hero-price">RM 128.00 <span class="md-hero-soldout">Sold out today</span></span>
-                </span>
-            </a>
-        </div>
-    </div>
 
-    @* Arrows (top-right) *@
-    <div class="md-hero-arrows">
-        <button type="button" data-bs-target="#recommendationHero" data-bs-slide="prev" aria-label="Previous dish"><i class="bi bi-chevron-left"></i></button>
-        <button type="button" data-bs-target="#recommendationHero" data-bs-slide="next" aria-label="Next dish"><i class="bi bi-chevron-right"></i></button>
-    </div>
+        @if (Model.HeroSlides.Count > 1)
+        {
+            @* Arrows (top-right) *@
+            <div class="md-hero-arrows">
+                <button type="button" data-bs-target="#recommendationHero" data-bs-slide="prev" aria-label="Previous dish"><i class="bi bi-chevron-left"></i></button>
+                <button type="button" data-bs-target="#recommendationHero" data-bs-slide="next" aria-label="Next dish"><i class="bi bi-chevron-right"></i></button>
+            </div>
 
-    @* Line indicators (bottom-right) *@
-    <div class="carousel-indicators md-hero-indicators">
-        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="0" class="active" aria-current="true" aria-label="Dish 1"></button>
-        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="1" aria-label="Dish 2"></button>
-        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="2" aria-label="Dish 3"></button>
-        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="3" aria-label="Dish 4"></button>
-        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="4" aria-label="Dish 5"></button>
-        <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="5" aria-label="Dish 6"></button>
-    </div>
-</section>
+            @* Line indicators (bottom-right) *@
+            <div class="carousel-indicators md-hero-indicators">
+                @for (int i = 0; i < Model.HeroSlides.Count; i++)
+                {
+                    <button type="button" data-bs-target="#recommendationHero" data-bs-slide-to="@i" class="@(i == 0 ? "active" : "")" aria-current="@(i == 0 ? "true" : "false")" aria-label="Dish @(i + 1)"></button>
+                }
+            </div>
+        }
+    </section>
+}
 
 <div class="row md-grid md-section">
     @* ---------- Next reservation (narrower column) ---------- *@
@@ -165,6 +143,19 @@
                         <li class="md-next-slot is-empty" aria-hidden="true"></li>
                     }
                 </ul>
+            </section>
+        }
+        else
+        {
+            @* No reservation in the next 7 days *@
+            <section class="md-card h-100">
+                <div class="md-card-header">
+                    <span class="md-card-label">Next reservation</span>
+                </div>
+                <div class="md-card-body text-center py-4">
+                    <p class="md-hint mb-3">You have no reservations in the next 7 days.</p>
+                    <a class="btn btn-md-dark" href="/Customer/Reservations">Book a table</a>
+                </div>
             </section>
         }
     </div>
