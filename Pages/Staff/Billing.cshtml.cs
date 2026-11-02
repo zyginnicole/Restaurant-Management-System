@@ -39,11 +39,16 @@ namespace RestaurantManagementSystem.Pages.Staff
 
         private readonly ApplicationDbContext _context;
         private readonly PromotionService _promotions;
+        private readonly NotificationService _notifications;
 
-        public BillingModel(ApplicationDbContext context, PromotionService promotions)
+        public BillingModel(
+            ApplicationDbContext context,
+            PromotionService promotions,
+            NotificationService notifications)
         {
             _context = context;
             _promotions = promotions;
+            _notifications = notifications;
         }
 
         // ---------- What the page shows (names match Billing.cshtml) ----------
@@ -127,8 +132,7 @@ namespace RestaurantManagementSystem.Pages.Staff
 
         public async Task OnGetAsync()
         {
-            // orders left open from a day that has passed are cancelled (refunded when paid)
-            await StaleOrders.CancelPreviousDaysAsync(_context);
+            await StaleOrders.CancelStaleAsync(_context, _notifications);
 
             var now = DateTime.Now;
             var today = now.Date;

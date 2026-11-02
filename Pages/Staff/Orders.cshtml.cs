@@ -106,8 +106,7 @@ namespace RestaurantManagementSystem.Pages.Staff
 
         public async Task OnGetAsync()
         {
-            // orders left open from a day that has passed are cancelled (refunded when paid)
-            await StaleOrders.CancelPreviousDaysAsync(_context);
+            await StaleOrders.CancelStaleAsync(_context, _notifications);
 
             TodayLabel = DateTime.Now.ToString("dddd, d MMMM yyyy");
 
