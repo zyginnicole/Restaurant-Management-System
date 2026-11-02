@@ -134,6 +134,22 @@ namespace RestaurantManagementSystem.Pages.Customer
                 line.Note = string.IsNullOrEmpty(note) ? null : (note.Length > 200 ? note.Substring(0, 200) : note);
             }
 
+            // The form must show the same dishes as the saved cart. If the cart was changed in another tab
+            // (a dish added or removed there), show the page again with the current cart instead of ordering
+            // something the customer never saw on this page.
+            bool addedElsewhere = cart.Any(c => c.Quantity > 0 && !Items.Any(i => i.MenuId == c.MenuId));
+            bool removedElsewhere = Items.Any(i => i.Quantity > 0 && !cart.Any(c => c.MenuId == i.MenuId));
+            if (addedElsewhere || removedElsewhere)
+            {
+                HttpContext.Session.SaveCart(cart.Select(l => new CartItem
+                {
+                    MenuId = l.MenuId,
+                    Quantity = Math.Min(l.Quantity, MaxQuantity),
+                    Note = l.Note
+                }).ToList());
+                return await FailAsync(custId.Value, "Your cart was changed in another tab, so it has been refreshed below. Please check it and place your order again.");
+            }
+
             var lines = cart.Where(i => i.Quantity > 0).ToList();
             if (lines.Count == 0)
             {

@@ -61,6 +61,9 @@ namespace RestaurantManagementSystem.Pages.Staff
 
         public async Task OnGetAsync()
         {
+            // orders left open from a day that has passed are cancelled (refunded when paid)
+            await StaleOrders.CancelPreviousDaysAsync(_db);
+
             Settings = await _settings.GetAsync();
             StaffName = HttpContext.Session.GetUserName() ?? "";
 
