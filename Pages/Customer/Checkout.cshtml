@@ -37,6 +37,8 @@
                     <span class="md-card-label">Order items</span>
                     <a class="btn btn-md-outline md-btn-sm" href="/Customer/Menu">Add more</a>
                 </div>
+                @* Shown when a quantity change could not be saved (see saveQuantity below) *@
+                <p class="md-note-box md-note-box-danger m-3 d-none" id="saveError" role="alert"></p>
                 <ul class="md-cart" id="cartList">
                     @for (int i = 0; i < Model.CartLines.Count; i++)
                     {
@@ -225,12 +227,23 @@
             // Keep the saved cart in step with the quantity boxes and kitchen notes, so "Add more" and the Menu counter match.
             // Uses the Menu page's SetQuantity handler (the server clamps the value and re-reads prices).
             var timers = {};
+            var failedSaves = {};                 // dish id -> message; the notice stays until every dish saves again
+            var saveError = document.getElementById('saveError');
+            function saveFailed(menuId, message) {
+                if (message) failedSaves[menuId] = message; else delete failedSaves[menuId];
+                var messages = Object.keys(failedSaves).map(function (id) { return failedSaves[id]; });
+                saveError.textContent = messages.length
+                    ? messages.join(' ') + ' The quantities shown here are used when you place the order, but your cart on other pages may differ. Refresh the page if anything looks wrong.'
+                    : '';
+                saveError.classList.toggle('d-none', messages.length === 0);
+            }
             function saveQuantity(item) {
                 var menuId = item.querySelector('input[name$=".menuId"]').value;
                 var qty = parseInt(item.querySelector('.md-qty input').value, 10) || 0;
                 var noteInput = item.querySelector('.md-cart-note');
                 var note = noteInput ? noteInput.value : '';
                 clearTimeout(timers[menuId]);
+                var dishName = item.querySelector('.md-cart-name').textContent.trim();
                 timers[menuId] = setTimeout(function () {
                     fetch('/Customer/Menu?handler=SetQuantity', {
                         method: 'POST',
@@ -240,7 +253,16 @@
                             'RequestVerificationToken': token ? token.value : ''
                         },
                         body: 'menuId=' + encodeURIComponent(menuId) + '&quantity=' + qty + '&note=' + encodeURIComponent(note)
-                    });
+                    })
+                        .then(function (response) {
+                            return response.json().catch(function () { return {}; }).then(function (data) {
+                                if (response.ok && data.ok !== false) { saveFailed(menuId, null); return; }
+                                saveFailed(menuId, 'We could not save your change to ' + dishName + ' (' + (data.message || 'error ' + response.status) + ').');
+                            });
+                        })
+                        .catch(function () {
+                            saveFailed(menuId, 'We could not save your change to ' + dishName + '. Please check your connection.');
+                        });
                 }, 300);
             }
 

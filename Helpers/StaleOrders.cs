@@ -9,15 +9,21 @@ public static class StaleOrders
     private static readonly string[] OpenStatuses =
         { "Order placed", "Preparing", "Served" };
 
+    // An open order is stale when it was placed before TODAY'S OPENING TIME (Admin > Restaurant > Operating Hours):
+    // it belongs to an earlier service and can no longer be completed, so it is cancelled.
+    // A takeaway order whose pick-up time is still ahead of the opening time is kept (pre-order for today's service).
     public static async Task CancelStaleAsync(
         ApplicationDbContext db,
         NotificationService notifications)
     {
-        var cutoff = MalaysiaClock.StartOf(MalaysiaClock.Today);
+        var cutoffLocal = await ServiceStartAsync(db);
+        var cutoff = MalaysiaClock.StartOf(cutoffLocal.Date) + cutoffLocal.TimeOfDay;
 
         var candidateIds = await db.Orders
             .AsNoTracking()
-            .Where(o => o.orderDateTime < cutoff && OpenStatuses.Contains(o.orderStatus))
+            .Where(o => o.orderDateTime < cutoff
+                     && (o.pickupDateTime == null || o.pickupDateTime < cutoffLocal)
+                     && OpenStatuses.Contains(o.orderStatus))
             .Select(o => o.orderID)
             .ToListAsync();
 
@@ -30,6 +36,7 @@ public static class StaleOrders
             var claimed = await db.Orders
                 .Where(o => o.orderID == orderId
                          && o.orderDateTime < cutoff
+                         && (o.pickupDateTime == null || o.pickupDateTime < cutoffLocal)
                          && OpenStatuses.Contains(o.orderStatus))
                 .ExecuteUpdateAsync(update => update
                     .SetProperty(o => o.orderStatus, "Cancelled"));
@@ -101,7 +108,7 @@ public static class StaleOrders
                 continue;
 
             var code = $"ORD-{order.OrderId:0000}";
-            var message = $"{code} was not completed on the day it was placed, so it has been cancelled automatically.";
+            var message = $"{code} was not completed during the service it was placed in, so it has been cancelled automatically.";
             if (order.WasRefunded)
                 message += $" Your payment of RM {order.RefundAmount:N2} will be refunded within 3–5 working days.";
 
@@ -112,6 +119,33 @@ public static class StaleOrders
                 message,
                 "/Customer/History");
         }
+    }
+
+    // When today's service started: today's opening time from the restaurant's operating hours.
+    //  - closing after midnight (e.g. 18:00–02:00): until that closing time we are still inside yesterday's service
+    //  - closed today, or no hours set up yet: the start of the day
+    private static async Task<DateTime> ServiceStartAsync(ApplicationDbContext db)
+    {
+        var now = MalaysiaClock.Now;
+        var today = MalaysiaClock.Today;
+
+        var restaurant = await db.Restaurants.AsNoTracking().OrderBy(r => r.restaurantID).FirstOrDefaultAsync();
+        if (restaurant == null) return today;
+
+        var hours = await db.OperatingHours.AsNoTracking()
+            .Where(h => h.restaurantID == restaurant.restaurantID)
+            .ToListAsync();
+
+        var yesterday = today.AddDays(-1);
+        var y = hours.FirstOrDefault(h => h.dayOfWeek == yesterday.DayOfWeek);
+        if (y != null && !y.isClosed && y.closeTime < y.openTime && now.TimeOfDay < y.closeTime)
+            return yesterday + y.openTime;
+
+        var t = hours.FirstOrDefault(h => h.dayOfWeek == today.DayOfWeek);
+        if (t != null && !t.isClosed)
+            return today + t.openTime;
+
+        return today;
     }
 
     private sealed record CancelledOrder(
