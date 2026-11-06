@@ -48,6 +48,7 @@ builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<SignUpVerificationService>();
 builder.Services.AddScoped<DemoAccountSeeder>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<ExportService>();
