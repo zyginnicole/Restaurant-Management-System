@@ -6,7 +6,8 @@ namespace RestaurantManagementSystem.Pages.Admin
 {
     // Admin Feedback: ratings and comments from completed dining experiences (read-only).
     // Static UI for now – backend notes:
-    //  - OnGet(string? period): Feedback (+ Customer, Order → Reservation) for ?period=week · month (default) · all,
+    //  - OnGet filters feedback by quick period (?period=week · month · all) or
+    //    by a custom date range (?from=yyyy-MM-dd&to=yyyy-MM-dd),
     //    newest first (feedbackDate).
     //    Stat cards: average rating · number of reviews · low ratings (rating <= 2).
     //    Rating distribution: share of 5 / 4 / 3 / 2 / 1-star feedback in the period.
@@ -18,10 +19,15 @@ namespace RestaurantManagementSystem.Pages.Admin
         private readonly ApplicationDbContext _context;
 
         public string Period { get; private set; } = "month";
+        public DateTime? SelectedFrom { get; private set; }
+        public DateTime? SelectedTo { get; private set; }
         public string PeriodText => Period switch
         {
             "week" => "this week",
             "all" => "all time",
+            "custom" => SelectedFrom.HasValue && SelectedTo.HasValue
+                ? $"from {SelectedFrom.Value:dd MMM yyyy} to {SelectedTo.Value:dd MMM yyyy}"
+                : "in the selected period",
             _ => "this month"
         };
 
@@ -33,9 +39,15 @@ namespace RestaurantManagementSystem.Pages.Admin
 
         public FeedbackModel(ApplicationDbContext context) => _context = context;
 
-        public async Task OnGetAsync(string? period)
+        public async Task OnGetAsync(string? period, DateTime? from, DateTime? to)
         {
-            Period = period is "week" or "month" or "all" ? period : "month";
+            SelectedFrom = from?.Date;
+            SelectedTo = to?.Date;
+
+            if (SelectedFrom.HasValue && SelectedTo.HasValue && SelectedTo >= SelectedFrom)
+                Period = "custom";
+            else
+                Period = period is "week" or "month" or "all" ? period : "month";
 
             var query = _context.Feedbacks
                 .AsNoTracking()
@@ -44,7 +56,13 @@ namespace RestaurantManagementSystem.Pages.Admin
                     .ThenInclude(o => o!.Reservation)
                 .AsQueryable();
 
-            if (Period == "week")
+            if (Period == "custom")
+            {
+                var start = new DateTimeOffset(SelectedFrom!.Value, DateTimeOffset.Now.Offset);
+                var end = new DateTimeOffset(SelectedTo!.Value.AddDays(1), DateTimeOffset.Now.Offset);
+                query = query.Where(f => f.feedbackDate >= start && f.feedbackDate < end);
+            }
+            else if (Period == "week")
                 query = query.Where(f => f.feedbackDate >= DateTimeOffset.Now.AddDays(-7));
             else if (Period == "month")
             {

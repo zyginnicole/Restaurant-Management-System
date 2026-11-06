@@ -20,6 +20,9 @@
     // ?tab=statistic (default) · sales – each tab has its own GET form
     string tab = Request.Query["tab"] == "sales" ? "sales" : "statistic";
     string Q(string key) => Request.Query[key].ToString();
+    // Export actions are intentionally available only after the user submits a
+    // report form, not merely because a URL happens to contain a date range.
+    bool hasGeneratedReport = string.Equals(Q("generated"), "true", StringComparison.OrdinalIgnoreCase);
 
     // =====================================================
     // Statistic report – values are loaded by ReportsModel from ReportService.
@@ -96,7 +99,8 @@
         <button type="button" class="@(tab == "statistic" ? "active" : "")" data-tab="statistic">Statistic report</button>
         <button type="button" class="@(tab == "sales" ? "active" : "")" data-tab="sales">Sales report</button>
     </nav>
-    @if (tab == "statistic")
+    @* The statistic export appears only after its Generate report form is submitted. *@
+    @if (tab == "statistic" && hasGeneratedReport)
     {
         <button type="button" class="btn md-btn-round md-btn-outline md-report-btn"
                 data-pdf-target="#statReport"
@@ -117,6 +121,7 @@
     <section class="md-card md-section md-report-builder">
             <form class="md-card-body" method="get" id="statForm">
                 <input type="hidden" name="tab" value="statistic" />
+                <input type="hidden" name="generated" value="true" />
                 <input type="hidden" name="period" id="statPeriod" value="@sPeriod" />
                 <div class="row g-3 align-items-end md-report-filter-row">
                     @* From – To: months (Monthly) or years (Yearly) *@
@@ -387,6 +392,7 @@
     <section class="md-card md-section md-report-builder">
         <form class="md-card-body" method="get" id="salesForm">
             <input type="hidden" name="tab" value="sales" />
+            <input type="hidden" name="generated" value="true" />
             <input type="hidden" name="period" id="salesPeriod" value="@period" />
             <div class="row g-3 align-items-end">
                 <div class="col-6 col-lg-3">
@@ -411,7 +417,7 @@
         </form>
 
         @* Export buttons are shown only after the sales form has been submitted. *@
-        @if (tab == "sales" && !string.IsNullOrWhiteSpace(Q("from")) && !string.IsNullOrWhiteSpace(Q("to")))
+        @if (tab == "sales" && hasGeneratedReport)
         {
             <div class="md-report-tab-actions md-sales-export-actions">
                 <a class="btn md-btn-round md-btn-outline md-report-btn"

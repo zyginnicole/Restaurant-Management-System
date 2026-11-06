@@ -9,14 +9,26 @@
     ViewData["Subtitle"] = "Ratings and comments from completed dining experiences";
     Layout = "_DashboardLayout";
 
-    // ?period=week · month (default) · all – backend reloads the figures for that period
+    // Quick period filters plus specific date, month and year filters.
     string period = Model.Period;
     string periodText = Model.PeriodText;
     string Stars(int n) => new string('★', n) + new string('☆', 5 - n);
 }
 
 @section HeaderActions {
-    <div class="md-segment md-segment-sm md-header-segment" role="group" aria-label="Period">
+    <form method="get" class="md-feedback-date-filters" aria-label="Custom feedback period">
+        <span class="md-feedback-filter-label">From</span>
+        <label class="visually-hidden" for="feedbackFrom">From date</label>
+        <input class="form-control md-input" id="feedbackFrom" name="from" type="date"
+               value="@(Model.SelectedFrom?.ToString("yyyy-MM-dd"))" required />
+        <span class="md-feedback-filter-separator">to</span>
+        <label class="visually-hidden" for="feedbackTo">To date</label>
+        <input class="form-control md-input" id="feedbackTo" name="to" type="date"
+               value="@(Model.SelectedTo?.ToString("yyyy-MM-dd"))" required />
+        <button type="submit" class="btn btn-md-outline md-header-btn">Apply</button>
+    </form>
+
+    <div class="md-segment md-segment-sm md-header-segment" role="group" aria-label="Quick period">
         <a class="@(period == "week" ? "active" : "")" href="?period=week">This week</a>
         <a class="@(period == "month" ? "active" : "")" href="?period=month">This month</a>
         <a class="@(period == "all" ? "active" : "")" href="?period=all">All time</a>

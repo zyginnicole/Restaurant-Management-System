@@ -29,11 +29,10 @@ public class ChatbotService
         _logger = logger;
     }
 
-    // Fixed FAQ answers. They are used by the keyword rules AND given to the language model as facts.
-    private static readonly (string[] Keywords, string Answer)[] Faqs =
+    // Fixed FAQ answers. Opening hours are loaded separately from OperatingHours because
+    // administrators can change them in Admin > Restaurant.
+    private static readonly (string[] Keywords, string Answer)[] BaseFaqs =
     {
-        (new[] { "hour", "open", "close", "operation", "time" },
-            "We are open daily from 12:00 to 22:00."),
         (new[] { "cancel", "change", "modify", "drop", "edit" },
             "You can modify or cancel a reservation from your Reservations page before the booking time."),
         (new[] { "reserve", "reservation", "book", "table", "booking" },
@@ -82,6 +81,12 @@ public class ChatbotService
         // 1. Greeting
         if (text is "hi" or "hey" || text.Contains("hello"))
             return "Welcome to Lumière. How can I help you?";
+
+        // Opening hours must always come from Admin > Restaurant > Operating Hours,
+        // so the rule answer and the facts supplied to Ollama match the Menu page.
+        var faqs = await BuildFaqsAsync();
+        if (Has(text, "hour", "open", "close", "operation", "time"))
+            return faqs[0].Answer;
 
         // 2. Customer mentions a dish by name -> exact price and description from the database
         var dishes = await _db.Menus
@@ -157,7 +162,7 @@ public class ChatbotService
         {
             try
             {
-                var reply = await _ollama.ChatAsync(BuildSystemPrompt(dishes), original);
+                var reply = await _ollama.ChatAsync(BuildSystemPrompt(dishes, faqs), original);
                 if (!string.IsNullOrWhiteSpace(reply)) return reply;
             }
             catch (Exception ex)
@@ -174,7 +179,7 @@ public class ChatbotService
             return "Some of our dishes: " + string.Join(", ", sample) + ". See the Menu page for everything.";
         }
 
-        foreach (var (keywords, answer) in Faqs)
+        foreach (var (keywords, answer) in faqs)
         {
             if (Has(text, keywords)) return answer;
         }
@@ -219,7 +224,58 @@ public class ChatbotService
 
     // The instructions and facts given to the language model with every question.
     // Only public restaurant information is included. No customer data is ever sent.
-    private static string BuildSystemPrompt(List<Menu> dishes)
+    private async Task<List<(string[] Keywords, string Answer)>> BuildFaqsAsync()
+    {
+        var openingHours = await GetOpeningHoursAnswerAsync();
+        var faqs = new List<(string[] Keywords, string Answer)>
+        {
+            (new[] { "hour", "open", "close", "operation", "time" }, openingHours)
+        };
+
+        faqs.AddRange(BaseFaqs);
+        return faqs;
+    }
+
+    private async Task<string> GetOpeningHoursAnswerAsync()
+    {
+        var restaurantId = await _db.Restaurants.AsNoTracking()
+            .OrderBy(r => r.restaurantID)
+            .Select(r => (int?)r.restaurantID)
+            .FirstOrDefaultAsync();
+
+        if (restaurantId == null)
+            return "Our opening hours are currently unavailable. Please check the Menu page or contact the restaurant.";
+
+        var hours = await _db.OperatingHours.AsNoTracking()
+            .Where(h => h.restaurantID == restaurantId.Value)
+            .ToListAsync();
+
+        if (hours.Count == 0)
+            return "Our opening hours are currently unavailable. Please check the Menu page or contact the restaurant.";
+
+        DayOfWeek[] week =
+        {
+            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+            DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday,
+            DayOfWeek.Sunday
+        };
+
+        static string FormatTime(TimeSpan time) => time.ToString(@"hh\:mm");
+
+        var entries = week.Select(day =>
+        {
+            var row = hours.FirstOrDefault(h => h.dayOfWeek == day);
+            return row == null || row.isClosed
+                ? $"{day}: Closed"
+                : $"{day}: {FormatTime(row.openTime)}–{FormatTime(row.closeTime)}";
+        });
+
+        return "Our opening hours are: " + string.Join("; ", entries) + ".";
+    }
+
+    private static string BuildSystemPrompt(
+        List<Menu> dishes,
+        List<(string[] Keywords, string Answer)> faqs)
     {
         var sb = new StringBuilder();
         sb.AppendLine("You are the virtual assistant of a restaurant. Answer the customer using ONLY the facts below.");
@@ -241,7 +297,7 @@ public class ChatbotService
         }
         sb.AppendLine();
         sb.AppendLine("RESTAURANT INFORMATION:");
-        foreach (var (_, answer) in Faqs)
+        foreach (var (_, answer) in faqs)
             sb.AppendLine("- " + answer);
         return sb.ToString();
     }
