@@ -23,6 +23,9 @@ namespace RestaurantManagementSystem.Model
         public int slotIntervalMinutes { get; set; } = 30;      // 15, 30 or 60
         public int lastSeatingMinutes { get; set; } = 60;       // last booking = closing time minus this
 
+        // ---- Ordering ----
+        public int lastCallMinutes { get; set; } = 30;          // last order = closing time minus this (0 = until closing)
+
         public ICollection<BlockedSlot> BlockedSlots { get; set; } = new List<BlockedSlot>();
     }
 }

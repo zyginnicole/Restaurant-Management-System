@@ -113,6 +113,16 @@
                 <h2 class="a-card-title">Weekly Opening Hours</h2>
                 <button type="submit" form="hoursForm" class="a-btn solid">Save hours</button>
             </div>
+            <div class="a-lastcall">
+                <label class="a-label mb-0" for="lastCall">Last call for orders</label>
+                <select id="lastCall" form="hoursForm" name="lastCall" class="form-select a-input a-input-sm">
+                    @foreach (var m in RestaurantManagementSystem.Helpers.RestaurantHours.LastCallChoices)
+                    {
+                        <option value="@m" selected="@(Model.LastCall == m)">@(m == 0 ? "At closing time" : $"{m} minutes before closing")</option>
+                    }
+                </select>
+                <span class="a-card-note">Customers can order from opening time until the last order time shown for each day.</span>
+            </div>
             @for (var i = 0; i < Model.Hours.Count; i++)
             {
                 var h = Model.Hours[i];
@@ -129,6 +139,7 @@
                         <input type="time" form="hoursForm" name="hours[@i].From" class="form-control a-input a-input-sm" value="@h.From" aria-label="@h.Name opens" />
                         <span class="a-card-note">to</span>
                         <input type="time" form="hoursForm" name="hours[@i].To" class="form-control a-input a-input-sm" value="@h.To" aria-label="@h.Name closes" />
+                        <span class="a-card-note last-order">Last order <strong>@h.LastOrder</strong></span>
                     </div>
                 </div>
             }
@@ -484,6 +495,20 @@
                     loadSlots();
                 }
             });
+
+            // ---------- Last call: each day's "Last order" follows its closing time and the chosen minutes ----------
+            const lastCall = $('lastCall');
+            const toMin = v => { const [h, m] = (v || '0:0').split(':').map(Number); return h * 60 + m; };
+            const fmt = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+            const updateLastOrders = () => {
+                document.querySelectorAll('.a-hours').forEach(row => {
+                    const from = toMin(row.querySelector('input[name$=".From"]').value);
+                    const to = toMin(row.querySelector('input[name$=".To"]').value);
+                    row.querySelector('.last-order strong').textContent = fmt(Math.max(from, to - parseInt(lastCall.value, 10)));
+                });
+            };
+            lastCall.addEventListener('change', updateLastOrders);
+            document.querySelectorAll('.a-hours input[type="time"]').forEach(i => i.addEventListener('input', updateLastOrders));
 
             // the chosen date travels with the two save forms, so the page comes back on the same date
             const syncDate = () => document.querySelectorAll('.slot-date-field').forEach(f => f.value = slotDate.value);

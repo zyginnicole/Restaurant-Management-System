@@ -507,6 +507,7 @@
 
     .a-hours .times {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: .5rem;
     }
@@ -518,6 +519,25 @@
     .a-hours.is-closed .times {
         opacity: .35;
         pointer-events: none;
+    }
+
+    .a-hours .last-order {
+        white-space: nowrap;
+    }
+
+/* Last call for orders: sits above the weekday rows */
+.a-lastcall {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1rem;
+    padding: .8rem 1.25rem;
+    border-bottom: 1px solid var(--a-line);
+}
+
+    .a-lastcall .a-input {
+        width: auto;
+        min-width: 220px;
     }
 
 .a-chips {

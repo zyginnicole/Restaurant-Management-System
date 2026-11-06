@@ -107,7 +107,7 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             if (!await RestaurantHours.IsOpenAsync(_context))
             {
-                return await FailAsync(custId.Value, "We are closed right now, so orders cannot be placed. Please order within opening hours.");
+                return await FailAsync(custId.Value, "We are not taking orders right now (closed, or past the last call). Please order within opening hours.");
             }
 
             // Anyone can order takeaway (walk-ins included); dine-in needs a reservation today that is Seated

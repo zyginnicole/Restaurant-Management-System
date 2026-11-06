@@ -181,14 +181,18 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return new HoursRow
                 {
                     Day = d.ToString(),
-                    Text = h == null || h.isClosed ? "Closed" : Time(h.openTime) + " – " + Time(h.closeTime),
+                    Text = h == null || h.isClosed
+                        ? "Closed"
+                        : Time(h.openTime) + " – " + Time(h.closeTime)
+                          + " (last order " + Time(RestaurantHours.LastCall(h, restaurant.lastCallMinutes)) + ")",
                     IsToday = d == now.DayOfWeek
                 };
             }).ToList();
 
             var today = hours.FirstOrDefault(x => x.dayOfWeek == now.DayOfWeek);
+            var lastCall = today == null ? TimeSpan.Zero : RestaurantHours.LastCall(today, restaurant.lastCallMinutes);
             bool open = today != null && !today.isClosed
-                        && now.TimeOfDay >= today.openTime && now.TimeOfDay <= today.closeTime;
+                        && now.TimeOfDay >= today.openTime && now.TimeOfDay <= lastCall;
             if (open) return;
 
             OrderingClosed = true;
@@ -197,6 +201,13 @@ namespace RestaurantManagementSystem.Pages.Customer
             if (today != null && !today.isClosed && now.TimeOfDay < today.openTime)
             {
                 ClosedMessage = $"We open at {Time(today.openTime)} today. You can browse the menu now, and place your order once we are open.";
+                return;
+            }
+
+            // After last call but before closing: the kitchen is finishing the last orders
+            if (today != null && !today.isClosed && now.TimeOfDay <= today.closeTime)
+            {
+                ClosedMessage = $"Last call for orders was at {Time(lastCall)} today. We close at {Time(today.closeTime)}. You can still browse the menu.";
                 return;
             }
 

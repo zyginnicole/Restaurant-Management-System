@@ -24,6 +24,7 @@ namespace RestaurantManagementSystem.Pages.Admin
         public List<CategoryRow> Categories { get; set; } = new();
         public int SlotInterval { get; set; } = 30;
         public int LastSeating { get; set; } = 60;
+        public int LastCall { get; set; } = 30;        // minutes before closing when orders stop
         public string Today => DateTime.Today.ToString("yyyy-MM-dd");
         public string SlotDate { get; set; } = "";     // date shown in Booking Slots (kept after a save)
 
@@ -81,6 +82,7 @@ namespace RestaurantManagementSystem.Pages.Admin
             await EnsureHoursAsync(restaurant);
             SlotInterval = restaurant.slotIntervalMinutes;
             LastSeating = restaurant.lastSeatingMinutes;
+            LastCall = restaurant.lastCallMinutes;
 
             var saved = await _db.OperatingHours
                 .Where(h => h.restaurantID == restaurant.restaurantID)
@@ -94,7 +96,8 @@ namespace RestaurantManagementSystem.Pages.Admin
                     Day = d,
                     Open = !h.isClosed,
                     From = h.openTime.ToString(@"hh\:mm"),
-                    To = h.closeTime.ToString(@"hh\:mm")
+                    To = h.closeTime.ToString(@"hh\:mm"),
+                    LastOrder = RestaurantHours.LastCall(h, LastCall).ToString(@"hh\:mm")
                 };
             }).ToList();
 
@@ -114,16 +117,23 @@ namespace RestaurantManagementSystem.Pages.Admin
         // =====================================================================
         //  OPERATING HOURS: save the 7 weekdays
         // =====================================================================
-        public async Task<IActionResult> OnPostSaveHoursAsync(List<HourInput> hours, DateTime? date)
+        public async Task<IActionResult> OnPostSaveHoursAsync(List<HourInput> hours, int lastCall, DateTime? date)
         {
             if (date.HasValue) TempData["SlotDate"] = date.Value.ToString("yyyy-MM-dd");
 
             if (hours == null || hours.Count != 7 || hours.Select(h => h.Day).Distinct().Count() != 7)
                 return BackTo("tab-hours", "The opening hours were not received. Please try again.");
 
+            if (!RestaurantHours.LastCallChoices.Contains(lastCall))
+                return BackTo("tab-hours", "Please choose a valid last call time.");
+
             foreach (var h in hours)
+            {
                 if (h.Open && h.To <= h.From)
                     return BackTo("tab-hours", $"{h.Day}: closing time must be after opening time.");
+                if (h.Open && h.To - h.From <= TimeSpan.FromMinutes(lastCall))
+                    return BackTo("tab-hours", $"{h.Day}: the day is too short for a last call {lastCall} minutes before closing.");
+            }
 
             var restaurant = await GetRestaurantAsync();
             await EnsureHoursAsync(restaurant);
@@ -138,6 +148,7 @@ namespace RestaurantManagementSystem.Pages.Admin
                 row.openTime = h.From;
                 row.closeTime = h.To;
             }
+            restaurant.lastCallMinutes = lastCall;
             await _db.SaveChangesAsync();
 
             // Existing reservations are never changed, but tell the admin if some now fall outside the hours
@@ -597,6 +608,7 @@ namespace RestaurantManagementSystem.Pages.Admin
             public bool Open { get; set; }
             public string From { get; set; } = "12:00";
             public string To { get; set; } = "22:30";
+            public string LastOrder { get; set; } = "22:00";   // closing time minus the last call minutes
         }
 
         // What the Save hours form posts for each weekday

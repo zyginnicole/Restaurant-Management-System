@@ -407,6 +407,9 @@ FodyWeavers.xsd
 *.sln.iml
 .idea/
 
+# Claude Code: local per-machine config (browser preview launch.json, local settings)
+.claude/
+
 ##
 ## Visual studio for Mac
 ##

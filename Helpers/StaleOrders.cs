@@ -121,10 +121,40 @@ public static class StaleOrders
         }
     }
 
-    // When today's service started: today's opening time from the restaurant's operating hours.
+    // When the CURRENT service started. Never a time in the future:
+    //  - before today's opening time, the current service is still the last one (the previous open day),
+    //    so orders staff create before opening are not cancelled straight away
     //  - closing after midnight (e.g. 18:00–02:00): until that closing time we are still inside yesterday's service
     //  - closed today, or no hours set up yet: the start of the day
     private static async Task<DateTime> ServiceStartAsync(ApplicationDbContext db)
+    {
+        var now = MalaysiaClock.Now;
+        var start = await TodayServiceStartAsync(db);
+        if (start <= now) return start;
+
+        // Today's opening time hasn't come yet: go back to the last day the restaurant was open
+        var restaurant = await db.Restaurants.AsNoTracking().OrderBy(r => r.restaurantID).FirstOrDefaultAsync();
+        if (restaurant != null)
+        {
+            var hours = await db.OperatingHours.AsNoTracking()
+                .Where(h => h.restaurantID == restaurant.restaurantID)
+                .ToListAsync();
+
+            for (int i = 1; i <= 7; i++)
+            {
+                var day = MalaysiaClock.Today.AddDays(-i);
+                var h = hours.FirstOrDefault(x => x.dayOfWeek == day.DayOfWeek);
+                if (h != null && !h.isClosed)
+                    return day + h.openTime;
+            }
+        }
+
+        // No open day found: fall back to the start of today (always in the past)
+        return MalaysiaClock.Today;
+    }
+
+    // Today's opening time (or yesterday's, inside an after-midnight service). Can be later than now.
+    private static async Task<DateTime> TodayServiceStartAsync(ApplicationDbContext db)
     {
         var now = MalaysiaClock.Now;
         var today = MalaysiaClock.Today;
