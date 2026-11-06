@@ -1,0 +1,452 @@
+@page
+@model RestaurantManagementSystem.Pages.Admin.AccountsModel
+@using RestaurantManagementSystem.Helpers
+@{
+    ViewData["Title"] = "Accounts";
+    ViewData["Module"] = "Admin";
+    ViewData["ActiveNav"] = "Accounts";
+    ViewData["Eyebrow"] = "User management";
+    ViewData["Heading"] = "Accounts";
+    ViewData["Subtitle"] = "Customer and staff accounts, role assignment and access";
+    Layout = "_DashboardLayout";
+
+    // Data comes from the database (AccountsModel → AccountService)
+    var staff = Model.StaffAccounts;
+    var customers = Model.Customers;
+    var now = DateTimeOffset.Now;
+    var jobTitles = new[] { "Manager", "Senior Waiter", "Waiter", "Host", "Cashier", "Head Chef", "Chef" };
+
+    int customerTotal = Model.Stats.CustomerTotal;
+    string Initials(string name) => NameFormatter.GetInitials(name);
+
+    // Paging links for the Customers tab keep the search text
+    int firstShown = customers.Count == 0 ? 0 : (Model.CurrentPage - 1) * RestaurantManagementSystem.Services.AccountService.CustomersPerPage + 1;
+    int lastShown = firstShown == 0 ? 0 : firstShown + customers.Count - 1;
+    string PageLink(int p) => $"?tab=customers&page={p}" + (Model.Search != null ? "&q=" + Uri.EscapeDataString(Model.Search) : "");
+
+    // ?tab=customers opens the Customers tab (after an action on that tab, a search or a page link)
+    bool customersTab = Request.Query["tab"] == "customers";
+}
+
+@section HeaderActions {
+    @* Typing filters the rows on screen; Enter on the Customers tab searches all customers (?q=) *@
+    <input type="search" class="form-control md-input md-header-search" id="accountSearch" placeholder="Search name or email" aria-label="Search accounts" value="@Model.Search" />
+}
+
+@* Message after an action (TempData["AdminMessage"] set by the PageModel) *@
+@if (TempData["AdminMessage"] is string message)
+{
+    <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+}
+@if (TempData["AdminError"] is string errorMessage)
+{
+    <div class="md-alert-danger md-section" role="alert"><i class="bi bi-exclamation-circle me-2"></i>@errorMessage</div>
+}
+
+@* ---------- Stat cards ---------- *@
+<div class="row md-grid md-section">
+    <div class="col-sm-6 col-xl-3">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Customers</span>
+            <div class="md-stat-value">@customerTotal</div>
+            <span class="md-hint">@Model.Stats.CustomersNewThisWeek new this week</span>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Staff accounts</span>
+            <div class="md-stat-value">@(Model.Stats.StaffActive + Model.Stats.StaffDeactivated)</div>
+            <span class="md-hint">@Model.Stats.StaffActive active · @Model.Stats.StaffDeactivated deactivated</span>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Administrators</span>
+            <div class="md-stat-value">@Model.Stats.AdminTotal</div>
+            <span class="md-hint">Full access</span>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Locked accounts</span>
+            <div class="md-stat-value">@Model.Stats.LockedCustomers</div>
+            <span class="md-hint">After too many failed sign-ins</span>
+        </div>
+    </div>
+</div>
+
+<nav class="md-tabs md-page-tabs" aria-label="Account type" id="accountTabs">
+    <button type="button" class="@(customersTab ? "active" : "")" data-tab="customers">Customers <small>@customerTotal</small></button>
+    <button type="button" class="@(customersTab ? "" : "active")" data-tab="staff">Staff <small>@staff.Count</small></button>
+</nav>
+
+@* =====================================================
+   Staff tab – accounts table (full width). "New staff" opens the Create staff account pop-up.
+   ===================================================== *@
+<div class="md-section @(customersTab ? "d-none" : "")" data-pane="staff">
+    <div>
+        <section class="md-card">
+            <div class="md-card-header">
+                <span class="md-card-label">Staff accounts · @staff.Count</span>
+                <button type="button" class="btn md-btn-round md-btn-sm btn-md-dark" data-bs-toggle="modal" data-bs-target="#createStaffPopup"><i class="bi bi-person-plus me-1"></i>New staff</button>
+            </div>
+            <div class="table-responsive">
+                <table class="md-visit-table md-account-table">
+                    <thead>
+                        <tr><th>Name</th><th>Job title</th><th>System role</th><th>Status</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in staff)
+                        {
+                            bool admin = s.Role == "Administrator";
+                            <tr data-search="@($"{s.Name} {s.Email}".ToLower())" class="@(s.Active ? "" : "is-muted")">
+                                <td>
+                                    <div class="md-account-name">
+                                        <span class="md-avatar">@Initials(s.Name)</span>
+                                        <div>
+                                            <b>@s.Name</b>
+                                            <small>@s.Email</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>@(string.IsNullOrEmpty(s.JobTitle) ? "—" : s.JobTitle)</td>
+                                <td><span class="md-role @(admin ? "is-admin" : "is-staff")">@s.Role</span></td>
+                                <td><span class="md-pill @(s.Active ? "is-active" : "is-deactivated")">@(s.Active ? "Active" : "Deactivated")</span></td>
+                                <td class="text-end">
+                                    @if (s.Active)
+                                    {
+                                        <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-bs-toggle="modal" data-bs-target="#editAccountPopup"
+                                                data-id="@s.AccountId" data-name="@s.Name" data-email="@s.Email" data-phone="@s.Phone" data-title="@s.JobTitle" data-role="@s.Role">
+                                            Edit
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn md-btn-round md-btn-sm md-btn-confirm" data-bs-toggle="modal" data-bs-target="#reactivatePopup"
+                                                data-id="@s.AccountId" data-name="@s.Name" data-details="@s.Name · @s.JobTitle · @s.Email">
+                                            Reactivate
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="md-notice-empty d-none" data-empty>No staff match this search.</p>
+        </section>
+    </div>
+</div>
+
+@* ---------- Create staff account pop-up (opened by "New staff"; posts to OnPostCreate) ---------- *@
+<div class="modal fade md-popup" id="createStaffPopup" tabindex="-1" aria-labelledby="createStaffTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" asp-page-handler="Create" id="createStaffForm" autocomplete="off">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Staff account</span>
+                    <h2 class="modal-title md-popup-title" id="createStaffTitle">Create staff account</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-2">
+                    <div class="col-sm-6">
+                        <label class="md-label" for="newName">Full name</label>
+                        <input class="form-control md-input" id="newName" name="staffName" maxlength="100" placeholder="Staff member's name" required />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="md-label" for="newEmail">Work email</label>
+                        <input class="form-control md-input" id="newEmail" name="staffEmail" type="email" maxlength="100" placeholder="name@maisondoree.my" required />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="md-label" for="newPhone">Phone</label>
+                        <input class="form-control md-input" id="newPhone" name="staffPhone" type="tel" maxlength="11" inputmode="numeric" placeholder="0123456789" />
+                    </div>
+                    <div class="col-sm-6">
+                        @* Staff.staffPosition – pick one or type a new title *@
+                        <label class="md-label" for="newTitle">Job title</label>
+                        <input class="form-control md-input" id="newTitle" name="staffPosition" list="jobTitleList" maxlength="50" placeholder="e.g. Waiter, Host, Chef" />
+                        <datalist id="jobTitleList">
+                            @foreach (var t in jobTitles)
+                            {
+                                <option value="@t"></option>
+                            }
+                        </datalist>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="md-label" for="newRole">System role</label>
+                        <select class="form-select md-input" id="newRole" name="systemRole" data-md-select>
+                            <option selected>Staff</option>
+                            <option>Administrator</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="md-hint mb-3">The system role decides what this person can access: Staff portal or full administration. Job title is for display only. Phone and job title are needed for Staff only.</p>
+                @* No email is sent: a temporary password is created and shown once after saving *@
+                <p class="md-note-box md-note-box-info mb-0">A temporary password is created and shown to you once. Give it to them privately; they can change it in My profile.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn md-btn-round btn-md-green"><i class="bi bi-person-plus me-2"></i>Create account</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* =====================================================
+   Customers tab
+   ===================================================== *@
+<div class="md-section @(customersTab ? "" : "d-none")" data-pane="customers">
+    <section class="md-card">
+        <div class="md-card-header">
+            <span class="md-card-label">Customer accounts</span>
+            <span class="md-card-meta">Customers edit their own details on their Profile page</span>
+        </div>
+        <div class="table-responsive">
+            <table class="md-visit-table md-account-table">
+                <thead>
+                    <tr><th>Name</th><th>Phone</th><th>Member since</th><th>Visits</th><th>Promotions</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in customers)
+                    {
+                        bool locked = c.LockedUntil.HasValue && c.LockedUntil.Value > now;
+                        <tr data-search="@($"{c.Name} {c.Email}".ToLower())">
+                            <td>
+                                <div class="md-account-name">
+                                    <span class="md-avatar">@Initials(c.Name)</span>
+                                    <div>
+                                        <b>@c.Name</b>
+                                        <small>@c.Email</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>@c.Phone</td>
+                            <td>@c.MemberSince.ToString("d MMM yyyy")</td>
+                            <td>@c.Visits</td>
+                            <td>@(c.PromoOptIn ? "Opted in" : "—")</td>
+                            <td>
+                                @if (locked)
+                                {
+                                    <span class="md-pill is-locked">Locked</span>
+                                    <small class="md-locked-until">until @(c.LockedUntil!.Value.ToString("HH:mm"))</small>
+                                }
+                                else
+                                {
+                                    <span class="md-pill is-active">Active</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (locked)
+                                {
+                                    <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-bs-toggle="modal" data-bs-target="#unlockPopup"
+                                            data-id="@c.CustId" data-name="@c.Name" data-details="@c.Name · @c.Email">
+                                        Unlock
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="md-notice-empty d-none" data-empty>No customers match this search.</p>
+        @* Paging: 20 customers per page (?page=2), keeps the search (?q=) *@
+        <div class="md-table-foot">
+            <span>
+                Showing @firstShown–@lastShown of @Model.CustomerMatches
+                @if (Model.Search != null)
+                {
+                    <text> matching “@Model.Search” · <a href="?tab=customers">Clear search</a></text>
+                }
+            </span>
+            <div class="d-flex gap-2">
+                <a class="btn md-btn-round md-btn-sm md-btn-outline @(Model.CurrentPage <= 1 ? "disabled" : "")" href="@PageLink(Model.CurrentPage - 1)" aria-label="Previous page" aria-disabled="@(Model.CurrentPage <= 1 ? "true" : "false")"><i class="bi bi-chevron-left"></i></a>
+                <a class="btn md-btn-round md-btn-sm md-btn-outline @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")" href="@PageLink(Model.CurrentPage + 1)" aria-label="Next page" aria-disabled="@(Model.CurrentPage >= Model.TotalPages ? "true" : "false")"><i class="bi bi-chevron-right"></i></a>
+            </div>
+        </div>
+    </section>
+</div>
+
+@* ---------- Edit account pop-up (filled from the row's Edit button) ----------
+   Posts accountId + fields to OnPostEdit. Deactivate / Reset password close it and open their confirm pop-up. *@
+<div class="modal fade md-popup" id="editAccountPopup" tabindex="-1" aria-labelledby="editAccountTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" asp-page-handler="Edit">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow" data-edit="role">Staff account</span>
+                    <h2 class="modal-title md-popup-title" id="editAccountTitle" data-edit="title">Edit account</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="accountId" id="editId" />
+                <div class="mb-3">
+                    <label class="md-label" for="editName">Full name</label>
+                    <input class="form-control md-input" id="editName" name="staffName" maxlength="100" required />
+                </div>
+                <div class="row g-3 mb-3" data-staff-only>
+                    <div class="col-sm-6">
+                        <label class="md-label" for="editPhone">Phone</label>
+                        <input class="form-control md-input" id="editPhone" name="staffPhone" type="tel" maxlength="11" inputmode="numeric" placeholder="0123456789" />
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="md-label" for="editTitle">Job title</label>
+                        <input class="form-control md-input" id="editTitle" name="staffPosition" list="jobTitleList" maxlength="50" />
+                    </div>
+                </div>
+                <div class="row g-3">
+                    <div class="col-sm-7">
+                        <label class="md-label" for="editEmail">Work email</label>
+                        <input class="form-control md-input md-input-locked" id="editEmail" type="email" readonly tabindex="-1" />
+                    </div>
+                    <div class="col-sm-5">
+                        <label class="md-label" for="editRole">System role</label>
+                        <input class="form-control md-input md-input-locked" id="editRole" readonly tabindex="-1" />
+                    </div>
+                </div>
+                <p class="md-hint mt-2 mb-0">Work email is the sign-in name and the system role is set when the account is created, so neither can be changed here.</p>
+            </div>
+            <div class="modal-footer md-detail-footer">
+                <div class="md-edit-actions">
+                    <button type="button" class="btn md-btn-round md-btn-cancel" data-open-popup="deactivatePopup" data-staff-only>Deactivate</button>
+                    <button type="button" class="btn md-btn-round md-btn-outline" data-open-popup="resetPasswordPopup">Reset password</button>
+                </div>
+                <button type="submit" class="btn md-btn-round btn-md-green">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* ---------- Confirm pop-ups (shared _ConfirmPopup), filled from the clicked button's data-id / data-name / data-details ---------- *@
+@{
+    var deactivatePopup = new ConfirmPopupView
+    {
+        Id = "deactivatePopup",
+        Eyebrow = "Staff account",
+        Title = "Deactivate {name}?",
+        Message = "{details}",
+        Note = "They can no longer sign in. Their past reservations and orders stay in the records. You can reactivate the account later.",
+        Handler = "Deactivate",
+        IdField = "accountId",
+        BackText = "Keep active",
+        ConfirmText = "Deactivate",
+        Danger = true
+    };
+    var reactivatePopup = new ConfirmPopupView
+    {
+        Id = "reactivatePopup",
+        Eyebrow = "Staff account",
+        Title = "Reactivate {name}?",
+        Message = "{details}",
+        Note = "They can sign in to the Staff portal again with their existing password.",
+        Handler = "Reactivate",
+        IdField = "accountId",
+        ConfirmText = "Reactivate"
+    };
+    var resetPasswordPopup = new ConfirmPopupView
+    {
+        Id = "resetPasswordPopup",
+        Eyebrow = "Account",
+        Title = "Reset {name}'s password?",
+        Message = "{details}",
+        Note = "A new temporary password is created and shown to you once. Their current password stops working straight away.",
+        Handler = "ResetPassword",
+        IdField = "accountId",
+        ConfirmText = "Reset password"
+    };
+    var unlockPopup = new ConfirmPopupView
+    {
+        Id = "unlockPopup",
+        Eyebrow = "Customer account",
+        Title = "Unlock {name}?",
+        Message = "{details}",
+        Note = "The account was locked after too many failed sign-ins. Unlocking lets them sign in again straight away.",
+        Handler = "Unlock",
+        IdField = "custId",
+        ConfirmText = "Unlock account"
+    };
+}
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="deactivatePopup" />
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="reactivatePopup" />
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="resetPasswordPopup" />
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="unlockPopup" />
+
+@section Scripts {
+    <script src="~/js/md-select.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            // Customers / Staff tabs
+            var tabs = document.querySelectorAll('#accountTabs button');
+            tabs.forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    tabs.forEach(function (t) { t.classList.toggle('active', t === tab); });
+                    document.querySelectorAll('[data-pane]').forEach(function (p) { p.classList.toggle('d-none', p.dataset.pane !== tab.dataset.tab); });
+                });
+            });
+
+            // New staff: start with an empty form, cursor in Full name
+            var createEl = document.getElementById('createStaffPopup');
+            createEl.addEventListener('show.bs.modal', function () {
+                document.getElementById('createStaffForm').reset();
+                document.getElementById('newRole').dispatchEvent(new Event('md-refresh'));
+            });
+            createEl.addEventListener('shown.bs.modal', function () { document.getElementById('newName').focus(); });
+
+            // Search: Enter on the Customers tab searches ALL customers on the server (?q=), not just this page
+            var searchBox = document.getElementById('accountSearch');
+            searchBox.addEventListener('keydown', function (e) {
+                if (e.key !== 'Enter') return;
+                var customersOpen = document.querySelector('#accountTabs button.active').dataset.tab === 'customers';
+                if (!customersOpen) return;
+                e.preventDefault();
+                var text = this.value.trim();
+                window.location.search = '?tab=customers' + (text ? '&q=' + encodeURIComponent(text) : '');
+            });
+
+            // Search: typing filters the rows shown in both tables by name or email
+            searchBox.addEventListener('input', function () {
+                var text = this.value.trim().toLowerCase();
+                document.querySelectorAll('[data-pane]').forEach(function (pane) {
+                    var shown = 0;
+                    pane.querySelectorAll('tr[data-search]').forEach(function (row) {
+                        var ok = !text || row.dataset.search.indexOf(text) !== -1;
+                        row.classList.toggle('d-none', !ok);
+                        if (ok) shown++;
+                    });
+                    pane.querySelector('[data-empty]').classList.toggle('d-none', shown > 0);
+                });
+            });
+
+            // Edit pop-up: fill from the clicked row. Admin rows have no phone / job title and can't be deactivated.
+            var popupEl = document.getElementById('editAccountPopup');
+            popupEl.addEventListener('show.bs.modal', function (e) {
+                if (!e.relatedTarget || !e.relatedTarget.dataset.id) return;   // reopened by script
+                var d = e.relatedTarget.dataset, admin = d.role === 'Administrator';
+                document.getElementById('editId').value = d.id;
+                document.getElementById('editName').value = d.name;
+                document.getElementById('editPhone').value = d.phone;
+                document.getElementById('editTitle').value = d.title;
+                document.getElementById('editEmail').value = d.email;
+                document.getElementById('editRole').value = d.role;
+                popupEl.querySelector('[data-edit="title"]').textContent = 'Edit ' + d.name;
+                popupEl.querySelector('[data-edit="role"]').textContent = admin ? 'Administrator account' : 'Staff account';
+                popupEl.querySelectorAll('[data-staff-only]').forEach(function (el) { el.classList.toggle('d-none', admin); });
+                popupEl.querySelectorAll('[data-open-popup]').forEach(function (b) {
+                    b.dataset.id = d.id; b.dataset.name = d.name;
+                    b.dataset.details = d.name + ' · ' + (d.title ? d.title + ' · ' : '') + d.email;
+                });
+            });
+
+            // Deactivate / Reset password: close the Edit pop-up, then open the confirm pop-up
+            popupEl.querySelectorAll('[data-open-popup]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var target = bootstrap.Modal.getOrCreateInstance(document.getElementById(button.dataset.openPopup));
+                    popupEl.addEventListener('hidden.bs.modal', function () { target.show(button); }, { once: true });
+                    bootstrap.Modal.getInstance(popupEl).hide();
+                });
+            });
+        })();
+    </script>
+}

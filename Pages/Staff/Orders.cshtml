@@ -1,0 +1,528 @@
+@page
+@model RestaurantManagementSystem.Pages.Staff.OrdersModel
+@{
+    ViewData["Title"] = "Orders";
+    ViewData["Module"] = "Staff";
+    ViewData["ActiveNav"] = "Orders";
+    ViewData["Eyebrow"] = Model.TodayLabel;
+    ViewData["Heading"] = "Orders";
+    ViewData["Subtitle"] = "Create orders for seated tables and move them through the kitchen";
+    Layout = "_DashboardLayout";
+
+    // ---------- Data comes from OrdersModel (the database) ----------
+    // Order + its Reservation / table. Steps = time each tracker step was reached (Order placed, Preparing, Served, Completed).
+    var orders = Model.Orders;
+    string Group(string status) => status is "Completed" ? "completed" : status is "Cancelled" ? "cancelled" : "active";
+    // CSS class for an order status: "Order placed" → is-placed, "Preparing" → is-preparing …
+    string OrderClass(string status) => status == "Order placed" ? "is-placed" : "is-" + status.ToLower();
+    decimal Subtotal(IEnumerable<RestaurantManagementSystem.Pages.Staff.OrdersModel.ItemRow> items) => items.Sum(i => i.Qty * i.Price - i.Discount);   // after promotions
+    string Rm(decimal value) => "RM " + value.ToString("#,##0.00");
+
+    // New order: tables (seated now + vacant for walk-ins) and the Menu
+    var tables = Model.Tables;
+    var menu = Model.MenuRows;
+    string[] steps = { "Order placed", "Preparing", "Served", "Completed" };
+    // List order: the statuses that need staff come first
+    string[] priority = { "Order placed", "Preparing", "Served", "Completed", "Cancelled" };
+}
+
+@section HeaderActions {
+    @* Shows the New order form on the right (same place and style as New booking on Reservations) *@
+    <button type="button" class="btn btn-md-dark md-header-btn" id="newOrderButton"><i class="bi bi-plus-lg"></i>New order</button>
+}
+
+@* Message after an action (TempData["StaffMessage"]) *@
+@if (TempData["StaffMessage"] is string message)
+{
+    <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+}
+
+@* Orders view (list + chosen order). Hidden while a new order is being built. *@
+<div class="row md-grid md-section" id="ordersView">
+    @* =====================================================
+       Left: order list – tabs Active / Completed / Cancelled; click an order to see it on the right
+       ===================================================== *@
+    <div class="col-lg-5 col-xl-4">
+        <section class="md-card md-staff-orders">
+            <nav class="md-tabs md-filter-tabs" aria-label="Order status" id="orderTabs">
+                <button type="button" class="active" data-group="active">Active <small>@orders.Count(o => Group(o.Status) == "active")</small></button>
+                <button type="button" data-group="completed">Completed <small>@orders.Count(o => Group(o.Status) == "completed")</small></button>
+                <button type="button" data-group="cancelled">Cancelled <small>@orders.Count(o => Group(o.Status) == "cancelled")</small></button>
+            </nav>
+            <ul class="md-order-list" id="orderList">
+                @* Orders that need staff first: Order placed → Preparing → Served (then Completed, Cancelled); newest first within each.
+                   Backend: OrderBy(status priority).ThenByDescending(orderDateTime) *@
+                @foreach (var o in orders.OrderBy(o => Array.IndexOf(priority, o.Status)))
+                {
+                    <li class="md-order md-staff-order @OrderClass(o.Status)" data-group="@Group(o.Status)" data-code="@o.Code">
+                        <span class="md-table-badge">@(o.Table != null ? o.Table.Replace("-", "") : "TA")</span>@* "I-01" -> "I01": keeps the area code *@
+                        <div class="md-order-main">
+                            <button type="button" class="md-staff-order-btn stretched-link" data-show-order="@o.Code">@(o.Table ?? "Takeaway") · @o.Name</button>
+                            <span class="md-guest-meta">@o.Code · @o.Items.Sum(i => i.Qty) items@(o.Pickup != null ? " · pick-up " + o.Pickup : "")</span>
+                        </div>
+                        <div class="md-order-side">
+                            <span class="md-pill @OrderClass(o.Status)">@o.Status</span>
+                            <span class="md-order-amount">@Rm(o.Total)</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+            <p class="md-notice-empty d-none" id="orderEmpty">No orders here.</p>
+        </section>
+    </div>
+
+    @* =====================================================
+       Right: the chosen order (copied from its <template data-order>)
+       ===================================================== *@
+    <div class="col-lg-7 col-xl-8">
+        <div id="orderPanel"></div>
+    </div>
+</div>
+
+@* =====================================================
+   New order view (shown by the New order button instead of the orders view):
+   left = order type and table / takeaway details, right = Order items with Add items below.
+   Posts to OnPostCreate: orderType, tableId (+ walkInName / walkInPhone for a walk-in) / guestName + guestPhone + pickupDateTime,
+   items[i].menuId, items[i].quantity, items[i].itemRemark (rows are added by the script).
+   ===================================================== *@
+<form method="post" asp-page-handler="Create" class="d-none" id="newOrder">
+<div class="row md-grid md-section">
+    <div class="col-lg-5 col-xl-4">
+            <section class="md-card md-new-order-card">
+                <div class="md-card-header">
+                    <span class="md-card-label">New order</span>
+                    <span class="md-pill is-draft">Draft</span>
+                </div>
+                <div class="md-card-body">
+                    <div class="md-choice mb-3" role="radiogroup" aria-label="Order type">
+                        <input type="radio" class="btn-check" name="orderType" id="newDineIn" value="DineIn" checked />
+                        <label for="newDineIn">Dine-in</label>
+                        <input type="radio" class="btn-check" name="orderType" id="newTakeaway" value="Takeaway" />
+                        <label for="newTakeaway">Takeaway</label>
+                    </div>
+                    <div data-type="DineIn">
+                        <label class="md-label" for="newTable">Table</label>
+                        <select class="form-select md-input" id="newTable" name="tableId" data-md-select>
+                            @if (tables.Count == 0)
+                            {
+                                <option value="" disabled selected>No table available</option>
+                            }
+                            @* Seated tables first (guests there now), then vacant tables for walk-ins.
+                               data-walkin = 1 → a guest name is needed (vacant table, or seated with nobody on record) *@
+                            @foreach (var t in tables)
+                            {
+                                <option value="@t.Id" data-walkin="@(t.Occupied && t.Guest != null ? "0" : "1")">@(t.Occupied ? "Seated" : "Vacant") · @t.Table · @t.Area · @(t.Occupied ? (t.Guest ?? "guests seated") + (t.Res != null ? " · " + t.Res : "") : "seats " + t.Capacity + " · walk-in")</option>
+                            }
+                        </select>
+                        <div class="row g-3 mt-0 d-none" id="walkInFields">
+                            <div class="col-12">
+                                <label class="md-label" for="walkInName">Guest name</label>
+                                <input class="form-control md-input" id="walkInName" name="walkInName" maxlength="100" />
+                            </div>
+                            <div class="col-12">
+                                <label class="md-label" for="walkInPhone">Phone (optional)</label>
+                                <input class="form-control md-input" id="walkInPhone" name="walkInPhone" type="tel" maxlength="20" placeholder="+60 1X-XXX XXXX" />
+                            </div>
+                        </div>
+                        <p class="md-hint mt-2 mb-0">Seated tables are listed first (guests with a reservation can also order from their own account). A vacant table is for a walk-in: enter the guest's name, and the table becomes Occupied when the order is sent.</p>
+                    </div>
+                    <div class="row g-3 d-none" data-type="Takeaway">
+                        <div class="col-12">
+                            <label class="md-label" for="newGuestName">Guest name</label>
+                            <input class="form-control md-input" id="newGuestName" name="guestName" maxlength="100" />
+                        </div>
+                        <div class="col-sm-7 col-lg-12 col-xl-7">
+                            <label class="md-label" for="newGuestPhone">Phone</label>
+                            <input class="form-control md-input" id="newGuestPhone" name="guestPhone" type="tel" maxlength="20" placeholder="+60 1X-XXX XXXX" />
+                        </div>
+                        <div class="col-sm-5 col-lg-12 col-xl-5">
+                            <label class="md-label" for="newPickup">Pick-up</label>
+                            <select class="form-select md-input" id="newPickup" name="pickupDateTime">
+                                @foreach (var p in Model.PickupOptions)
+                                {
+                                    <option value="@p.Value">@p.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </section>
+    </div>
+
+    <div class="col-lg-7 col-xl-8">
+            <section class="md-card md-section">
+                <div class="md-card-header">
+                    <span class="md-card-label">Order items</span>
+                </div>
+                <ul class="md-draft-items" id="draftItems"></ul>
+                <p class="md-notice-empty" id="draftEmpty">No items yet. Add dishes from the menu below.</p>
+                <div class="md-card-body md-draft-foot">
+                    <div class="md-draft-total"><span>Subtotal</span><b id="draftSubtotal">RM 0.00</b></div>
+                    <p class="md-hint mt-1 mb-3">Service charge and SST are added when the order is sent.</p>
+                    <div class="md-edit-actions">
+                        <button type="submit" class="btn md-btn-round md-btn-green" id="sendToKitchen" disabled>Send to kitchen</button>
+                    </div>
+                </div>
+            </section>
+
+            @* Menu items (Menu: menuID, menuCategory, menuName, menuPrice, isAvailable) *@
+            <section class="md-card">
+                <div class="md-card-header md-add-head">
+                    <span class="md-card-label">Add items</span>
+                    <div class="md-segment md-segment-sm" role="group" aria-label="Menu category" id="addTabs">
+                        <button type="button" class="active" data-cat="all">All</button>
+                        @foreach (var cat in Model.Categories)
+                        {
+                            <button type="button" data-cat="@cat">@cat</button>
+                        }
+                    </div>
+                </div>
+                <div class="md-card-body">
+                    <ul class="md-add-grid" id="addGrid">
+                        @foreach (var m in menu)
+                        {
+                            <li class="md-add-item @(m.Available ? "" : "is-soldout")" data-cat="@m.Category">
+                                <span class="md-add-cat">@m.Category</span>
+                                <span class="md-add-name">@m.Name</span>
+                                <div class="md-add-foot">
+                                    <span>@Rm(m.Price)</span>
+                                    @if (m.Available)
+                                    {
+                                        <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-add-item="@m.Id" data-name="@m.Name" data-price="@m.Price">Add</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" disabled>Sold out</button>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </section>
+    </div>
+</div>
+</form>
+
+@* =====================================================
+   One <template data-order> per order: copied into #orderPanel when the order is clicked.
+   Actions per status: Order placed → Accept · Preparing → Mark served · Served → Record payment (Billing).
+   ===================================================== *@
+@foreach (var o in orders)
+{
+    int reached = Array.IndexOf(steps, o.Status) + 1;     // steps done so far, from the status
+    bool open = o.Status is "Order placed" or "Preparing";
+    string details = $"{(o.Table ?? "Takeaway")} · {o.Name} · {o.Items.Sum(i => i.Qty)} items · {Rm(o.Total)}";
+    <template data-order="@o.Code">
+        <section class="md-card">
+            <div class="md-card-header">
+                <span class="md-card-label">@o.Code · @(o.Table ?? "Takeaway") · @o.Name</span>
+                <span class="md-pill @OrderClass(o.Status)">@o.Status</span>
+            </div>
+            <div class="md-card-body">
+                <p class="md-hint mt-0 mb-3">
+                    @o.Type@(o.Res != null ? " · reservation " + o.Res : "")@(o.Pickup != null ? " · pick-up " + o.Pickup : "") · placed at @o.Steps[0]
+                    @if (o.Phone != null)
+                    {
+                        <span class="d-block">Phone Number: @o.Phone</span>
+                    }
+                </p>
+                @if (o.Status != "Cancelled")
+                {
+                    <ol class="md-tracker mb-4">
+                        @for (int i = 0; i < steps.Length; i++)
+                        {
+                            string state = i < reached - 1 || (i == reached - 1 && o.Status == "Completed") ? "done" : i == reached - 1 ? "current" : "";
+                            <li class="@state"><span>@steps[i]</span><small class="md-tracker-time">@(o.Steps[i] == "" ? "—" : o.Steps[i])</small></li>
+                        }
+                    </ol>
+                }
+                <ul class="md-order-items">
+                    @foreach (var i in o.Items)
+                    {
+                        <li>
+                            <span>
+                                @(i.Qty)× @i.Name
+                                @if (i.Remark != null)
+                                {
+                                    <small class="md-item-note">@i.Remark</small>
+                                }
+                                @if (!string.IsNullOrEmpty(i.Promo) && i.Discount > 0)
+                                {
+                                    <small class="md-item-note">Promo @i.Promo &minus;@Rm(i.Discount)</small>
+                                }
+                            </span>
+                            <span>@Rm(i.Qty * i.Price - i.Discount)</span>
+                        </li>
+                    }
+                </ul>
+                <div class="md-draft-total"><span>Subtotal</span><b>@Rm(o.Total)</b></div>
+                <p class="md-hint mt-1 mb-3">@(o.Type == "Takeaway" ? "Includes SST, after promotions." : "Includes service charge and SST, after promotions.")</p>
+
+                <div class="md-edit-actions">
+                    @switch (o.Status)
+                    {
+                        case "Order placed":
+                            <form method="post" asp-page-handler="Accept">
+                                <input type="hidden" name="orderId" value="@o.Code" />
+                                <button type="submit" class="btn md-btn-round md-btn-green">Accept order</button>
+                            </form>
+                            break;
+                        case "Preparing":
+                            <form method="post" asp-page-handler="Serve">
+                                <input type="hidden" name="orderId" value="@o.Code" />
+                                <button type="submit" class="btn md-btn-round md-btn-green">Mark served</button>
+                            </form>
+                            break;
+                        case "Served":
+                            <a class="btn md-btn-round btn-md-dark" href="/Staff/Billing?order=@o.Code">@(o.Type == "Takeaway" ? "View payment" : "Proceed payment")</a>
+                            break;
+                    }
+                    @if (open)
+                    {
+                        <button type="button" class="btn md-btn-round md-btn-cancel" data-bs-toggle="modal" data-bs-target="#cancelOrderPopup"
+                                data-id="@o.Code" data-code="@o.Code" data-details="@details">Cancel order</button>
+                    }
+                </div>
+                @if (o.Status is "Completed" or "Cancelled")
+                {
+                    <p class="md-hint mt-3 mb-0">This order is @o.Status.ToLower() and can no longer be changed.</p>
+                }
+            </div>
+        </section>
+    </template>
+}
+
+@{
+    var cancelOrderPopup = new ConfirmPopupView
+    {
+        Id = "cancelOrderPopup", Eyebrow = "Order", Title = "Cancel {code}?", Message = "{details}",
+        Note = "The kitchen stops the order. A paid takeaway is refunded to the guest.",
+        Handler = "CancelOrder", IdField = "orderId",
+        Reasons = new[] { "Requested by guest", "Item no longer available", "Entered by mistake", "Other" },
+        BackText = "Keep order", ConfirmText = "Cancel order", Danger = true
+    };
+}
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="cancelOrderPopup" />
+
+@* ---------- Discard order? ----------
+   Shown when staff leave a new order that has items (Back to orders, or any link off the page).
+   Nothing is posted: the draft is only on screen until "Send to kitchen". *@
+<div class="modal fade md-popup" id="discardOrderPopup" tabindex="-1" aria-labelledby="discardOrderTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">New order</span>
+                    <h2 class="modal-title md-popup-title" id="discardOrderTitle">Discard order?</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="md-popup-message mb-3" id="discardOrderSummary">—</p>
+                <p class="md-note-box md-note-box-info mb-0">These items haven't been sent to the kitchen yet. Discarding removes them.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn md-btn-round md-btn-outline" data-bs-dismiss="modal">Keep editing</button>
+                <button type="button" class="btn md-btn-round md-btn-danger" id="discardOrderConfirm">Discard order</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @* Table dropdowns open their list below (data-md-select) *@
+    <script src="~/js/md-select.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var list = document.getElementById('orderList');
+            var rows = list.querySelectorAll(':scope > li');
+            var panel = document.getElementById('orderPanel');
+            var newOrder = document.getElementById('newOrder');
+            var group = 'active';
+
+            // Tabs: Active / Completed / Cancelled
+            function applyTab() {
+                var shown = 0;
+                rows.forEach(function (row) {
+                    var ok = row.dataset.group === group;
+                    row.classList.toggle('d-none', !ok);
+                    if (ok) shown++;
+                });
+                document.getElementById('orderEmpty').classList.toggle('d-none', shown > 0);
+            }
+            document.querySelectorAll('#orderTabs button').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    group = tab.dataset.group;
+                    document.querySelectorAll('#orderTabs button').forEach(function (t) { t.classList.toggle('active', t === tab); });
+                    applyTab();
+                });
+            });
+
+            // Show an order on the right (from its template)
+            var shownCode = null;
+            function showOrder(code, scroll) {
+                var template = document.querySelector('template[data-order="' + code + '"]');
+                if (!template) return;
+                shownCode = code;
+                panel.innerHTML = '';
+                panel.appendChild(template.content.cloneNode(true));
+                rows.forEach(function (row) { row.classList.toggle('is-selected', row.dataset.code === code); });
+                history.replaceState(null, '', '?view=' + code);
+                if (scroll && window.innerWidth < 992) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            list.querySelectorAll('[data-show-order]').forEach(function (b) {
+                b.addEventListener('click', function () { showOrder(b.dataset.showOrder, true); });
+            });
+
+            // New order view: replaces the order list + chosen order. The header button switches back ("Back to orders").
+            var ordersView = document.getElementById('ordersView');
+            var newOrderButton = document.getElementById('newOrderButton');
+            function setNewOrder(on) {
+                ordersView.classList.toggle('d-none', on);
+                newOrder.classList.toggle('d-none', !on);
+                newOrderButton.innerHTML = on ? '<i class="bi bi-arrow-left"></i>Back to orders' : '<i class="bi bi-plus-lg"></i>New order';
+                newOrderButton.blur();   // back to the white style; it turns gold only on hover / while pressed
+                history.replaceState(null, '', on || !shownCode ? location.pathname : '?view=' + shownCode);
+                window.scrollTo({ top: 0, behavior: 'instant' });
+            }
+            newOrderButton.addEventListener('click', function () {
+                var opening = newOrder.classList.contains('d-none');
+                if (opening) setNewOrder(true);
+                else confirmLeave(function () { setNewOrder(false); });   // Back to orders
+            });
+
+            // Walk-in guest name: shown when the chosen table is vacant (or has nobody on record)
+            var tableSelect = document.getElementById('newTable');
+            function syncWalkIn() {
+                var option = tableSelect && tableSelect.options[tableSelect.selectedIndex];
+                var dineIn = newOrder.querySelector('input[name="orderType"]:checked').value === 'DineIn';
+                var need = dineIn && !!option && option.dataset.walkin === '1';
+                document.getElementById('walkInFields').classList.toggle('d-none', !need);
+                document.getElementById('walkInName').required = need;
+            }
+            if (tableSelect) tableSelect.addEventListener('change', syncWalkIn);
+
+            // Dine-in / Takeaway fields
+            newOrder.querySelectorAll('input[name="orderType"]').forEach(function (r) {
+                r.addEventListener('change', function () {
+                    newOrder.querySelectorAll('[data-type]').forEach(function (el) { el.classList.toggle('d-none', el.dataset.type !== r.value); });
+                    document.getElementById('newGuestName').required = r.value === 'Takeaway';
+                    document.getElementById('newGuestPhone').required = r.value === 'Takeaway';
+                    syncWalkIn();
+                });
+            });
+
+            syncWalkIn();
+
+            // Draft items: Add from the menu, − / + quantity, remark, Remove. Hidden fields items[i].* are rebuilt each time.
+            var draft = [];   // { id, name, price, qty, remark }
+            var draftList = document.getElementById('draftItems');
+            var rm = function (n) { return 'RM ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+            var esc = function (s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+
+            function renderDraft() {
+                draftList.innerHTML = draft.map(function (it, i) {
+                    return '<li class="md-draft-item">' +
+                        '<div class="md-draft-main"><span class="md-draft-name">' + esc(it.name) + '</span>' +
+                        '<input type="hidden" name="items[' + i + '].menuId" value="' + it.id + '" />' +
+                        '<input type="hidden" name="items[' + i + '].quantity" value="' + it.qty + '" />' +
+                        '<input class="form-control md-input md-cart-note" name="items[' + i + '].itemRemark" maxlength="200" placeholder="Item note" value="' + esc(it.remark) + '" data-remark="' + i + '" aria-label="Note for ' + esc(it.name) + '" /></div>' +
+                        '<div class="md-qty"><button type="button" data-step="-1" data-index="' + i + '" aria-label="One less">&minus;</button>' +
+                        '<span>' + it.qty + '</span><button type="button" data-step="1" data-index="' + i + '" aria-label="One more">+</button></div>' +
+                        '<span class="md-draft-line">' + rm(it.qty * it.price) + '</span>' +
+                        '<button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-remove="' + i + '">Remove</button>' +
+                        '</li>';
+                }).join('');
+                var total = draft.reduce(function (s, it) { return s + it.qty * it.price; }, 0);
+                document.getElementById('draftSubtotal').textContent = rm(total);
+                document.getElementById('draftEmpty').classList.toggle('d-none', draft.length > 0);
+                document.getElementById('sendToKitchen').disabled = draft.length === 0;
+            }
+
+            document.querySelectorAll('[data-add-item]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    var found = draft.filter(function (it) { return it.id === b.dataset.addItem; })[0];
+                    if (found) found.qty++;
+                    else draft.push({ id: b.dataset.addItem, name: b.dataset.name, price: parseFloat(b.dataset.price), qty: 1, remark: '' });
+                    renderDraft();
+                });
+            });
+            draftList.addEventListener('click', function (e) {
+                var step = e.target.closest('[data-step]'), remove = e.target.closest('[data-remove]');
+                if (step) {
+                    var it = draft[+step.dataset.index];
+                    it.qty = Math.max(1, Math.min(20, it.qty + parseInt(step.dataset.step, 10)));
+                    renderDraft();
+                }
+                if (remove) { draft.splice(+remove.dataset.remove, 1); renderDraft(); }
+            });
+            draftList.addEventListener('input', function (e) {
+                if (e.target.dataset.remark != null) draft[+e.target.dataset.remark].remark = e.target.value;
+            });
+            // ---------- Leaving a new order that has items → "Discard order?" ----------
+            var discardEl = document.getElementById('discardOrderPopup');
+            var discardPopup = new bootstrap.Modal(discardEl);
+            var afterDiscard = null, sending = false;
+            function hasDraft() { return !newOrder.classList.contains('d-none') && draft.length > 0; }
+
+            // Run "leave" straight away when there is nothing to lose, otherwise ask first
+            function confirmLeave(leave) {
+                if (!hasDraft()) { leave(); return; }
+                var count = draft.reduce(function (s, it) { return s + it.qty; }, 0);
+                var total = draft.reduce(function (s, it) { return s + it.qty * it.price; }, 0);
+                document.getElementById('discardOrderSummary').textContent =
+                    count + (count === 1 ? ' item' : ' items') + ' · ' + rm(total) + ' · ' + draft.map(function (it) { return it.name; }).join(', ');
+                afterDiscard = leave;
+                discardPopup.show();
+            }
+            document.getElementById('discardOrderConfirm').addEventListener('click', function () {
+                draft = [];
+                renderDraft();
+                var leave = afterDiscard;
+                afterDiscard = null;
+                discardEl.addEventListener('hidden.bs.modal', function () { if (leave) leave(); }, { once: true });
+                discardPopup.hide();
+            });
+
+            // Links that leave the page (sidebar menu, profile …) ask first while a new order has items
+            document.addEventListener('click', function (e) {
+                var link = e.target.closest('a[href]');
+                if (!link || !hasDraft() || link.target === '_blank' || link.getAttribute('href').charAt(0) === '#') return;
+                e.preventDefault();
+                confirmLeave(function () { window.location.href = link.href; });
+            });
+
+            // Browser back / refresh / close: the browser shows its own "Leave site?" message
+            newOrder.addEventListener('submit', function () { sending = true; });   // Send to kitchen: no warning
+            window.addEventListener('beforeunload', function (e) {
+                if (hasDraft() && !sending) { e.preventDefault(); e.returnValue = ''; }
+            });
+
+            // Menu category tabs
+            document.querySelectorAll('#addTabs button').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    document.querySelectorAll('#addTabs button').forEach(function (t) { t.classList.toggle('active', t === tab); });
+                    document.querySelectorAll('#addGrid > li').forEach(function (li) {
+                        li.classList.toggle('d-none', tab.dataset.cat !== 'all' && li.dataset.cat !== tab.dataset.cat);
+                    });
+                });
+            });
+
+            // Start: ?view=ORD-0082 (from the Dashboard), otherwise the first active order
+            applyTab();
+            renderDraft();
+            var view = new URLSearchParams(location.search).get('view');
+            // ?status=placed (Staff Dashboard "1 to accept"): the first Order placed order
+            var placed = new URLSearchParams(location.search).get('status') === 'placed' ? list.querySelector('li.is-placed') : null;
+            var start = view && document.querySelector('template[data-order="' + view + '"]') ? view
+                      : placed ? placed.dataset.code
+                      : (list.querySelector('li[data-group="active"]') || {}).dataset?.code;
+            if (view) {
+                var row = list.querySelector('li[data-code="' + view + '"]');
+                if (row && row.dataset.group !== 'active') document.querySelector('#orderTabs [data-group="' + row.dataset.group + '"]').click();
+            }
+            if (start) showOrder(start);
+        })();
+    </script>
+}

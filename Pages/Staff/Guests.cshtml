@@ -1,0 +1,218 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Staff.GuestsModel
+@using RestaurantManagementSystem.Services
+@{
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    ViewData["Title"] = "Guests";
+    ViewData["Module"] = "Staff";
+    ViewData["ActiveNav"] = "Guests";
+    ViewData["Eyebrow"] = DateTime.Today.ToString("dddd, d MMMM yyyy", inv) + (DateTime.Now.Hour < 16 ? " · Lunch service" : " · Dinner service");
+    ViewData["Heading"] = "Guests";
+    ViewData["Subtitle"] = "Know your guests: preferences and past visits";
+    Layout = "_DashboardLayout";
+
+    // Customers + figures worked out from their Reservations / Payments (GuestsModel)
+    var guests = Model.Guests;
+    string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+    string StatusClass(string status) => "is-" + status.Replace("-", "").ToLowerInvariant();
+    string Group(int visits, bool tonight) => (tonight ? "tonight " : "") + (visits >= 3 ? "regular" : "");
+}
+
+<div class="row md-grid md-section">
+    @* ---------- Guest list (left) ---------- *@
+    <div class="col-lg-5 col-xl-4">
+        <section class="md-card md-staff-orders">
+            <nav class="md-tabs md-filter-tabs" aria-label="Guests" id="guestTabs">
+                <button type="button" class="active" data-group="all">All <small>@guests.Count</small></button>
+                <button type="button" data-group="tonight">Tonight <small>@guests.Count(g => g.Tonight != null)</small></button>
+                <button type="button" data-group="regular">Regulars <small>@guests.Count(g => g.Visits >= 3)</small></button>
+            </nav>
+            <div class="md-card-body md-guest-search">
+                <input type="search" class="form-control md-input" id="guestSearch" placeholder="Name, phone or email" aria-label="Search guests" />
+            </div>
+            <ul class="md-order-list" id="guestList">
+                @foreach (var g in guests)
+                {
+                    var c = g.Customer;
+                    <li class="md-order md-staff-order md-guest-row" data-id="@c.custID" data-group="@Group(g.Visits, g.Tonight != null)"
+                        data-search="@($"{c.custName} {c.custEmail} {new string((c.custPhone ?? "").Where(char.IsDigit).ToArray())}".ToLower())">
+                        <span class="md-table-badge md-guest-initials">@Initials(c.custName)</span>
+                        <div class="md-order-main">
+                            <button type="button" class="md-staff-order-btn stretched-link" data-show-guest="@c.custID">@c.custName</button>
+                            <span class="md-guest-meta">@c.custPhone · @g.Visits @(g.Visits == 1 ? "visit" : "visits")@(g.LastVisit != null ? " · last " + g.LastVisit.Value.ToString("d MMM yyyy", inv) : "")</span>
+                        </div>
+                        @if (g.Tonight != null || g.NoShows > 0)
+                        {
+                            <div class="md-order-side">
+                                @if (g.Tonight is { } t)
+                                {
+                                    <span class="md-pill @StatusClass(t.reservationStatus)">Tonight @t.reservationDateTime.ToString("HH:mm", inv)</span>
+                                }
+                                @if (g.NoShows > 0)
+                                {
+                                    <span class="md-guest-flag">@g.NoShows no-show@(g.NoShows == 1 ? "" : "s")</span>
+                                }
+                            </div>
+                        }
+                    </li>
+                }
+            </ul>
+            <p class="md-notice-empty @(guests.Count == 0 ? "" : "d-none")" id="guestEmpty">@(guests.Count == 0 ? "No guests yet." : "No guests match.")</p>
+        </section>
+    </div>
+
+    @* ---------- The chosen guest (right) – copied from its <template data-guest> ---------- *@
+    <div class="col-lg-7 col-xl-8">
+        <div id="guestPanel"></div>
+    </div>
+</div>
+
+@foreach (var g in guests)
+{
+    var c = g.Customer;
+    var diet = string.IsNullOrWhiteSpace(c.DietaryPref) ? "None" : c.DietaryPref;
+    <template data-guest="@c.custID">
+        @* ---------- Guest profile ---------- *@
+        <section class="md-card md-section md-guest-profile">
+            <div class="md-card-header">
+                <span class="md-card-label">Guest profile</span>
+                <a class="btn md-btn-round md-btn-sm btn-md-dark" href="/Staff/WalkIn?guest=@c.custID"><i class="bi bi-calendar-plus"></i>New booking</a>
+            </div>
+            <div class="md-card-body">
+                <div class="md-guest-id">
+                    <span class="md-avatar">@Initials(c.custName)</span>
+                    <div>
+                        <div class="md-guest-name">@c.custName</div>
+                        <span class="md-guest-meta">
+                            @(g.NotRegistered ? "Walk-in guest · not registered yet" : "Member since " + c.custCreateAt.ToString("MMM yyyy", inv))<br />@c.custPhone · @c.custEmail
+                        </span>
+                    </div>
+                </div>
+
+                <div class="md-guest-stats md-guest-stats-row">
+                    <div><span class="md-label">Visits</span><b>@g.Visits</b></div>
+                    <div><span class="md-label">No-shows</span><b class="@(g.NoShows > 0 ? "is-warn" : "")">@g.NoShows</b></div>
+                    <div><span class="md-label">Avg spend</span><b>@(g.AvgSpend > 0 ? "RM " + g.AvgSpend.ToString("#,##0", inv) : "—")</b></div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        @* Customer.DietaryPref (set by the customer on Register / Profile) *@
+                        <span class="md-label">Dining preferences</span>
+                        <div class="md-chips mt-1">
+                            @* Allergies red, other dietary needs (Vegetarian, Halal …) amber *@
+                            <span class="md-chip @(diet.Contains("allergy", StringComparison.OrdinalIgnoreCase) ? "is-allergy" : diet != "None" ? "is-diet" : "")">Dietary: @diet</span>
+                        </div>
+                        @* Customer.kitchenNotes (set by the customer on Profile) *@
+                        @if (c.kitchenNotes != null)
+                        {
+                            <p class="md-res-note mt-2 mb-0">Kitchen notes: “@c.kitchenNotes”</p>
+                        }
+                    </div>
+                    <div class="col-md-6">
+                        <span class="md-label">Tonight</span>
+                        <p class="mb-0">
+                            @if (g.Tonight is { } tn)
+                            {
+                                <a href="/Staff/Reservations?view=@ReservationService.Code(tn)">@ReservationService.Code(tn)</a>
+                                @: · @tn.reservationDateTime.ToString("HH:mm", inv) · @tn.partySize guests · @tn.DiningTable?.tableNumber · @tn.reservationStatus
+                            }
+                            else
+                            {
+                                @:No booking today
+                            }
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @* ---------- Visit history (newest first); today's booking opens its details on Reservations ---------- *@
+        <section class="md-card">
+            <div class="md-card-header">
+                <span class="md-card-label">Visit history</span>
+                <span class="md-card-meta">@g.History.Count @(g.History.Count == 1 ? "booking" : "bookings")</span>
+            </div>
+            @if (g.History.Count == 0)
+            {
+                <p class="md-empty">No bookings yet.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="md-visit-table">
+                        <thead>
+                            <tr><th>Ref</th><th>Date</th><th>Guests</th><th>Table</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var h in g.History)
+                            {
+                                var code = ReservationService.Code(h);
+                                bool isToday = h.reservationDateTime.Date == DateTime.Today;
+                                <tr class="@(g.Tonight?.reservationID == h.reservationID ? "is-current" : "")">
+                                    <td><a href="/Staff/Reservations?date=@h.reservationDateTime.ToString("yyyy-MM-dd", inv)&view=@code">@code</a></td>
+                                    <td>@h.reservationDateTime.ToString("d MMM yyyy, HH:mm", inv)@(isToday ? " · today" : "")</td>
+                                    <td>@h.partySize</td>
+                                    <td>@h.DiningTable?.tableNumber</td>
+                                    <td><span class="md-pill @StatusClass(h.reservationStatus)">@h.reservationStatus</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    </template>
+}
+
+@section Scripts {
+    <script>
+        (function () {
+            var list = document.getElementById('guestList');
+            var rows = list.querySelectorAll(':scope > li');
+            var panel = document.getElementById('guestPanel');
+            var search = document.getElementById('guestSearch');
+            var group = 'all';
+
+            // Tabs + search (phone numbers match as digits only)
+            function apply() {
+                var text = search.value.trim().toLowerCase(), digits = text.replace(/[\s+-]/g, ''), shown = 0;
+                rows.forEach(function (row) {
+                    var ok = (group === 'all' || row.dataset.group.split(' ').indexOf(group) !== -1)
+                        && (!text || row.dataset.search.indexOf(text) !== -1 || (/^\d+$/.test(digits) && row.dataset.search.indexOf(digits) !== -1));
+                    row.classList.toggle('d-none', !ok);
+                    if (ok) shown++;
+                });
+                document.getElementById('guestEmpty').classList.toggle('d-none', shown > 0);
+            }
+            document.querySelectorAll('#guestTabs button').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    group = tab.dataset.group;
+                    document.querySelectorAll('#guestTabs button').forEach(function (t) { t.classList.toggle('active', t === tab); });
+                    apply();
+                });
+            });
+            search.addEventListener('input', apply);
+
+            // Show a guest on the right
+            function showGuest(id, scroll) {
+                var template = document.querySelector('template[data-guest="' + id + '"]');
+                if (!template) return;
+                panel.innerHTML = '';
+                panel.appendChild(template.content.cloneNode(true));
+                rows.forEach(function (row) { row.classList.toggle('is-selected', row.dataset.id === String(id)); });
+                history.replaceState(null, '', '?guest=' + id);
+                if (scroll && window.innerWidth < 992) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            list.querySelectorAll('[data-show-guest]').forEach(function (b) {
+                b.addEventListener('click', function () { showGuest(b.dataset.showGuest, true); });
+            });
+
+            // Start: ?guest=12, otherwise the first guest in the list
+            apply();
+            var wanted = new URLSearchParams(location.search).get('guest');
+            var start = wanted && document.querySelector('template[data-guest="' + wanted + '"]') ? wanted : (list.querySelector('li') || {}).dataset?.id;
+            if (start) showGuest(start);
+        })();
+    </script>
+}

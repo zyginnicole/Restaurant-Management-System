@@ -1,0 +1,147 @@
+@using RestaurantManagementSystem.Helpers
+@using Microsoft.EntityFrameworkCore
+@inject RestaurantManagementSystem.Data.ApplicationDbContext Db
+@{
+    var brand = await Db.SystemSettings.AsNoTracking().FirstOrDefaultAsync()
+                ?? new RestaurantManagementSystem.Model.SystemSetting();
+}
+@{
+    // Shared layout for the Staff and Admin modules.
+    // Each page sets ViewData["Module"] = "Staff" or "Admin" (menu items) and ViewData["ActiveNav"] (highlighted item).
+    string module = ViewData["Module"] as string ?? "Staff";
+    bool isAdmin = module == "Admin";
+    string active = ViewData["ActiveNav"] as string ?? "";
+    string NavClass(string name) => name == active ? "md-nav-link active" : "md-nav-link";
+
+    // Signed-in user, read from the session (saved at login)
+    string userName = Context.Session.GetUserName() ?? (isAdmin ? "Administrator" : "Staff");
+    string userInitials = NameFormatter.GetInitials(userName);
+    string userRole = isAdmin ? "Administrator" : "Staff";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] · @ViewData["Brand"]</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+@* A page can add extra body classes with ViewData["BodyClass"] if it needs page-specific styling *@
+<body class="md-app @ViewData["BodyClass"]"
+      data-system-name="@brand.restaurantName"
+      data-system-tagline="@brand.tagline"
+      data-system-address="@brand.address"
+      data-system-phone="@brand.phone"
+      data-system-email="@brand.email">
+
+    @* Phone / tablet top bar with the menu button *@
+    <header class="md-mobilebar d-lg-none">
+        <button class="md-menu-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mdSidebar" aria-controls="mdSidebar" aria-label="Open menu">
+            <i class="bi bi-list"></i>
+        </button>
+        <span class="md-mobilebar-brand">@ViewData["Brand"]</span>
+    </header>
+
+    @* Sidebar: always visible on desktop, slides in on phones *@
+    <aside class="md-sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="mdSidebar" aria-label="@module menu">
+        <div class="md-sidebar-brand">
+            <span class="md-eyebrow">@ViewData["BrandTagLine"]</span>
+            <div class="md-sidebar-name">@ViewData["Brand"]</div>
+            <span class="md-sidebar-module">@(isAdmin ? "Administrator" : "Staff")</span>
+            <button type="button" class="btn-close btn-close-white d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#mdSidebar" aria-label="Close menu"></button>
+        </div>
+
+        @* Signed-in user: clicking it opens the profile page (same as the last menu item) *@
+        <a class="md-sidebar-user" href="@(isAdmin ? "/Admin/Profile" : "/Staff/Profile")" aria-label="Open my profile">
+            <span class="md-avatar">@userInitials</span>
+            <div>
+                <div class="md-sidebar-user-name">@userName</div>
+                <div class="md-sidebar-user-meta">@userRole</div>
+            </div>
+        </a>
+
+        <nav class="md-nav">
+            @if (isAdmin)
+            {
+                <a class="@NavClass("Dashboard")" href="/Admin/Dashboard"><i class="bi bi-grid"></i>Dashboard</a>
+                <a class="@NavClass("Restaurant")" href="/Admin/Restaurant"><i class="bi bi-shop"></i>Restaurant</a>
+                <a class="@NavClass("Settings")" href="/Admin/Settings"><i class="bi bi-sliders"></i>Settings</a>
+                <a class="@NavClass("Accounts")" href="/Admin/Accounts"><i class="bi bi-people"></i>Accounts</a>
+                <a class="@NavClass("MenuOffers")" href="/Admin/MenuOffers"><i class="bi bi-book"></i>Menu &amp; Offers</a>
+                <a class="@NavClass("Monitor")" href="/Admin/Monitor"><i class="bi bi-display"></i>Monitor</a>
+                <a class="@NavClass("Reports")" href="/Admin/Reports"><i class="bi bi-bar-chart"></i>Reports</a>
+                <a class="@NavClass("Announcements")" href="/Admin/Announcements"><i class="bi bi-megaphone"></i>Announcements</a>
+                <a class="@NavClass("Feedback")" href="/Admin/Feedback"><i class="bi bi-star"></i>Feedback</a>
+                @* Profile is always the last menu item, for every role *@
+                <a class="@NavClass("Profile")" href="/Admin/Profile"><i class="bi bi-person"></i>My profile</a>
+            }
+            else
+            {
+                <a class="@NavClass("Dashboard")" href="/Staff/Dashboard"><i class="bi bi-grid"></i>Dashboard</a>
+                <a class="@NavClass("Reservations")" href="/Staff/Reservations"><i class="bi bi-calendar3"></i>Reservations</a>
+                <a class="@NavClass("Orders")" href="/Staff/Orders"><i class="bi bi-receipt"></i>Orders</a>
+                <a class="@NavClass("Billing")" href="/Staff/Billing"><i class="bi bi-credit-card"></i>Billing</a>
+                <a class="@NavClass("Notifications")" href="/Staff/Notifications"><i class="bi bi-bell"></i>Notifications</a>
+                <a class="@NavClass("Guests")" href="/Staff/Guests"><i class="bi bi-person-vcard"></i>Guests</a>
+                @* Profile is always the last menu item, for every role *@
+                <a class="@NavClass("Profile")" href="/Staff/Profile"><i class="bi bi-person"></i>My profile</a>
+            }
+        </nav>
+
+        @* Opens the Sign out confirmation pop-up below *@
+        <button type="button" class="md-signout" data-bs-toggle="modal" data-bs-target="#signOutPopup">Sign out</button>
+    </aside>
+
+    <main class="md-main">
+        @await RenderSectionAsync("TopBanner", required: false)
+
+        @* Page header: small gold label, big title, optional actions on the right *@
+        <div class="md-page-header">
+            <div>
+                @if (ViewData["Eyebrow"] != null)
+                {
+                    <span class="md-eyebrow">@ViewData["Eyebrow"]</span>
+                }
+                <h1 class="md-page-title">@(ViewData["Heading"] ?? ViewData["Title"])</h1>
+                @if (ViewData["Subtitle"] != null)
+                {
+                    <p class="md-page-subtitle">@ViewData["Subtitle"]</p>
+                }
+            </div>
+            <div class="md-page-actions">
+                @await RenderSectionAsync("HeaderActions", required: false)
+            </div>
+        </div>
+
+        @RenderBody()
+    </main>
+
+    @* ---------- Sign out confirmation (shared _ConfirmPopup, same as the customer layout) ----------
+       "Sign out" posts to /Logout, which sends Staff and Admin back to the Staff Portal login. *@
+    @{
+        var signOutPopup = new ConfirmPopupView
+        {
+            Id = "signOutPopup",
+            Eyebrow = "Account",
+            Title = "Confirm sign-out?",
+            Message = "You'll need to sign in again through the Staff Portal.",
+            Page = "/Logout",
+            BackText = "Stay signed in",
+            ConfirmText = "Sign out"
+        };
+    }
+    <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="signOutPopup" />
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    @* Fills any shared _ConfirmPopup from the button that opened it *@
+    <script src="~/js/confirm-popup.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

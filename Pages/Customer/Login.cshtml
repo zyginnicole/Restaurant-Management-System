@@ -1,0 +1,64 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.LoginModel
+@{
+    ViewData["Title"] = "Sign in";
+    Layout = "_CustomerAuthLayout";
+}
+
+@* Bootstrap Icons (eye icon), as on the Register page *@
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+<h1>Welcome back</h1>
+<p class="md-auth-subtitle">Sign in to your member account</p>
+
+@* Green message after a password reset (set by ResetPassword) *@
+@if (TempData["LoginMessage"] is string loginMessage)
+{
+    <div class="md-alert-success mb-4" role="status">@loginMessage</div>
+}
+
+@* Error message from the PageModel: wrong details, attempts left, or account locked *@
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="md-alert-danger mb-4" role="alert">
+        @Model.ErrorMessage
+    </div>
+}
+
+<form method="post">
+    <div class="mb-3">
+        <label class="md-label" asp-for="Customer.custEmail">Email address</label>
+        <input class="form-control md-input" asp-for="Customer.custEmail" type="email"
+               placeholder="you@example.com" autocomplete="email" required />
+        <span class="text-danger small" asp-validation-for="Customer.custEmail"></span>
+    </div>
+
+    <div class="mb-3">
+        <label class="md-label" asp-for="Customer.custPassword">Password</label>
+        @* Eye button shows / hides the password (same as Register, wwwroot/js/function.js) *@
+        <div class="position-relative">
+            <input class="form-control md-input pe-5" asp-for="Customer.custPassword" type="password"
+                   placeholder="••••••••" autocomplete="current-password" required />
+            <button type="button" class="btn border-0 p-0 shadow-none position-absolute top-50 translate-middle-y"
+                    style="right: .75rem; line-height: 1; font-size: 1rem;"
+                    data-toggle-password="Customer_custPassword" aria-label="Show password" aria-pressed="false">
+                <i class="bi bi-eye-slash"></i>
+            </button>
+        </div>
+        <span class="text-danger small" asp-validation-for="Customer.custPassword"></span>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="form-check">
+            <input class="form-check-input" id="rememberMe" name="rememberMe" type="checkbox" value="true" />
+            <label class="form-check-label" for="rememberMe">Remember me</label>
+        </div>
+        <a asp-page="/Customer/ForgotPassword" class="small">Forgot password?</a>
+    </div>
+
+    <button type="submit" class="btn btn-md-dark w-100">Sign in</button>
+</form>
+
+<p class="md-auth-switch">No account? <a asp-page="/Customer/Register">Register</a></p>
+
+<script src="~/js/function.js" asp-append-version="true"></script>

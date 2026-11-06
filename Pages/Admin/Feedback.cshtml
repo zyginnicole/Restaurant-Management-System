@@ -1,0 +1,199 @@
+@page
+@model RestaurantManagementSystem.Pages.Admin.FeedbackModel
+@{
+    ViewData["Title"] = "Feedback";
+    ViewData["Module"] = "Admin";
+    ViewData["ActiveNav"] = "Feedback";
+    ViewData["Eyebrow"] = "Customer voice";
+    ViewData["Heading"] = "Feedback";
+    ViewData["Subtitle"] = "Ratings and comments from completed dining experiences";
+    Layout = "_DashboardLayout";
+
+    // Quick period filters plus specific date, month and year filters.
+    string period = Model.Period;
+    string periodText = Model.PeriodText;
+    string Stars(int n) => new string('★', n) + new string('☆', 5 - n);
+}
+
+@section HeaderActions {
+    <form method="get" class="md-feedback-date-filters" aria-label="Custom feedback period">
+        <span class="md-feedback-filter-label">From</span>
+        <label class="visually-hidden" for="feedbackFrom">From date</label>
+        <input class="form-control md-input" id="feedbackFrom" name="from" type="date"
+               value="@(Model.SelectedFrom?.ToString("yyyy-MM-dd"))" required />
+        <span class="md-feedback-filter-separator">to</span>
+        <label class="visually-hidden" for="feedbackTo">To date</label>
+        <input class="form-control md-input" id="feedbackTo" name="to" type="date"
+               value="@(Model.SelectedTo?.ToString("yyyy-MM-dd"))" required />
+        <button type="submit" class="btn btn-md-outline md-header-btn">Apply</button>
+    </form>
+
+    <div class="md-segment md-segment-sm md-header-segment" role="group" aria-label="Quick period">
+        <a class="@(period == "week" ? "active" : "")" href="?period=week">This week</a>
+        <a class="@(period == "month" ? "active" : "")" href="?period=month">This month</a>
+        <a class="@(period == "all" ? "active" : "")" href="?period=all">All time</a>
+    </div>
+    <button type="button" class="btn btn-md-outline md-header-btn" id="exportCsv"><i class="bi bi-download"></i>Export</button>
+}
+
+@* ---------- Stat cards ---------- *@
+<div class="row md-grid md-section">
+    <div class="col-md-4">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Average rating</span>
+            <div class="md-stat-value">@Model.AverageRating.ToString("0.0") <small>/ 5</small></div>
+            <span class="md-hint">Average of all ratings @periodText</span>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Reviews</span>
+            <div class="md-stat-value">@Model.ReviewCount</div>
+            <span class="md-hint">Feedback received @periodText</span>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="md-stat md-staff-stat">
+            <span class="md-label">Low ratings</span>
+            <div class="md-stat-value">@Model.LowRatingCount</div>
+            <span class="md-hint">Rated 2 stars or lower</span>
+        </div>
+    </div>
+</div>
+
+<div class="row md-grid md-section">
+    @* ---------- Rating distribution ---------- *@
+    <div class="col-xxl-4">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Rating distribution</span>
+                <span class="md-card-meta">@Model.ReviewCount reviews</span>
+            </div>
+            <div class="md-card-body">
+                <ul class="md-dist-bars">
+                    @foreach (var d in Model.Distribution)
+                    {
+                        <li>
+                            <span>@d.Stars @(d.Stars == 1 ? "star" : "stars")</span>
+                            <div class="md-dist-track"><i style="width: @d.Percent%"></i></div>
+                            <b>@d.Percent%</b>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    @* ---------- Latest feedback (read-only; click a row for the full comment and contact details) ---------- *@
+    <div class="col-xxl-8">
+        <section class="md-card h-100">
+            <div class="md-card-header">
+                <span class="md-card-label">Latest feedback</span>
+                <div class="md-segment md-segment-sm" role="group" aria-label="Filter" id="feedbackFilter">
+                    <button type="button" class="active" data-filter="all">All</button>
+                    <button type="button" data-filter="low">Low ratings</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="md-visit-table md-account-table md-feedback-table" id="feedbackTable">
+                    <thead>
+                        <tr><th>Date</th><th>Customer / visit</th><th>Rating</th><th>Comment</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var f in Model.Items)
+                        {
+                            <tr class="md-row-click @(f.Rating <= 2 ? "is-low" : "")" tabindex="0"
+                                data-name="@f.Customer" data-date="@f.Date" data-phone="@f.Phone" data-email="@f.Email"
+                                data-visit="@f.Order@(f.Reservation != null ? " · " + f.Reservation : " · Takeaway")" data-rating="@f.Rating" data-comment="@f.Comment">
+                                <td>@f.Date</td>
+                                <td>@f.Customer<small class="d-block md-muted-text">@(f.Reservation ?? f.Order)</small></td>
+                                <td class="md-report-stars" aria-label="@f.Rating out of 5">@Stars(f.Rating)</td>
+                                <td class="md-feedback-comment"><div>@f.Comment</div></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="md-notice-empty d-none" id="feedbackEmpty">No low ratings in this period.</p>
+        </section>
+    </div>
+</div>
+
+@* ---------- Feedback pop-up (read-only, filled from the clicked row) ---------- *@
+<div class="modal fade md-popup" id="feedbackPopup" tabindex="-1" aria-labelledby="feedbackTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow" id="fbEyebrow">Feedback</span>
+                    <h2 class="modal-title md-popup-title" id="feedbackTitle">—</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="md-feedback-head">
+                    <span class="md-feedback-stars" id="fbStars">—</span>
+                    <span class="md-muted-text" id="fbVisit">—</span>
+                </div>
+                <blockquote class="md-feedback-quote" id="fbComment">—</blockquote>
+                <dl class="md-feedback-contact mb-0">
+                    <div><dt>Phone</dt><dd><a id="fbPhone" href="#">—</a></dd></div>
+                    <div><dt>Email</dt><dd><a id="fbEmail" href="#">—</a></dd></div>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var rows = document.querySelectorAll('#feedbackTable tbody tr');
+
+            // ---------- All / Low ratings (2 stars or lower) ----------
+            document.querySelectorAll('#feedbackFilter button').forEach(function (b, _, all) {
+                b.addEventListener('click', function () {
+                    all.forEach(function (x) { x.classList.toggle('active', x === b); });
+                    var shown = 0;
+                    rows.forEach(function (r) { var ok = b.dataset.filter === 'all' || +r.dataset.rating <= 2; r.classList.toggle('d-none', !ok); if (ok) shown++; });
+                    document.getElementById('feedbackEmpty').classList.toggle('d-none', shown > 0);
+                });
+            });
+
+            // ---------- Feedback pop-up ----------
+            var popup = new bootstrap.Modal(document.getElementById('feedbackPopup'));
+            function open(row) {
+                var d = row.dataset, n = +d.rating;
+                document.getElementById('fbEyebrow').textContent = 'Feedback · ' + d.date;
+                document.getElementById('feedbackTitle').textContent = d.name;
+                document.getElementById('fbStars').textContent = '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
+                document.getElementById('fbVisit').textContent = d.visit;
+                document.getElementById('fbComment').textContent = '“' + d.comment + '”';
+                var phone = document.getElementById('fbPhone'), email = document.getElementById('fbEmail');
+                phone.textContent = d.phone; phone.href = 'tel:' + d.phone.replace(/[^\d+]/g, '');
+                email.textContent = d.email; email.href = 'mailto:' + d.email;
+                popup.show();
+            }
+            rows.forEach(function (r) {
+                r.addEventListener('click', function () { open(r); });
+                r.addEventListener('keydown', function (e) { if (e.key === 'Enter') open(r); });
+            });
+
+            // ---------- Export: the rows shown, as CSV ----------
+            document.getElementById('exportCsv').addEventListener('click', function () {
+                var q = function (t) { return '"' + t.replace(/"/g, '""') + '"'; };
+                var lines = ['Date,Customer,Visit,Rating,Comment'];
+                rows.forEach(function (r) {
+                    if (r.classList.contains('d-none')) return;
+                    var d = r.dataset;
+                    lines.push([d.date, d.name, d.visit, d.rating, d.comment].map(q).join(','));
+                });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+                a.download = 'MaisonDoree-feedback-' + new Date().toISOString().slice(0, 10) + '.csv';
+                document.body.appendChild(a); a.click();
+                setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+            });
+        })();
+    </script>
+}

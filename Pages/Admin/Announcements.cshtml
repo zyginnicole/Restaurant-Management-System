@@ -1,0 +1,231 @@
+@page
+@model RestaurantManagementSystem.Pages.Admin.AnnouncementsModel
+@{
+    ViewData["Title"] = "Announcements";
+    ViewData["Module"] = "Admin";
+    ViewData["ActiveNav"] = "Announcements";
+    ViewData["Eyebrow"] = "Communication";
+    ViewData["Heading"] = "Announcements";
+    ViewData["Subtitle"] = "Notices for customers and staff, such as closures and opening hours";
+    Layout = "_DashboardLayout";
+
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    // Announcement.targetAudience: All · Customers · Staff (counts for the labels, AnnouncementsModel)
+    var audiences = Model.Audiences;
+    string AudienceText(string v) { var a = audiences.FirstOrDefault(x => x.Value == v); return a.Label == null ? v : $"{a.Label} ({a.Count})"; }
+
+    // Pinned first, then newest first
+    var items = Model.Items.Select(a => (Id: a.announcementID, Title: a.announcementTitle, Message: a.announcementMessage,
+        Audience: a.targetAudience, Date: a.announcementDate.ToString("d MMM yyyy, HH:mm", inv), Pinned: a.isPinned)).ToList();
+}
+
+@section HeaderActions {
+    @* Clears the form for a new announcement *@
+    <button type="button" class="btn btn-md-dark md-header-btn" id="newAnnouncement"><i class="bi bi-plus-lg"></i>New announcement</button>
+}
+
+@* Message after an action (TempData["AdminMessage"]) *@
+@if (TempData["AdminMessage"] is string message)
+{
+    if (TempData["AdminMessageIsError"] is true)
+    {
+        <p class="md-note-box md-note-box-danger md-section" role="alert">@message</p>
+    }
+    else
+    {
+        <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@message</div>
+    }
+}
+
+@* =====================================================
+   Announcements list (full width). New / Edit open the announcement pop-up below.
+   ===================================================== *@
+<div class="md-section">
+    <div>
+        <section class="md-card">
+            <div class="md-card-header">
+                <span class="md-card-label">Announcements</span>
+                <div class="md-segment md-segment-sm" role="group" aria-label="Filter" id="announceFilter">
+                    <button type="button" class="active" data-filter="all">All</button>
+                    <button type="button" data-filter="pinned">Pinned</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="md-visit-table md-account-table md-campaign-table">
+                    <thead>
+                        <tr><th>Announcement</th><th>Audience</th><th>Posted</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in items)
+                        {
+                            <tr data-pinned="@(a.Pinned ? "true" : "false")">
+                                <td>
+                                    <b class="md-campaign-title">
+                                        @if (a.Pinned)
+                                        {
+                                            <i class="bi bi-pin-angle-fill md-pin" title="Pinned"></i>
+                                        }
+                                        @a.Title
+                                    </b>
+                                    <small class="md-muted-text md-announce-snippet">@a.Message</small>
+                                </td>
+                                <td>@AudienceText(a.Audience)</td>
+                                <td>@a.Date</td>
+                                <td class="text-end">
+                                    <div class="md-order-actions justify-content-end">
+                                        <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-edit
+                                                data-id="@a.Id" data-title="@a.Title" data-message="@a.Message" data-audience="@a.Audience"
+                                                data-pinned="@(a.Pinned ? "true" : "false")">Edit</button>
+                                        <form method="post" asp-page-handler="Pin">
+                                            <input type="hidden" name="announcementId" value="@a.Id" />
+                                            <input type="hidden" name="pin" value="@(a.Pinned ? "false" : "true")" />
+                                            <button type="submit" class="btn md-btn-round md-btn-sm md-btn-outline" title="@(a.Pinned ? "Unpin" : "Pin to top")"><i class="bi @(a.Pinned ? "bi-pin-angle" : "bi-pin") me-1"></i>@(a.Pinned ? "Unpin" : "Pin")</button>
+                                        </form>
+                                        <button type="button" class="btn md-btn-round md-btn-sm md-btn-cancel" data-bs-toggle="modal" data-bs-target="#deletePopup"
+                                                data-id="@a.Id" data-name="@a.Title" data-details="@AudienceText(a.Audience) · posted @a.Date">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="md-notice-empty @(items.Count > 0 ? "d-none" : "")" id="announceEmpty">@(items.Count > 0 ? "No pinned announcements." : "No announcements yet. Use New announcement to post one.")</p>
+        </section>
+    </div>
+</div>
+
+@* =====================================================
+   New / edit announcement pop-up – posts straight away (OnPostSave)
+   ===================================================== *@
+<div class="modal fade md-popup" id="announcementPopup" tabindex="-1" aria-labelledby="composeTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" asp-page-handler="Save" id="composeForm" autocomplete="off">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Announcement</span>
+                    <h2 class="modal-title md-popup-title" id="composeTitle">New announcement</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="announcementId" id="annId" />
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="md-label" for="annTitle">Title</label>
+                        <input class="form-control md-input" id="annTitle" name="announcementTitle" maxlength="100" placeholder="e.g. Monday closure" required />
+                    </div>
+                    <div class="col-12">
+                        <label class="md-label d-flex justify-content-between" for="annMessage">Message <span class="md-char-count" id="annCount">0 / 500</span></label>
+                        <textarea class="form-control md-input" id="annMessage" name="announcementMessage" rows="4" maxlength="500" placeholder="What should they know?" required></textarea>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="md-label" for="annAudience">Audience</label>
+                        <select class="form-select md-input" id="annAudience" name="targetAudience" data-md-select>
+                            @foreach (var a in audiences)
+                            {
+                                <option value="@a.Value">@a.Label (@a.Count)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-6 d-flex align-items-end">
+                        <div class="md-switch-row w-100">
+                            <div>
+                                <label class="md-switch-title" for="annPin">Pin to top</label>
+                                <span class="md-hint d-block mt-0">Stays first in the list they see.</span>
+                            </div>
+                            <div class="form-check form-switch m-0">
+                                <input class="form-check-input md-switch" type="checkbox" role="switch" id="annPin" name="isPinned" value="true" />
+                            </div>
+                        </div>
+                    </div>
+                    @* Preview: how it looks in the customer / staff list *@
+                    <div class="col-12">
+                        <span class="md-label">Preview</span>
+                        <div class="md-announce-preview">
+                            <b id="previewTitle">Title</b>
+                            <p id="previewMessage" class="mb-0">Your message appears here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-md-dark" id="postButton"><i class="bi bi-send me-2"></i>Post announcement</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@{
+    var deletePopup = new ConfirmPopupView
+    {
+        Id = "deletePopup", Eyebrow = "Announcement", Title = "Delete \"{name}\"?", Message = "{details}",
+        Note = "Customers and staff will no longer see it. This can't be undone.",
+        Handler = "Delete", IdField = "announcementId", BackText = "Keep it", ConfirmText = "Delete", Danger = true
+    };
+}
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="deletePopup" />
+
+@section Scripts {
+    <script src="~/js/md-select.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            // ---------- All / Pinned ----------
+            var rows = document.querySelectorAll('.md-campaign-table tbody tr');
+            document.querySelectorAll('#announceFilter button').forEach(function (b, _, all) {
+                b.addEventListener('click', function () {
+                    all.forEach(function (x) { x.classList.toggle('active', x === b); });
+                    var shown = 0;
+                    rows.forEach(function (r) { var ok = b.dataset.filter === 'all' || r.dataset.pinned === 'true'; r.classList.toggle('d-none', !ok); if (ok) shown++; });
+                    document.getElementById('announceEmpty').classList.toggle('d-none', shown > 0);
+                });
+            });
+
+            // ---------- Form ----------
+            var f = {
+                id: document.getElementById('annId'), title: document.getElementById('annTitle'), message: document.getElementById('annMessage'),
+                audience: document.getElementById('annAudience'), pin: document.getElementById('annPin')
+            };
+            function preview() {
+                document.getElementById('previewTitle').textContent = f.title.value || 'Title';
+                document.getElementById('previewMessage').textContent = f.message.value || 'Your message appears here.';
+                document.getElementById('annCount').textContent = f.message.value.length + ' / 500';
+            }
+            [f.title, f.message].forEach(function (el) { el.addEventListener('input', preview); });
+
+            var popupEl = document.getElementById('announcementPopup');
+            var popup = new bootstrap.Modal(popupEl);
+            function setMode(editing, title) {
+                document.getElementById('composeTitle').textContent = editing ? 'Edit · ' + title : 'New announcement';
+                document.getElementById('postButton').innerHTML = editing
+                    ? '<i class="bi bi-check2 me-2"></i>Save changes' : '<i class="bi bi-send me-2"></i>Post announcement';
+            }
+            // Focus the title once the pop-up is open
+            popupEl.addEventListener('shown.bs.modal', function () { f.title.focus(); });
+
+            // New announcement: empty pop-up
+            document.getElementById('newAnnouncement').addEventListener('click', function () {
+                document.getElementById('composeForm').reset();
+                f.id.value = '';
+                f.audience.dispatchEvent(new Event('md-refresh'));
+                setMode(false); preview();
+                popup.show();
+            });
+
+            // Edit: the same pop-up, filled from the row
+            document.querySelectorAll('[data-edit]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    var d = b.dataset;
+                    f.id.value = d.id;
+                    f.title.value = d.title;
+                    f.message.value = d.message;
+                    f.audience.value = d.audience; f.audience.dispatchEvent(new Event('md-refresh'));
+                    f.pin.checked = d.pinned === 'true';
+                    setMode(true, d.title); preview();
+                    popup.show();
+                });
+            });
+        })();
+    </script>
+}

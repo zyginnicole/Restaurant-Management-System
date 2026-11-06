@@ -1,0 +1,122 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.NotificationsModel
+@{
+    ViewData["Title"] = "Notifications";
+    ViewData["ActiveNav"] = "Notifications";
+    ViewData["Eyebrow"] = "Updates";
+    ViewData["Heading"] = "Notifications";
+    ViewData["HideBell"] = true;   // no bell icon on the Notifications page itself
+    Layout = "_CustomerLayout";
+}
+
+@* Example data. Clicking a notification opens the shared pop-up (_NotificationPopup, notifications.js)
+   and marks it as read on screen. data-category is used by the filter tabs. *@
+
+@section HeaderActions {
+    @* Marks every notification as read (OnPostReadAll); the script also updates the page straight away *@
+    <form method="post" asp-page-handler="ReadAll" class="d-inline">
+        <button type="submit" class="btn btn-md-outline" id="markAllRead"><i class="bi bi-check2-all me-2"></i>Mark all as read</button>
+    </form>
+}
+
+<section class="md-card md-section">
+    <div class="md-card-header md-notice-toolbar">
+        <nav class="md-tabs" aria-label="Filter notifications" id="noticeTabs">
+            <button type="button" class="active" data-filter="all">All <small data-count="all">@Model.Items.Count</small></button>
+            <button type="button" data-filter="unread">Unread <small data-count="unread">@Model.Items.Count(x => x.Unread)</small></button>
+            <button type="button" data-filter="reservation">Reservations <small data-count="reservation">@Model.Items.Count(x => x.DataCategory == "reservation")</small></button>
+            <button type="button" data-filter="order">Orders <small data-count="order">@Model.Items.Count(x => x.DataCategory == "order")</small></button>
+            <button type="button" data-filter="promotion">Promotions <small data-count="promotion">@Model.Items.Count(x => x.DataCategory == "promotion")</small></button>
+        </nav>
+    </div>
+
+    <ul class="md-notice-list" id="noticeList">
+        @foreach (var notification in Model.Items)
+    {
+        <li class="md-notice @(notification.Unread ? "unread" : "")"
+            data-category="@notification.DataCategory">
+
+            <button type="button"
+                    class="md-notice-btn md-notice-row"
+                    data-id="@notification.NotificationId"
+                    data-type="@notification.Category"
+                    data-title="@notification.Title"
+                    data-message="@notification.Message"
+                    data-time="@notification.TimeText"
+                    data-link="@notification.LinkUrl"
+                    data-link-text="@notification.LinkText">
+
+                <span class="md-notice-icon is-@notification.DataCategory">
+                    <i class="bi bi-bell"></i>
+                </span>
+
+                <span class="md-notice-text">
+                    <span class="md-notice-title">
+                        @notification.Title
+                        @if (notification.Pinned)
+                        {
+                            <i class="bi bi-pin-angle-fill md-notice-pin" title="Pinned notification" aria-label="Pinned"></i>
+                        }
+                    </span>
+                    <p>@notification.Message</p>
+                    <span class="md-notice-time">@notification.TimeText</span>
+                </span>
+            </button>
+        </li>
+    }
+    </ul>
+    <p class="md-notice-empty d-none" id="noticeEmpty">No notifications here.</p>
+</section>
+
+<partial name="~/Pages/Shared/Popups/_NotificationPopup.cshtml" />
+
+@section Scripts {
+    <script src="~/js/notifications.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var list = document.getElementById('noticeList');
+            var tabs = document.querySelectorAll('#noticeTabs button');
+            var current = 'all';
+
+            function matches(item, filter) {
+                if (filter === 'all') return true;
+                if (filter === 'unread') return item.classList.contains('unread');
+                return item.dataset.category === filter;
+            }
+
+            // Show the rows for the chosen tab and refresh every tab's count
+            function refresh() {
+                var items = list.querySelectorAll('.md-notice'), shown = 0;
+                items.forEach(function (item) {
+                    var show = matches(item, current);
+                    item.classList.toggle('d-none', !show);
+                    if (show) shown++;
+                });
+                tabs.forEach(function (tab) {
+                    var n = Array.prototype.filter.call(items, function (item) { return matches(item, tab.dataset.filter); }).length;
+                    tab.querySelector('[data-count]').textContent = n;
+                });
+                document.getElementById('noticeEmpty').classList.toggle('d-none', shown > 0);
+            }
+
+            tabs.forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    current = tab.dataset.filter;
+                    tabs.forEach(function (t) { t.classList.toggle('active', t === tab); });
+                    refresh();
+                });
+            });
+
+            // Opening a notification marks it read (notifications.js) – update the counts afterwards
+            list.addEventListener('click', function () { setTimeout(refresh, 0); });
+
+            // Mark all as read: update the page now.
+            document.getElementById('markAllRead').addEventListener('click', function () {
+                list.querySelectorAll('.md-notice.unread').forEach(function (item) { item.classList.remove('unread'); });
+                refresh();
+            });
+
+            refresh();
+        })();
+    </script>
+}

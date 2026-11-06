@@ -1,0 +1,492 @@
+@page
+@model RestaurantManagementSystem.Pages.Admin.MonitorModel
+@using RestaurantManagementSystem.Pages.Shared.Partials
+@{
+    ViewData["Title"] = "Monitor";
+    ViewData["Module"] = "Admin";
+    ViewData["ActiveNav"] = "Monitor";
+    ViewData["Eyebrow"] = "Monitoring";
+    ViewData["Heading"] = "Monitor";
+    ViewData["Subtitle"] = "Reservations, orders and payments across the restaurant";
+    Layout = "_DashboardLayout";
+
+    string tab = Request.Query["tab"].ToString() is "orders" or "payments" ? Request.Query["tab"].ToString() : "reservations";
+    // "No-show" → is-noshow, "Order placed" → is-placed (same classes as the Staff pages)
+    string StatusClass(string status) => status == "Order placed" ? "is-placed" : "is-" + status.Replace("-", "").Replace(" ", "").ToLower();
+    string Rm(decimal v) => "RM " + v.ToString("N2");
+    var inv = System.Globalization.CultureInfo.InvariantCulture;   // "16 Sep", not "16 Sept"
+
+    // ---------- Reservations: from the database (MonitorModel, ReservationService.GetBetweenAsync) ----------
+    var reservations = Model.Reservations;
+    string[] resStatuses = { "Pending", "Confirmed", "Seated", "Completed", "Cancelled", "No-show", "Declined" };
+
+    // ---------- Orders and Payments: example data – later from the database (orders / payments feature) ----------
+    // Orders today. Total = Order.totalAmount (dine-in + 10% service charge, then 6% SST; takeaway SST only)
+    // Lines = OrderItems: quantity, Menu.menuName, unitPrice, itemRemark. Subtotal = sum of the lines.
+    var orders = new (string Code, string? Table, string Name, string Time, string Status, (int Qty, string Item, decimal Price, string? Remark)[] Lines)[]
+    {
+        ("ORD-0085", "T-03", "Daniel Tan", "20:31", "Order placed",
+            new (int, string, decimal, string?)[] { (1, "Pan-Seared Sea Bass", 98m, null), (1, "Valrhona Chocolate Fondant", 36m, null) }),
+        ("ORD-0084", null, "Natalia Voss", "18:52", "Cancelled",
+            new (int, string, decimal, string?)[] { (1, "Lobster Thermidor", 128m, null), (2, "Valrhona Chocolate Fondant", 38m, "Pickup 21:30") }),
+        ("ORD-0083", "T-09", "Thomas Ashford", "18:20", "Completed",
+            new (int, string, decimal, string?)[] { (2, "Wagyu Beef Tenderloin", 168m, "Medium rare"), (1, "Oyster Selection", 50m, "No shellfish garnish") }),
+        ("ORD-0082", "T-12", "Eleanor Whitmore", "19:52", "Served",
+            new (int, string, decimal, string?)[] { (2, "Wagyu Beef Tenderloin", 168m, "One medium, one well done"), (1, "Lobster Thermidor", 128m, null), (1, "Caviar & Soft Egg", 85m, null), (2, "Valrhona Chocolate Fondant", 38m, "Anniversary candle on one"), (1, "Château Margaux 2018 · glass", 51m, null) }),
+        ("ORD-0081", "T-06", "Marcus Delacroix", "19:41", "Preparing",
+            new (int, string, decimal, string?)[] { (2, "Duck à l'Orange", 92m, null), (1, "Caviar & Soft Egg", 85m, null), (1, "Pan-Seared Sea Bass", 98m, "Sauce on the side"), (1, "Sparkling Water", 20m, null) })
+    };
+    decimal Sub((int Qty, string Item, decimal Price, string? Remark)[] lines) => lines.Sum(l => l.Qty * l.Price);
+    decimal Total(decimal sub, bool dineIn) => Math.Round((dineIn ? Math.Round(sub * 1.10m, 2) : sub) * 1.06m, 2);
+    string OrderGroup(string s) => s is "Completed" ? "completed" : s is "Cancelled" ? "cancelled" : "active";
+
+    // Payments, newest first. Items fill the receipt (Paid / Refunded only).
+    var payments = new (string Code, string Order, string Name, string Method, string Status, string When, string? Table, string? Res, (int Qty, string Item, decimal Price)[] Items)[]
+    {
+        ("PAY-0061", "ORD-0083", "Thomas Ashford",  "Card",           "Paid",     "16 Sep 2026, 20:26", "T-09", "R-0039",
+            new[] { (2, "Wagyu Beef Tenderloin", 168.00m), (1, "Oyster Selection", 50.00m) }),
+        ("PAY-0060", "ORD-0084", "Natalia Voss",    "Online Banking", "Refunded", "16 Sep 2026, 19:10", null, null,
+            new[] { (1, "Lobster Thermidor", 128.00m), (2, "Valrhona Chocolate Fondant", 38.00m) }),
+        ("PAY-0059", "ORD-0080", "Victoria Blake",  "Cash",           "Paid",     "15 Sep 2026, 21:40", "T-02", "R-0036",
+            new[] { (2, "Duck à l'Orange", 92.00m), (1, "Caviar & Soft Egg", 85.00m), (1, "Château Margaux 2018 · glass", 51.00m) }),
+        ("PAY-0058", "ORD-0078", "James Carlton",   "Card",           "Failed",   "15 Sep 2026, 21:02", "T-05", "R-0033",
+            new[] { (1, "Wagyu Beef Tenderloin", 170.00m) })
+    };
+    decimal PayAmount(int i) { var p = payments[i]; return Total(p.Items.Sum(x => x.Qty * x.Price), p.Table != null); }
+}
+
+@section HeaderActions {
+    @* Downloads the rows shown on the open tab as a .csv file (built in the browser) *@
+    <button type="button" class="btn btn-md-outline md-header-btn" id="exportCsv"><i class="bi bi-download"></i>Export CSV</button>
+}
+
+<nav class="md-tabs md-page-tabs" aria-label="Monitor" id="monitorTabs">
+    <button type="button" class="@(tab == "reservations" ? "active" : "")" data-tab="reservations">Reservations</button>
+    <button type="button" class="@(tab == "orders" ? "active" : "")" data-tab="orders">Orders</button>
+    <button type="button" class="@(tab == "payments" ? "active" : "")" data-tab="payments">Payments</button>
+</nav>
+
+@* =====================================================
+   Reservations
+   ===================================================== *@
+<div class="@(tab == "reservations" ? "" : "d-none")" data-pane="reservations">
+    @* Filters – From / To reload the list (?tab=reservations&from=…&to=…); status and search filter on screen *@
+    <section class="md-card md-section">
+        <div class="md-card-body md-monitor-filters">
+            <div>
+                <label class="md-label" for="resFrom">From</label>
+                <input type="date" class="form-control md-input" id="resFrom" value="@Model.From.ToString("yyyy-MM-dd", inv)" />
+            </div>
+            <div>
+                <label class="md-label" for="resTo">To</label>
+                <input type="date" class="form-control md-input" id="resTo" value="@Model.To.ToString("yyyy-MM-dd", inv)" />
+            </div>
+            <div>
+                <label class="md-label" for="resStatus">Status</label>
+                <select class="form-select md-input" id="resStatus" data-md-select>
+                    <option value="">All statuses</option>
+                    @foreach (var s in resStatuses)
+                    {
+                        <option>@s</option>
+                    }
+                </select>
+            </div>
+            <div class="md-monitor-search">
+                <label class="md-label" for="resSearch">Search</label>
+                <input type="search" class="form-control md-input" id="resSearch" placeholder="Name or R-number" />
+            </div>
+        </div>
+    </section>
+
+    <section class="md-card md-section">
+        <div class="md-card-header">
+            <span class="md-card-label">Reservations · <span id="resCount">@reservations.Count</span> results</span>
+            <span class="md-card-meta">Click a row for details</span>
+        </div>
+        <div class="table-responsive">
+            <table class="md-visit-table md-account-table md-monitor-table" data-export="reservations">
+                <thead>
+                    <tr><th>Ref</th><th>Date &amp; time</th><th>Customer</th><th>Guests</th><th>Table</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in reservations)
+                    {
+                        var code = RestaurantManagementSystem.Services.ReservationService.Code(r);
+                        var name = r.Customer?.custName ?? "Guest";
+                        var status = r.reservationStatus;
+                        <tr class="md-row-click" data-res="@code" data-status="@status"
+                            data-search="@($"{name} {code} {code.Replace("-", "")}".ToLower())" tabindex="0">
+                            <td><b>@code</b></td>
+                            <td>@r.reservationDateTime.ToString("d MMM · HH:mm", inv)</td>
+                            <td>@name</td>
+                            <td>@r.partySize</td>
+                            <td>@r.DiningTable?.tableNumber · @r.DiningTable?.DiningArea?.areaName</td>
+                            <td><span class="md-pill @StatusClass(status)">@status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="md-notice-empty @(reservations.Count == 0 ? "" : "d-none")" id="resEmpty">
+            @(reservations.Count == 0 ? "No reservations between these dates." : "No reservations match these filters.")
+        </p>
+    </section>
+
+    @* One details block per reservation – copied into the pop-up when its row is clicked *@
+    @foreach (var r in reservations)
+    {
+        var code = RestaurantManagementSystem.Services.ReservationService.Code(r);
+        var phone = r.Customer?.custPhone ?? "";
+        <template data-res-detail="@code" data-status="@r.reservationStatus" data-pill="@StatusClass(r.reservationStatus)">
+            <dl class="md-feedback-contact">
+                <div><dt>Guest</dt><dd>@(r.Customer?.custName ?? "Guest")<br /><a href="tel:@phone">@phone</a><br />@r.Customer?.custEmail</dd></div>
+                <div><dt>When</dt><dd>@r.reservationDateTime.ToString("ddd d MMM yyyy", inv)<br />@r.reservationDateTime.ToString("HH:mm", inv)</dd></div>
+                <div><dt>Guests</dt><dd>@r.partySize</dd></div>
+                <div><dt>Table</dt><dd>@r.DiningTable?.tableNumber · @r.DiningTable?.DiningArea?.areaName</dd></div>
+            </dl>
+            @if (r.specialRequest != null)
+            {
+                <span class="md-label">Special request</span>
+                <p class="md-note-box mb-0">@r.specialRequest</p>
+            }
+            @* How it was booked / who handled it (same text as the Staff pages) *@
+            <p class="md-hint mt-3 mb-0">@RestaurantManagementSystem.Pages.Staff.StaffReservationText.Booked(r)</p>
+            <p class="md-hint mt-1 mb-0">Bookings are confirmed, seated or cancelled by staff on the Staff Reservations page.</p>
+        </template>
+    }
+</div>
+
+@* =====================================================
+   Orders
+   ===================================================== *@
+<div class="@(tab == "orders" ? "" : "d-none")" data-pane="orders">
+    <section class="md-card md-section">
+        <div class="md-card-header">
+            <span class="md-card-label">Orders · today</span>
+            <div class="md-segment md-segment-sm" role="group" aria-label="Order status" data-segment="orders">
+                <button type="button" class="active" data-group="">All</button>
+                <button type="button" data-group="active">Active</button>
+                <button type="button" data-group="completed">Completed</button>
+                <button type="button" data-group="cancelled">Cancelled</button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="md-visit-table md-account-table md-monitor-table" data-export="orders">
+                <thead>
+                    <tr><th>Order</th><th>Table / customer</th><th>Type</th><th class="text-end">Items</th><th class="text-end">Total</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var o in orders)
+                    {
+                        @* Click: opens the Order details pop-up with its ordered items *@
+                        <tr class="md-row-click" data-group="@OrderGroup(o.Status)" data-order="@o.Code" tabindex="0">
+                            <td><b>@o.Code</b></td>
+                            <td>@(o.Table ?? "Takeaway") · @o.Name</td>
+                            <td>@(o.Table != null ? "Dine-in" : "Takeaway")</td>
+                            <td class="text-end">@o.Lines.Sum(l => l.Qty)</td>
+                            <td class="text-end">@Rm(Total(Sub(o.Lines), o.Table != null))</td>
+                            <td><span class="md-pill @StatusClass(o.Status)">@o.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    @* One order details block per order – copied into the pop-up when its row is clicked *@
+    @foreach (var o in orders)
+    {
+        bool dineIn = o.Table != null;
+        decimal sub = Sub(o.Lines), sc = dineIn ? Math.Round(sub * 0.10m, 2) : 0m, sst = Math.Round((sub + sc) * 0.06m, 2);
+        <template data-order-detail="@o.Code" data-status="@o.Status" data-pill="@StatusClass(o.Status)">
+            <p class="md-muted-text mb-3">@(dineIn ? $"Dine-in · {o.Table}" : "Takeaway") · @o.Name · ordered @o.Time</p>
+            <table class="md-order-lines">
+                <thead>
+                    <tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in o.Lines)
+                    {
+                        <tr>
+                            <td>@l.Item@if (l.Remark != null) { <small>@l.Remark</small> }</td>
+                            <td class="text-end">× @l.Qty</td>
+                            <td class="text-end">@Rm(l.Qty * l.Price)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr><td colspan="2">Subtotal</td><td class="text-end">@Rm(sub)</td></tr>
+                    @if (dineIn)
+                    {
+                        <tr><td colspan="2">Service charge 10%</td><td class="text-end">@Rm(sc)</td></tr>
+                    }
+                    <tr><td colspan="2">SST 6%</td><td class="text-end">@Rm(sst)</td></tr>
+                    <tr class="is-total"><td colspan="2">Total</td><td class="text-end">@Rm(sub + sc + sst)</td></tr>
+                </tfoot>
+            </table>
+            @if (o.Status == "Cancelled")
+            {
+                <p class="md-hint mt-3 mb-0">This order was cancelled and its payment refunded.</p>
+            }
+        </template>
+    }
+</div>
+
+@* =====================================================
+   Payments
+   ===================================================== *@
+<div class="@(tab == "payments" ? "" : "d-none")" data-pane="payments">
+    <section class="md-card md-section">
+        <div class="md-card-header">
+            <span class="md-card-label">Payment transactions</span>
+            <div class="md-segment md-segment-sm" role="group" aria-label="Payment status" data-segment="payments">
+                <button type="button" class="active" data-group="">All</button>
+                <button type="button" data-group="Paid">Paid</button>
+                <button type="button" data-group="Refunded">Refunded</button>
+                <button type="button" data-group="Failed">Failed</button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="md-visit-table md-account-table md-monitor-table" data-export="payments">
+                <thead>
+                    <tr><th>Payment / order</th><th>Customer</th><th>Method</th><th>Date</th><th class="text-end">Amount</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < payments.Length; i++)
+                    {
+                        var p = payments[i];
+                        <tr data-group="@p.Status">
+                            <td><b>@p.Code</b><small class="d-block md-muted-text">@p.Order</small></td>
+                            <td>@p.Name</td>
+                            <td>@p.Method</td>
+                            <td>@p.When.Replace(" 2026,", ",")</td>
+                            <td class="text-end">@Rm(PayAmount(i))</td>
+                            <td><span class="md-pill @StatusClass(p.Status)">@p.Status</span></td>
+                            <td class="text-end">
+                                @if (p.Status is "Paid" or "Refunded")
+                                {
+                                    <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-receipt="@p.Code">Receipt</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="md-hint md-table-note">Card numbers are never stored. A failed payment has no receipt; the order stays unpaid until the guest pays again.</p>
+    </section>
+
+    @* One receipt per Paid / Refunded payment – copied into the Receipt pop-up *@
+    @foreach (var p in payments.Where(p => p.Status is "Paid" or "Refunded"))
+    {
+        var receipt = new ReceiptView
+        {
+            ReceiptNo = "RCP-" + p.Code[4..], OrderCode = p.Order, IsDineIn = p.Table != null,
+            ReservationCode = p.Res, TableCode = p.Table, CustomerName = p.Name,
+            Items = p.Items.Select(x => new ReceiptLine { Quantity = x.Qty, Name = x.Item, UnitPrice = x.Price }).ToList(),
+            PaymentMethod = p.Method, PaymentStatus = p.Status,
+            PaidAt = DateTimeOffset.ParseExact(p.When + " +08:00", "d MMM yyyy, HH:mm zzz", System.Globalization.CultureInfo.InvariantCulture)
+        };
+        <template data-receipt-for="@p.Code" data-name="MaisonDoree-Receipt-@receipt.ReceiptNo">
+            <partial name="~/Pages/Shared/Partials/_Receipt.cshtml" model="receipt" />
+        </template>
+    }
+</div>
+
+@* ---------- Reservation details pop-up (filled from the row's <template>) ---------- *@
+<div class="modal fade md-popup" id="resDetailPopup" tabindex="-1" aria-labelledby="resDetailTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Reservation detail</span>
+                    <h2 class="modal-title md-popup-title" id="resDetailTitle">—</h2>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="md-pill" id="resDetailPill">—</span>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body" id="resDetailBody"></div>
+        </div>
+    </div>
+</div>
+
+@* ---------- Order details pop-up (read-only, filled from the order's <template>) ---------- *@
+<div class="modal fade md-popup" id="orderDetailPopup" tabindex="-1" aria-labelledby="orderDetailTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Order detail</span>
+                    <h2 class="modal-title md-popup-title" id="orderDetailTitle">—</h2>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="md-pill" id="orderDetailPill">—</span>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body" id="orderDetailBody"></div>
+        </div>
+    </div>
+</div>
+
+@* ---------- Receipt pop-up ---------- *@
+<div class="modal fade md-popup" id="receiptPopup" tabindex="-1" aria-labelledby="receiptTitle" aria-hidden="true">
+    @* Not modal-dialog-scrollable: the PDF capture (html2canvas) hangs on a scrolling pop-up body *@
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Payment</span>
+                    <h2 class="modal-title md-popup-title" id="receiptTitle">Receipt</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="receiptBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn md-btn-round btn-md-dark" id="receiptPdf" data-pdf-target="#receiptPaper"><i class="bi bi-download me-2"></i>Download receipt (PDF)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="~/js/pdf-download.js" asp-append-version="true"></script>
+    <script src="~/js/md-select.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            // ---------- Tabs ----------
+            var tabs = document.querySelectorAll('#monitorTabs button');
+            tabs.forEach(function (t) {
+                t.addEventListener('click', function () {
+                    tabs.forEach(function (x) { x.classList.toggle('active', x === t); });
+                    document.querySelectorAll('[data-pane]').forEach(function (p) { p.classList.toggle('d-none', p.dataset.pane !== t.dataset.tab); });
+                });
+            });
+
+            // ---------- Reservations filters (on screen) ----------
+            var rows = document.querySelectorAll('[data-pane="reservations"] tr[data-res]');
+            var f = {
+                from: document.getElementById('resFrom'), to: document.getElementById('resTo'),
+                status: document.getElementById('resStatus'), search: document.getElementById('resSearch')
+            };
+            // From / To: reload the list for the new dates (the server loads that range)
+            [f.from, f.to].forEach(function (input) {
+                input.addEventListener('change', function () {
+                    if (!f.from.value || !f.to.value) return;
+                    window.location.search = '?tab=reservations&from=' + f.from.value + '&to=' + f.to.value;
+                });
+            });
+
+            // Status + search: filter the rows on screen
+            function applyFilters() {
+                if (!rows.length) return;
+                var text = f.search.value.trim().toLowerCase(), shown = 0;
+                rows.forEach(function (r) {
+                    var d = r.dataset;
+                    var ok = (!f.status.value || d.status === f.status.value) && (!text || d.search.indexOf(text) !== -1);
+                    r.classList.toggle('d-none', !ok);
+                    if (ok) shown++;
+                });
+                document.getElementById('resCount').textContent = shown;
+                document.getElementById('resEmpty').classList.toggle('d-none', shown > 0);
+            }
+            f.status.addEventListener('change', applyFilters);
+            f.search.addEventListener('input', applyFilters);
+
+            // ?q=R-0021 (e.g. from the Dashboard's Recent activity): fill the search box so only that booking shows
+            var wanted = new URLSearchParams(location.search).get('q');
+            if (wanted) { f.search.value = wanted; applyFilters(); }
+
+            // ---------- Reservation details pop-up (read-only) ----------
+            var detail = new bootstrap.Modal(document.getElementById('resDetailPopup'));
+            function openDetail(code) {
+                var tpl = document.querySelector('template[data-res-detail="' + code + '"]');
+                if (!tpl) return;
+                var d = tpl.dataset;
+                document.getElementById('resDetailTitle').textContent = code;
+                var pill = document.getElementById('resDetailPill');
+                pill.className = 'md-pill ' + d.pill;
+                pill.textContent = d.status;
+                var body = document.getElementById('resDetailBody');
+                body.innerHTML = '';
+                body.appendChild(tpl.content.cloneNode(true));
+                detail.show();
+            }
+            rows.forEach(function (r) {
+                r.addEventListener('click', function () { openDetail(r.dataset.res); });
+                r.addEventListener('keydown', function (e) { if (e.key === 'Enter') openDetail(r.dataset.res); });
+            });
+            var view = new URLSearchParams(location.search).get('view');
+            if (view) openDetail(view);
+
+            // ---------- Order details pop-up (ordered items) ----------
+            var orderPopup = new bootstrap.Modal(document.getElementById('orderDetailPopup'));
+            function openOrder(code) {
+                var tpl = document.querySelector('template[data-order-detail="' + code + '"]');
+                if (!tpl) return;
+                document.getElementById('orderDetailTitle').textContent = code;
+                var pill = document.getElementById('orderDetailPill');
+                pill.className = 'md-pill ' + tpl.dataset.pill;
+                pill.textContent = tpl.dataset.status;
+                var body = document.getElementById('orderDetailBody');
+                body.innerHTML = '';
+                body.appendChild(tpl.content.cloneNode(true));
+                orderPopup.show();
+            }
+            document.querySelectorAll('tr[data-order]').forEach(function (r) {
+                r.addEventListener('click', function () { openOrder(r.dataset.order); });
+                r.addEventListener('keydown', function (e) { if (e.key === 'Enter') openOrder(r.dataset.order); });
+            });
+
+            // ---------- Orders / Payments status segments ----------
+            document.querySelectorAll('[data-segment]').forEach(function (seg) {
+                var buttons = seg.querySelectorAll('button');
+                var table = seg.closest('section').querySelector('tbody');
+                buttons.forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        buttons.forEach(function (x) { x.classList.toggle('active', x === b); });
+                        table.querySelectorAll('tr').forEach(function (r) { r.classList.toggle('d-none', !!b.dataset.group && r.dataset.group !== b.dataset.group); });
+                    });
+                });
+            });
+
+            // ---------- Receipt pop-up ----------
+            var receiptEl = document.getElementById('receiptPopup');
+            document.querySelectorAll('[data-receipt]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    var tpl = document.querySelector('template[data-receipt-for="' + b.dataset.receipt + '"]');
+                    var body = document.getElementById('receiptBody');
+                    body.innerHTML = '';
+                    body.appendChild(tpl.content.cloneNode(true));
+                    document.getElementById('receiptTitle').textContent = 'Receipt · ' + b.dataset.receipt;
+                    document.getElementById('receiptPdf').dataset.pdfName = tpl.dataset.name;
+                    bootstrap.Modal.getOrCreateInstance(receiptEl).show();
+                });
+            });
+
+            // ---------- Export CSV: the visible rows of the open tab ----------
+            document.getElementById('exportCsv').addEventListener('click', function () {
+                var pane = document.querySelector('[data-pane]:not(.d-none)');
+                var table = pane.querySelector('table[data-export]');
+                var cell = function (c) { return '"' + c.textContent.replace(/\s+/g, ' ').trim().replace(/"/g, '""') + '"'; };
+                var lines = [Array.prototype.map.call(table.querySelectorAll('thead th'), cell).filter(function (h) { return h !== '""'; }).join(',')];
+                table.querySelectorAll('tbody tr:not(.d-none)').forEach(function (r) {
+                    var cells = Array.prototype.map.call(r.children, cell);
+                    lines.push(cells.slice(0, table.querySelectorAll('thead th').length).filter(function (c, i) { return table.querySelectorAll('thead th')[i].textContent.trim() !== ''; }).join(','));
+                });
+                var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                var systemName = document.body.dataset.systemName || 'Restaurant';
+                systemName = systemName.replace(/[<>:"/\\|?*]/g, '-').replace(/\s+/g, '-');
+                a.download = systemName + '-' + table.dataset.export + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+            });
+        })();
+    </script>
+}

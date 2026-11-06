@@ -1,0 +1,340 @@
+@page
+@model RestaurantManagementSystem.Pages.Customer.MenuModel
+@{
+    ViewData["Title"] = "Menu";
+    ViewData["ActiveNav"] = "Menu";
+    ViewData["Eyebrow"] = "À la carte";
+    ViewData["Heading"] = "Our Menu";
+    Layout = "_CustomerLayout";
+}
+
+@functions {
+    static string DayRange(RestaurantManagementSystem.Model.Promotion p) =>
+        p.startDay == DayOfWeek.Monday && p.endDay == DayOfWeek.Sunday
+            ? "Every day"
+            : p.startDay.ToString()[..3] + "–" + p.endDay.ToString()[..3];
+}
+
+@* Card values map to the Menu model: menuName, menuDescription, menuCategory, menuPrice, isAvailable, menuImageUrl. *@
+
+@* ---------- Promotion banner (full width, top of page) ----------
+   One slide per active promotion. Values map to the Promotion model:
+   promoTitle, promoDescription, promoLabel, promoCode, promoActive. *@
+@section TopBanner {
+    @{
+        // The banner only shows promotions that can be used right now
+        var bannerPromos = Model.Promotions.Where(p => !Model.PromoUnavailable.ContainsKey(p.promoID)).ToList();
+    }
+    @if (bannerPromos.Any())
+    {
+        <div class="md-promo-strip" id="promoStrip" role="region" aria-label="Current promotions">
+            <div id="promoCarousel" class="carousel slide carousel-fade" data-bs-ride="carousel" data-bs-interval="5000">
+                <div class="carousel-inner">
+                    @for (int i = 0; i < bannerPromos.Count; i++)
+                    {
+                        var promo = bannerPromos[i];
+                        <div class="carousel-item @(i == 0 ? "active" : "")">
+                            <button type="button" class="md-promo-slide" data-promo-target="promo-@promo.promoID">
+                                <span class="md-promo-label">Promotion</span>
+                                <span class="md-promo-text"><strong>@promo.promoTitle</strong> — @promo.promoLabel</span>
+                                <i class="bi bi-arrow-right md-promo-arrow" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    }
+                </div>
+                <button class="md-promo-nav prev" type="button" data-bs-target="#promoCarousel" data-bs-slide="prev" aria-label="Previous promotion"><i class="bi bi-chevron-left"></i></button>
+                <button class="md-promo-nav next" type="button" data-bs-target="#promoCarousel" data-bs-slide="next" aria-label="Next promotion"><i class="bi bi-chevron-right"></i></button>
+            </div>
+            <button type="button" class="md-promo-close" id="promoClose" aria-label="Hide promotions"><i class="bi bi-x-lg"></i></button>
+        </div>
+    }
+}
+
+@section HeaderActions {
+    <a class="btn btn-md-dark md-cart-btn" href="/Customer/Checkout">
+        <i class="bi bi-bag"></i>
+        Cart · <span id="cartCount">@Model.CartCount</span> items · <span id="cartTotal">RM @Model.CartSubtotal.ToString("N2")</span>
+    </a>
+}
+
+@* ---------- Tabs + search ---------- *@
+<style>
+    /* Many categories: keep the tabs on one line and let them scroll sideways */
+    .md-menu-toolbar .md-tabs {
+        display: flex;
+        flex-wrap: nowrap;
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 6px;
+    }
+
+        .md-menu-toolbar .md-tabs button {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+
+    /* Opening hours list in the "can't place an order" pop-up */
+    .md-hours-list { list-style: none; margin: 0; padding: 0; }
+    .md-hours-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .45rem 0; border-bottom: 1px dashed rgba(0, 0, 0, .14); font-size: .95rem; }
+    .md-hours-list li:last-child { border-bottom: 0; }
+    .md-hours-list li.is-today { font-weight: 700; }
+</style>
+<div class="md-menu-toolbar">
+    <nav class="md-tabs" aria-label="Menu categories">
+        <button type="button" class="active" data-filter="Recommendations">Recommendations</button>
+        <button type="button" data-filter="Promotions">Promotions</button>
+        <button type="button" data-filter="All">All</button>
+        @foreach (var categoryName in Model.CategoryNames)
+        {
+            <button type="button" data-filter="@categoryName">@categoryName</button>
+        }
+    </nav>
+    <input class="form-control md-input md-search" id="menuSearch" type="search" placeholder="Search dishes" aria-label="Search dishes" />
+</div>
+
+@* ---------- Allergen switch + tag chips ---------- *@
+@{
+    var tagChips = RestaurantManagementSystem.Helpers.MenuVocabulary.Tags
+        .Where(t => Model.MenuItems.Any(m => RestaurantManagementSystem.Helpers.MenuVocabulary.Parse(m.menuTags).Contains(t)))
+        .ToList();
+}
+<div class="md-filterbar" id="menuFilterBar">
+    @if (Model.CustomerAllergies.Any())
+    {
+        <div class="form-check form-switch md-allergen-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="hideAllergens" checked />
+            <label class="form-check-label" for="hideAllergens">Hide dishes with my allergens (@string.Join(", ", Model.CustomerAllergies))</label>
+        </div>
+    }
+    @if (tagChips.Any())
+    {
+        <div class="md-chips d-none" id="tagChips" role="group" aria-label="Filter by tag">
+            @foreach (var t in tagChips)
+            {
+                <button type="button" class="md-chip" data-tag="@t" aria-pressed="false">@t</button>
+            }
+            <button type="button" class="md-chip md-chip-clear d-none" data-clear-tags>Clear</button>
+        </div>
+    }
+    <p class="md-allergen-note">Allergen information is entered by the restaurant and may not be complete. Cross-contamination might happen. Please inform our staff about any severe allergies.</p>
+</div>
+
+@* =====================================================
+   Recommendations tab
+   ===================================================== *@
+<div id="recommendationsPanel">
+    @{
+        var recSections = new (string Title, List<RestaurantManagementSystem.Model.Menu> Dishes)[]
+        {
+            ("Order again", Model.Recs.OrderedBefore),
+            ("Based on your preferences", Model.Recs.ForYourPreference),
+            ("Popular dishes", Model.Recs.TopSellers),
+            ("Signature Dishes", Model.Recs.Signature)
+        };
+    }
+    @foreach (var rec in recSections.Where(r => r.Dishes.Any()))
+    {
+        <h2 class="md-section-title">@rec.Title</h2>
+        <div class="row md-grid md-section">
+            @foreach (var item in rec.Dishes)
+            {
+                <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="item" /></div>
+            }
+        </div>
+    }
+    @if (!recSections.Any(r => r.Dishes.Any()))
+    {
+        <p class="md-empty">No recommendations yet. Browse the whole menu in the All tab.</p>
+    }
+</div>
+
+@* =====================================================
+   Promotions tab – one section per active promotion,
+   followed by the dishes it applies to
+   ===================================================== *@
+<div class="d-none" id="promotionsPanel">
+    @foreach (var promo in Model.Promotions)
+    {
+        <section class="md-promo-section" id="promo-@promo.promoID">
+            <div class="md-promo-info">
+                <span class="md-badge md-badge-promo">Promotion</span>
+                <h2 class="md-section-title">@promo.promoTitle</h2>
+                <p>@promo.promoDescription</p>
+                <div class="md-promo-meta">
+                    <span><i class="bi bi-calendar3"></i>@DayRange(promo)@(promo.validUntil.HasValue ? " · until " + promo.validUntil.Value.ToString("d MMM") : "")</span>
+                    <span><i class="bi bi-tag"></i>@promo.promoLabel</span>
+                    <span><i class="bi bi-ticket-perforated"></i>Code <strong>@promo.promoCode</strong></span>
+                    @if (promo.autoApply)
+                    {
+                        <span><i class="bi bi-magic"></i>Applied automatically</span>
+                    }
+                    @foreach (var rule in RestaurantManagementSystem.Helpers.PromotionRules.RulesSummary(promo))
+                    {
+                        <span><i class="bi bi-info-circle"></i>@rule</span>
+                    }
+                    @if (Model.PromoUnavailable.TryGetValue(promo.promoID, out var notNow))
+                    {
+                        <span class="is-off"><i class="bi bi-clock"></i>Not available right now · @notNow</span>
+                    }
+                </div>
+            </div>
+
+            @if (promo.Menus.Any())
+            {
+                <div class="row md-grid">
+                    @foreach (var dish in promo.Menus)
+                    {
+                        <div class="col-sm-6 col-xl-4"><partial name="_MenuCard" model="dish" /></div>
+                    }
+                </div>
+            }
+            else
+            {
+                <a class="btn btn-md-dark" href="/Customer/Reservations">Reserve a table</a>
+            }
+        </section>
+    }
+</div>
+
+@* =====================================================
+   All / category tabs
+   ===================================================== *@
+<div class="row md-grid d-none" id="menuGrid">
+    @foreach (var item in Model.MenuItems)
+    {
+        <div class="col-sm-6 col-xl-4 md-menu-item" data-category="@item.MenuCategory?.categoryName" data-name="@item.menuName">
+            <partial name="_MenuCard" model="item" />
+        </div>
+    }
+</div>
+
+<p class="md-empty d-none" id="menuEmpty">No dishes match your search. Try another name or category.</p>
+
+@* ---------- Chatbot: floating button + panel ---------- *@
+<button type="button" class="md-chat-fab" id="chatToggle" aria-expanded="false" aria-controls="chatPanel"
+        aria-label="Chat with our assistant" title="Chat with our assistant">
+    <i class="bi bi-chat-right-dots"></i>
+</button>
+
+@* Floating cart: same design as the chatbot button, just above it. Shown only when the header's Cart button
+   has scrolled out of view (cart-fab.js); the count follows #cartCount. *@
+<a class="md-chat-fab md-cart-fab is-hidden" id="cartFab" href="/Customer/Checkout" aria-label="Open cart" title="Open cart" tabindex="-1" aria-hidden="true">
+    <i class="bi bi-bag"></i>
+    <span class="md-cart-fab-count" id="cartFabCount">@Model.CartCount</span>
+</a>
+
+<section class="md-chat-panel d-none" id="chatPanel" aria-label="@ViewData["Brand"] assistant">
+    <div class="md-chat-header">
+        <div>
+            <div class="md-chat-title">@ViewData["Brand"] assistant</div>
+            <div class="md-chat-subtitle">Answers about bookings, menu and opening hours</div>
+        </div>
+        @* Same × close icon as every pop-up (white version on the dark header) *@
+        <button type="button" class="btn-close btn-close-white md-chat-close" id="chatClose" aria-label="Close chat"></button>
+    </div>
+    <div class="md-chat-body" id="chatBody">
+        <div class="md-chat-msg bot">
+            Hi! I can help you find dishes, recommendations and promotions, check opening hours,
+            or guide you to reservations, orders and notifications. Try asking “What are your mains?”
+            or “Show vegetarian dishes”.
+        </div>
+    </div>
+    <form class="md-chat-input" id="chatForm">
+        <input class="form-control md-input" id="chatText" type="text" placeholder="Ask about menu, booking or hours" aria-label="Message" />
+        <button type="submit" class="btn btn-md-dark">Send</button>
+    </form>
+</section>
+
+@* ---------- Pop-up: ordering is closed (outside opening hours) ----------
+   Opens when the customer clicks the header Cart button or the floating cart icon (script below).
+   Same pop-up style as _NotificationPopup / _ConfirmPopup. Text and hours come from MenuModel. *@
+@if (Model.OrderingClosed)
+{
+    <div class="modal fade md-popup" id="orderingClosedPopup" tabindex="-1" aria-labelledby="orderingClosedTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <span class="md-eyebrow">Ordering unavailable</span>
+                        <h2 class="modal-title md-popup-title" id="orderingClosedTitle">We can't take orders right now</h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="md-popup-message mb-3">@Model.ClosedMessage</p>
+                    <span class="md-label">Opening hours</span>
+                    <ul class="md-hours-list">
+                        @foreach (var row in Model.OpeningHours)
+                        {
+                            <li class="@(row.IsToday ? "is-today" : "")"><span>@row.Day@(row.IsToday ? " (today)" : "")</span><span>@row.Text</span></li>
+                        }
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-md-dark" data-bs-dismiss="modal">Got it</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    @* Antiforgery token + the saved cart (dish name -> id, id -> quantity) read by menu.js *@
+    @Html.AntiForgeryToken()
+    <script>window.MD_CART = @Json.Serialize(new { ids = Model.DishIds, quantities = Model.CartQuantities });</script>
+    <script>window.MD_USER = @Json.Serialize(new { allergies = Model.CustomerAllergies });</script>
+    <script src="~/js/menu.js" asp-append-version="true"></script>
+    <script src="~/js/chatbot.js" asp-append-version="true"></script>
+    @if (Model.OrderingClosed)
+    {
+        <script>
+            (function () {
+                var popup = document.getElementById('orderingClosedPopup');
+                if (!popup || !window.bootstrap) return;
+
+                // Header Cart button and the floating cart icon: no checkout while we are closed,
+                // so show the pop-up instead (capture phase = runs before the link is followed)
+                document.addEventListener('click', function (event) {
+                    var cart = event.target.closest('.md-cart-btn, #cartFab');
+                    if (!cart) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    window.bootstrap.Modal.getOrCreateInstance(popup).show();
+                }, true);
+
+                // Sent back from Checkout (e.g. its URL was typed while we are closed): show the pop-up straight away
+                if (new URLSearchParams(window.location.search).has('closed')) {
+                    window.bootstrap.Modal.getOrCreateInstance(popup).show();
+                }
+            })();
+        </script>
+    }
+    <script>
+        (function () {
+            const tabs = document.querySelector('.md-tabs');
+            if (!tabs) return;
+
+            // mouse wheel over the tabs scrolls them sideways (page scrolls normally at either end)
+            tabs.addEventListener('wheel', e => {
+                if (tabs.scrollWidth <= tabs.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+                const atStart = tabs.scrollLeft <= 0 && e.deltaY < 0;
+                const atEnd = tabs.scrollLeft + tabs.clientWidth >= tabs.scrollWidth - 1 && e.deltaY > 0;
+                if (atStart || atEnd) return;
+                e.preventDefault();
+                tabs.scrollLeft += e.deltaY;
+            }, { passive: false });
+
+            // keep the chosen tab in view
+            tabs.addEventListener('click', e => {
+                const b = e.target.closest('button');
+                if (b) b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+            });
+        })();
+    </script>
+    <script src="~/js/cart-fab.js" asp-append-version="true"></script>
+}

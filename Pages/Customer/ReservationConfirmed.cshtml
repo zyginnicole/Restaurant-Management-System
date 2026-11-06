@@ -1,0 +1,72 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Customer.ReservationConfirmedModel
+@using RestaurantManagementSystem.Services
+@{
+    var r = Model.Booking;
+    var settings = Model.Settings;
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    var isPending = r.reservationStatus == ReservationStatus.Pending;
+    var code = "R-" + r.reservationID.ToString("D4");
+    var start = r.reservationDateTime;
+    var deadline = ReservationService.CancelDeadline(r, settings);
+
+    ViewData["Title"] = isPending ? "Booking received" : "Booking confirmed";
+    ViewData["ActiveNav"] = "Reservations";
+    ViewData["Eyebrow"] = "Reservation";
+    ViewData["Heading"] = isPending ? "Booking received" : "Booking confirmed";
+    Layout = "_CustomerLayout";
+}
+
+<div class="md-confirm-wrap md-section">
+    <section class="md-card" id="confirmationCard">
+        <div class="md-card-header">
+            <span class="md-card-label">Reservation confirmation</span>
+            <span class="md-card-meta">Issued @r.reservationCreateAt.ToString("d MMM yyyy, HH:mm", inv)</span>
+        </div>
+        <div class="md-card-body md-confirm">
+            @if (isPending)
+            {
+                <span class="md-badge md-badge-pending">Pending</span>
+                <h2 class="md-confirm-title">Booking received</h2>
+                <p class="md-confirm-ref">Reference <b>@code</b> · our team will answer by @ReservationService.PendingDeadline(r).ToString("HH:mm 'on' d MMMM", inv) at the latest.</p>
+            }
+            else
+            {
+                <span class="md-badge md-badge-confirmed">Confirmed</span>
+                <h2 class="md-confirm-title">Your table is booked</h2>
+                <p class="md-confirm-ref">Reference <b>@code</b> · you'll find it under Reservations.</p>
+            }
+
+            <dl class="md-confirm-facts">
+                <div><dt>Date</dt><dd>@start.ToString("dddd, d MMMM yyyy", inv)</dd></div>
+                <div><dt>Time</dt><dd>@start.ToString("HH:mm", inv) – @start.AddMinutes(settings.diningMinutes).ToString("HH:mm", inv)</dd></div>
+                <div><dt>Guests</dt><dd>@r.partySize</dd></div>
+                <div><dt>Table</dt><dd><i class="bi bi-lamp md-lamp" aria-hidden="true"></i>@r.DiningTable?.tableNumber · @r.DiningTable?.DiningArea?.areaName</dd></div>
+                <div><dt>Name</dt><dd>@r.Customer?.custName</dd></div>
+                <div><dt>Special request</dt><dd>@(r.specialRequest ?? "None")</dd></div>
+            </dl>
+
+            <p class="md-note-box mt-0">
+                Free cancellation until @deadline.ToString("HH:mm 'on' d MMMM", inv).
+                Please arrive within @settings.lateHoldMinutes minutes of your booking time.
+            </p>
+
+            @* data-html2canvas-ignore: the buttons are left out of the PDF *@
+            <div class="md-confirm-actions" data-html2canvas-ignore>
+                @* Downloads the card above as a PDF (wwwroot/js/pdf-download.js) – the file name comes from the reservation code *@
+                <button type="button" class="btn btn-md-dark" data-pdf-target="#confirmationCard" data-pdf-name="MaisonDoree-Reservation-@code"><i class="bi bi-download me-2"></i>Download confirmation (PDF)</button>
+                <a class="btn btn-md-outline" href="/Customer/Reservations">View my reservations</a>
+            </div>
+        </div>
+    </section>
+
+    @if (isPending)
+    {
+        <p class="md-confirm-foot">Bookings are confirmed by our team. You'll find this booking under Reservations.</p>
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="~/js/pdf-download.js" asp-append-version="true"></script>
+}

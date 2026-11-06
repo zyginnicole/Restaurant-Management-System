@@ -1,0 +1,492 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Admin.MenuOffersModel
+@{
+    Layout = "_DashboardLayout";
+    ViewData["Title"] = "Menu & Offers";
+    ViewData["Module"] = "Admin";
+    ViewData["ActiveNav"] = "MenuOffers";
+    ViewData["Subtitle"] = "Manage dishes, pricing, availability and promotions";
+
+    var categories = Model.Categories;
+    var items = Model.Items.ToArray();
+    var promos = Model.Promos.ToArray();
+    var dayNames = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+
+    int availCount = items.Count(i => i.Avail);
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin-setup.css" asp-append-version="true" />
+}
+
+@section HeaderActions {
+    <div class="a-tabs" role="tablist">
+        <button class="a-tab active" type="button" role="tab" data-bs-toggle="pill" data-bs-target="#tab-items">Menu Items</button>
+        <button class="a-tab" type="button" role="tab" data-bs-toggle="pill" data-bs-target="#tab-promos">Promotions</button>
+    </div>
+}
+
+<div class="tab-content">
+
+    @* ================= TAB 1: Menu Items ================= *@
+    <div class="tab-pane fade show active" id="tab-items" role="tabpanel">
+        <section class="a-card">
+            <div class="a-card-head">
+                <div>
+                    <h2 class="a-card-title">Dishes</h2>
+                    <span class="a-card-note" id="itemCount">@items.Length dishes · @availCount available · @(items.Length - availCount) sold out</span>
+                </div>
+                <div class="a-tools">
+                    <div class="a-search">
+                        <i class="bi bi-search"></i>
+                        <input id="itemSearch" type="search" class="form-control a-input a-input-sm" placeholder="Search dishes" aria-label="Search dishes" />
+                    </div>
+                    <select id="itemCat" class="form-select a-input a-input-sm w-auto" aria-label="Filter by category">
+                        <option value="">All categories</option>
+                        @foreach (var c in categories)
+                        {
+                            <option>@c.Name</option>
+                        }
+                    </select>
+                    <select id="itemAvail" class="form-select a-input a-input-sm w-auto" aria-label="Filter by availability">
+                        <option value="">Any availability</option>
+                        <option value="yes">Available</option>
+                        <option value="no">Sold out</option>
+                    </select>
+                    <select id="itemTag" class="form-select a-input a-input-sm w-auto" aria-label="Filter by tag">
+                        <option value="">Any tag</option>
+                        @foreach (var tag in RestaurantManagementSystem.Helpers.MenuVocabulary.Tags)
+                        {
+                            <option value="@tag">@tag</option>
+                        }
+                    </select>
+                    <select id="itemAllergen" class="form-select a-input a-input-sm w-auto" aria-label="Filter by allergen">
+                        <option value="">Any allergen</option>
+                        @foreach (var allergen in RestaurantManagementSystem.Helpers.MenuVocabulary.Allergens)
+                        {
+                            <option value="@allergen">Contains @allergen</option>
+                        }
+                        <option value="__none">No allergens</option>
+                        <option value="__unset">Allergens not set</option>
+                    </select>
+                    <select id="itemSig" class="form-select a-input a-input-sm w-auto" aria-label="Filter by signature dish">
+                        <option value="">Any dish</option>
+                        <option value="yes">Signature only</option>
+                        <option value="no">Not signature</option>
+                    </select>
+                    <button type="button" class="a-btn" data-bs-toggle="modal" data-bs-target="#itemModal"><i class="bi bi-plus-lg"></i>Add dish</button>
+                </div>
+            </div>
+            <div class="a-scroll">
+                <table class="a-dtable">
+                    <thead>
+                        <tr><th>Dish</th><th>Category</th><th class="num">Price</th><th>Availability</th><th class="num">Actions</th></tr>
+                    </thead>
+                    <tbody id="itemRows">
+                        @foreach (var i in items)
+                        {
+                            <tr data-name="@i.Name.ToLower()" data-cat="@i.Cat" data-avail="@(i.Avail ? "yes" : "no")" data-sig="@(i.Sig ? "yes" : "no")" data-tags="@string.Join(",", i.TagList)" data-allergens="@string.Join(",", i.AllergenList)" data-allergen-set="@(i.AllergensSet ? "yes" : "no")">
+                                <td>
+                                    <div class="a-dish">
+                                        <div class="a-thumb">
+                                            @if (string.IsNullOrEmpty(i.Image))
+                                            {
+                                                <text>@i.Name.Substring(0, 1)</text>
+                                            }
+                                            else
+                                            {
+
+                                                <img src="~/images/menu/@i.Image" alt="" />
+                                            }
+                                        </div>
+                                        <div>
+                                            <strong>@i.Name</strong>@if (i.Sig) {
+                                            <span class="ms-1" title="Signature dish">★</span>
+                                        }
+                                        <small>@i.Desc</small>@if (!i.AllergensSet) {
+                                        <small class="text-danger">Allergens not set</small>
+                                    }
+                                </div>
+                            </div>
+                        </td>
+                        <td>@i.Cat</td>
+                        <td class="num">RM @i.Price.ToString("0.00")</td>
+                        <td>
+                            <label class="a-switch-wrap" data-switch-scope>
+                                <input type="checkbox" class="a-switch item-avail" autocomplete="off" data-id="@i.Id" @(i.Avail ? "checked" : "") data-on="Available" data-off="Sold out" aria-label="@i.Name available" />
+                                <span data-switch-text>@(i.Avail ? "Available" : "Sold out")</span>
+                            </label>
+                        </td>
+                        <td class="num">
+                            <button type="button" class="a-icon-btn" data-bs-toggle="modal" data-bs-target="#itemModal" data-json="@i.Json" aria-label="Edit @i.Name"><i class="bi bi-pencil"></i></button>
+                            <form method="post" asp-page-handler="DeleteDish" asp-route-id="@i.Id" class="d-inline" data-confirm="Delete “@i.Name”? This can't be undone.">
+                                <button type="submit" class="a-icon-btn danger" aria-label="Delete @i.Name"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (items.Length == 0)
+        {
+            <p class="a-card-note p-4 mb-0">No dishes yet. Use “Add dish” to create the first one.</p>
+        }
+    </div>
+</section>
+</div>
+
+@* ================= TAB 2: Promotions ================= *@
+<div class="tab-pane fade" id="tab-promos" role="tabpanel">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <span class="a-card-note">@promos.Count(p => p.Status == "Active") active · @promos.Count(p => p.Status == "Scheduled") scheduled · @promos.Count(p => p.Status == "Expired") expired · @promos.Count(p => p.Status == "Inactive") inactive</span>
+        <button type="button" class="a-btn" data-bs-toggle="modal" data-bs-target="#promoModal"><i class="bi bi-plus-lg"></i>Add promotion</button>
+    </div>
+    <div class="a-promos">
+        @foreach (var p in promos)
+        {
+            <article class="a-promo @(p.Status == "Expired" || p.Status == "Inactive" ? "is-expired" : "")">
+                <div class="a-promo-top">
+                    <div>
+                        <h3>@p.Name</h3>
+                        <div class="a-card-note">Code <strong>@p.Code</strong>@(p.AutoApply ? " · applied automatically" : "")</div>
+                    </div>
+                    <span class="a-badge @p.Status.ToLower()">@p.Status</span>
+                </div>
+                <div class="a-promo-value">@(p.Value)<small>@p.Unit</small></div>
+                <div class="a-promo-dates"><i class="bi bi-calendar-event me-1"></i>@p.Dates</div>
+                @if (p.Availability != "")
+                {
+                    <div class="a-promo-dates"><i class="bi bi-clock me-1"></i>@p.Availability</div>
+                }
+                @if (p.Rules.Length > 0)
+                {
+                    <div class="a-promo-dishes">
+                        @foreach (var r in p.Rules)
+                        {
+                            <span>@r</span>
+                        }
+                    </div>
+                }
+                <div class="a-promo-dishes">
+                    @foreach (var d in p.Dishes)
+                    {
+                        <span>@d</span>
+                    }
+                    @if (p.Dishes.Length == 0)
+                    {
+                        <span>No dishes selected</span>
+                    }
+                </div>
+                <div class="a-promo-foot">
+                    <button type="button" class="a-icon-btn" data-bs-toggle="modal" data-bs-target="#promoModal" data-json="@p.Json" aria-label="Edit @p.Name"><i class="bi bi-pencil"></i></button>
+                    <form method="post" asp-page-handler="DeletePromo" asp-route-id="@p.Id" class="d-inline" data-confirm="Delete the promotion “@p.Name”? This can't be undone.">
+                        <button type="submit" class="a-icon-btn danger" aria-label="Delete @p.Name"><i class="bi bi-trash"></i></button>
+                    </form>
+                </div>
+            </article>
+        }
+    </div>
+    @if (promos.Length == 0)
+    {
+        <p class="a-card-note">No promotions yet. Use “Add promotion” to create the first one.</p>
+    }
+</div>
+</div>
+
+@* ================= Modals ================= *@
+<div class="modal fade" id="itemModal" tabindex="-1" aria-labelledby="itemModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" enctype="multipart/form-data" asp-page-handler="SaveDish">
+            <input type="hidden" name="id" id="iId" />
+            <div class="modal-header"><h2 class="modal-title fs-5" id="itemModalTitle">Add dish</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-12"><label class="a-label" for="iName">Dish name</label><input id="iName" name="name" class="form-control a-input" required maxlength="100" /></div>
+                    <div class="col-sm-7">
+                        <label class="a-label" for="iCat">Category</label>
+                        <select id="iCat" name="categoryId" class="form-select a-input" required>
+                            @foreach (var c in categories)
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-5">
+                        <label class="a-label" for="iPrice">Price</label>
+                        <div class="input-group"><span class="input-group-text">RM</span><input id="iPrice" name="price" type="number" min="0.01" step="0.01" class="form-control a-input" required /></div>
+                    </div>
+                    <div class="col-12"><label class="a-label" for="iDesc">Description</label><textarea id="iDesc" name="description" class="form-control a-input" rows="2"></textarea></div>
+                    <div class="col-12">
+                        <label class="a-label" for="iImage">Photo</label>
+                        <input id="iImage" name="image" type="file" accept=".jpg,.jpeg,.png,.webp" class="form-control a-input" />
+                        <div id="iImageHint" class="a-card-note mt-1 d-none">Leave empty to keep the current photo.</div>
+                    </div>
+                    <div class="col-12"><label class="a-switch-wrap"><input type="checkbox" id="iAvail" name="available" value="true" class="a-switch" checked /> Available to order</label></div>
+                    <div class="col-12"><label class="a-switch-wrap"><input type="checkbox" id="iSig" name="signature" value="true" class="a-switch" /> Signature dish</label></div>
+                    <div class="col-12">
+                        <div class="a-label">Tags (matched with customer preferences)</div>
+                        <div class="d-flex flex-wrap gap-3">
+                            @foreach (var tag in RestaurantManagementSystem.Helpers.MenuVocabulary.Tags)
+                            {
+                                <label class="a-check"><input type="checkbox" name="tags" value="@tag" class="form-check-input mt-0 dish-tag" />@tag</label>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="a-label">Allergens this dish contains</div>
+                        <div class="d-flex flex-wrap gap-3">
+                            @foreach (var allergen in RestaurantManagementSystem.Helpers.MenuVocabulary.Allergens)
+                            {
+                                <label class="a-check"><input type="checkbox" name="allergens" value="@allergen" class="form-check-input mt-0 dish-allergen" />@allergen</label>
+                            }
+                            <label class="a-check"><input type="checkbox" name="noAllergens" value="true" id="iNoAllergen" class="form-check-input mt-0" />No common allergens</label>
+                        </div>
+                        <div class="a-card-note mt-1">Dishes with no allergen info are hidden from customers who have allergies.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="a-btn quiet" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="a-btn solid">Save dish</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="promoModal" tabindex="-1" aria-labelledby="promoModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <form class="modal-content" method="post" asp-page-handler="SavePromo">
+            <input type="hidden" name="id" id="pId" />
+            <div class="modal-header"><h2 class="modal-title fs-5" id="promoModalTitle">Add promotion</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-12"><label class="a-label" for="pTitle">Promotion title</label><input id="pTitle" name="title" class="form-control a-input" placeholder="e.g. Weekend Tasting Menu" required /></div>
+                    <div class="col-sm-5"><label class="a-label" for="pCode">Promo code</label><input id="pCode" name="code" class="form-control a-input text-uppercase" placeholder="WEEKEND15" maxlength="20" required /></div>
+                    <div class="col-sm-7"><label class="a-label" for="pLabel">Badge text</label><input id="pLabel" name="label" class="form-control a-input" placeholder="e.g. 15% off wine flight" required /></div>
+                    <div class="col-12"><label class="a-label" for="pDesc">Description</label><textarea id="pDesc" name="description" class="form-control a-input" rows="2"></textarea></div>
+                    <div class="col-sm-7">
+                        <label class="a-label" for="pType">Discount type</label>
+                        <select id="pType" name="discountType" class="form-select a-input">
+                            <option value="Percentage">Percentage off</option>
+                            <option value="FixedAmount">Fixed amount off</option>
+                            <option value="Complimentary">Complimentary item</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-5">
+                        <label class="a-label" for="pValue">Value</label>
+                        <div class="input-group"><input id="pValue" name="discountValue" type="number" min="0.01" step="0.01" class="form-control a-input" /><span class="input-group-text" id="pUnit">%</span></div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="a-label" for="pStartDay">Available from</label>
+                        <select id="pStartDay" name="startDay" class="form-select a-input">
+                            @foreach (var d in dayNames)
+                            {
+                                <option>@d</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="a-label" for="pEndDay">Available until</label>
+                        <select id="pEndDay" name="endDay" class="form-select a-input">
+                            @foreach (var d in dayNames)
+                            {
+                                <option>@d</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-6"><label class="a-label" for="pFrom">Valid from (optional)</label><input id="pFrom" name="validFrom" type="date" class="form-control a-input" /></div>
+                    <div class="col-sm-6"><label class="a-label" for="pUntil">Valid until (optional)</label><input id="pUntil" name="validUntil" type="date" class="form-control a-input" /></div>
+                    <div class="col-sm-6"><label class="a-label" for="pStartTime">Time from (optional)</label><input id="pStartTime" name="startTime" type="time" class="form-control a-input" /></div>
+                    <div class="col-sm-6"><label class="a-label" for="pEndTime">Time until (optional)</label><input id="pEndTime" name="endTime" type="time" class="form-control a-input" /></div>
+                    <div class="col-sm-6">
+                        <label class="a-label" for="pOrderType">Order type</label>
+                        <select id="pOrderType" name="orderType" class="form-select a-input">
+                            <option value="Any">Dine-in and takeaway</option>
+                            <option value="DineIn">Dine-in only</option>
+                            <option value="Takeaway">Takeaway only</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-6"><label class="a-label" for="pMinSpend">Minimum spend (optional)</label><div class="input-group"><span class="input-group-text">RM</span><input id="pMinSpend" name="minSpend" type="number" min="0.01" step="0.01" class="form-control a-input" /></div></div>
+                    <div class="col-sm-6"><label class="a-label" for="pPerCustomer">Uses per customer (optional)</label><input id="pPerCustomer" name="maxUsesPerCustomer" type="number" min="1" step="1" class="form-control a-input" placeholder="Unlimited" /></div>
+                    <div class="col-sm-6"><label class="a-label" for="pTotalUses">Total uses (optional)</label><input id="pTotalUses" name="maxTotalUses" type="number" min="1" step="1" class="form-control a-input" placeholder="Unlimited" /></div>
+                    <div class="col-sm-6"><label class="a-switch-wrap"><input type="checkbox" id="pYearly" name="limitResetsYearly" value="true" class="a-switch" /> Per-customer limit resets every year</label></div>
+                    <div class="col-sm-6"><label class="a-switch-wrap"><input type="checkbox" id="pBirthday" name="birthdayOnly" value="true" class="a-switch" /> Birthday month only</label></div>
+                    <div class="col-sm-6"><label class="a-switch-wrap"><input type="checkbox" id="pAuto" name="autoApply" value="true" class="a-switch" /> Apply automatically</label></div>
+                    <div class="col-sm-6"><label class="a-switch-wrap"><input type="checkbox" id="pActive" name="active" value="true" class="a-switch" checked /> Active</label></div>
+                    <div class="col-12">
+                        <div class="a-label">Dishes in this promotion</div>
+                        <div class="a-checklist">
+                            @foreach (var i in items)
+                            {
+                                <label class="a-check"><input type="checkbox" name="dishIds" value="@i.Id" class="form-check-input mt-0 promo-dish" />@i.Name<span>RM @i.Price.ToString("0.00")</span></label>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="a-btn quiet" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="a-btn solid">Save promotion</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/AdminSetup.js" asp-append-version="true"></script>
+
+    @* Message saved by the page model (e.g. "Dish added") shows once after the redirect *@
+    @if (TempData["Toast"] is string toastMessage)
+    {
+        <script>adm.toast(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(toastMessage)));</script>
+    }
+
+    <script>
+        (function () {
+            const $ = id => document.getElementById(id);
+            const rows = () => document.querySelectorAll('#itemRows tr');
+
+            // Reopen the tab the user was on after a redirect
+            if (new URLSearchParams(location.search).get('tab') === 'promos') {
+                bootstrap.Tab.getOrCreateInstance(
+                    document.querySelector('[data-bs-target="#tab-promos"]')).show();
+            }
+
+            // Make the label match the switch when the page loads
+            document.querySelectorAll('.item-avail').forEach(sw => {
+                sw.closest('[data-switch-scope]').querySelector('[data-switch-text]').textContent =
+                    sw.checked ? sw.dataset.on : sw.dataset.off;
+            });
+
+            // ---------- Search + category + availability + tag + allergen + signature filters ----------
+            const list = csv => (csv || '').split(',').filter(Boolean);
+
+            function allergenMatch(r, al) {
+                if (!al) return true;
+                if (al === '__unset') return r.dataset.allergenSet === 'no';                              // admin has not filled it in
+                if (al === '__none') return r.dataset.allergenSet === 'yes' && list(r.dataset.allergens).length === 0;
+                return list(r.dataset.allergens).includes(al);                                            // dish contains this allergen
+            }
+
+            function filter() {
+                const q = $('itemSearch').value.trim().toLowerCase();
+                const cat = $('itemCat').value, av = $('itemAvail').value;
+                const tag = $('itemTag').value, al = $('itemAllergen').value, sig = $('itemSig').value;
+                rows().forEach(r => {
+                    const ok = (!q || r.dataset.name.includes(q))
+                        && (!cat || r.dataset.cat === cat)
+                        && (!av || r.dataset.avail === av)
+                        && (!tag || list(r.dataset.tags).includes(tag))
+                        && allergenMatch(r, al)
+                        && (!sig || r.dataset.sig === sig);
+                    r.classList.toggle('d-none', !ok);
+                });
+            }
+            ['input', 'change'].forEach(ev => {
+                ['itemSearch', 'itemCat', 'itemAvail', 'itemTag', 'itemAllergen', 'itemSig']
+                    .forEach(id => $(id).addEventListener(ev, filter));
+            });
+
+            function recount() {
+                const all = rows().length, on = [...rows()].filter(r => r.dataset.avail === 'yes').length;
+                $('itemCount').textContent = all + ' dishes · ' + on + ' available · ' + (all - on) + ' sold out';
+            }
+
+            // ---------- Ask before deleting ----------
+            document.addEventListener('submit', e => {
+                const msg = e.target.dataset && e.target.dataset.confirm;
+                if (msg && !confirm(msg)) e.preventDefault();
+            });
+
+            // ---------- Available / sold-out switch saves straight away ----------
+            $('itemRows').addEventListener('change', async e => {
+                const sw = e.target;
+                if (!sw.classList.contains('item-avail')) return;
+                sw.closest('tr').dataset.avail = sw.checked ? 'yes' : 'no';
+                recount(); filter();
+                try {
+                    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                    const res = await fetch('?handler=ToggleAvailability', {
+                        method: 'POST',
+                        headers: { 'RequestVerificationToken': token, 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({ id: sw.dataset.id, available: sw.checked })
+                    });
+                    if (!res.ok) throw new Error('save failed');
+                } catch (err) {
+                    adm.toast('Could not save the change. Reloading the page…');
+                    setTimeout(() => location.reload(), 1200);
+                }
+            });
+
+            // ---------- Dish form: empty for "Add", filled for "Edit" ----------
+            $('itemModal').addEventListener('show.bs.modal', e => {
+                const b = e.relatedTarget;
+                const d = b && b.dataset.json ? JSON.parse(b.dataset.json) : null;
+                $('itemModalTitle').textContent = d ? 'Edit dish' : 'Add dish';
+                $('iId').value = d ? d.id : '';
+                $('iName').value = d ? d.name : '';
+                $('iCat').value = d ? d.catId : $('iCat').options[0].value;
+                $('iPrice').value = d ? d.price : '';
+                $('iDesc').value = d ? d.desc : '';
+                $('iImage').value = '';
+                $('iAvail').checked = d ? d.avail : true;
+                $('iSig').checked = d ? d.sig : false;
+                document.querySelectorAll('.dish-tag').forEach(cb => cb.checked = !!d && d.tags.includes(cb.value));
+                document.querySelectorAll('.dish-allergen').forEach(cb => cb.checked = !!d && d.allergens.includes(cb.value));
+                $('iNoAllergen').checked = !!d && d.noAllergens;
+                $('iImageHint').classList.toggle('d-none', !d);
+            });
+
+            // "No common allergens" and the allergen boxes exclude each other
+            document.querySelectorAll('.dish-allergen').forEach(cb => cb.addEventListener('change', () => { if (cb.checked) $('iNoAllergen').checked = false; }));
+            $('iNoAllergen').addEventListener('change', e => { if (e.target.checked) document.querySelectorAll('.dish-allergen').forEach(cb => cb.checked = false); });
+
+            // ---------- Promotion form ----------
+            function syncType() {
+                const t = $('pType').value;
+                $('pValue').disabled = t === 'Complimentary';
+                if (t === 'Complimentary') $('pValue').value = '';
+                $('pUnit').textContent = t === 'Percentage' ? '%' : 'RM';
+            }
+            $('pType').addEventListener('change', syncType);
+
+            $('promoModal').addEventListener('show.bs.modal', e => {
+                const b = e.relatedTarget;
+                const d = b && b.dataset.json ? JSON.parse(b.dataset.json) : null;
+                $('promoModalTitle').textContent = d ? 'Edit promotion' : 'Add promotion';
+                $('pId').value = d ? d.id : '';
+                $('pTitle').value = d ? d.title : '';
+                $('pCode').value = d ? d.code : '';
+                $('pLabel').value = d ? d.label : '';
+                $('pDesc').value = d ? d.desc : '';
+                $('pType').value = d ? d.type : 'Percentage';
+                $('pValue').value = d && d.value != null ? d.value : '';
+                $('pStartDay').value = d ? d.startDay : 'Monday';
+                $('pEndDay').value = d ? d.endDay : 'Sunday';
+                $('pFrom').value = d ? d.from : '';
+                $('pUntil').value = d ? d.until : '';
+                $('pAuto').checked = d ? d.auto : false;
+                $('pActive').checked = d ? d.active : true;
+                $('pStartTime').value = d ? d.startTime : '';
+                $('pEndTime').value = d ? d.endTime : '';
+                $('pOrderType').value = d ? d.orderType : 'Any';
+                $('pMinSpend').value = d && d.minSpend != null ? d.minSpend : '';
+                $('pPerCustomer').value = d && d.perCustomer != null ? d.perCustomer : '';
+                $('pTotalUses').value = d && d.totalUses != null ? d.totalUses : '';
+                $('pYearly').checked = d ? d.yearly : false;
+                $('pBirthday').checked = d ? d.birthday : false;
+                document.querySelectorAll('.promo-dish').forEach(cb => {
+                    cb.checked = !!d && d.dishIds.includes(+cb.value);
+                });
+                syncType();
+            });
+
+            // Birthday month only → default to once per customer, resetting every year (the server requires both)
+            $('pBirthday').addEventListener('change', function () {
+                if (!this.checked) return;
+                if ($('pPerCustomer').value === '') $('pPerCustomer').value = 1;
+                $('pYearly').checked = true;
+            });
+        })();
+    </script>
+}
