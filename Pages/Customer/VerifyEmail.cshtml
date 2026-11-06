@@ -1,0 +1,39 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Customer.VerifyEmailModel
+@{
+    ViewData["Title"] = "Verify your email";
+    Layout = "_CustomerAuthLayout";
+}
+
+<h1>Verify your email</h1>
+<p class="md-auth-subtitle">Enter the code sent to <strong>@Model.Email</strong> to finish creating your account</p>
+
+@if (!string.IsNullOrEmpty(Model.InfoMessage))
+{
+    <div class="md-alert-success mb-4" role="status">@Model.InfoMessage</div>
+}
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="md-alert-danger mb-4" role="alert">@Model.ErrorMessage</div>
+}
+
+<form method="post">
+    <input type="hidden" asp-for="Email" />
+
+    <div class="mb-4">
+        <label class="md-label" asp-for="Code">6-digit code</label>
+        <input class="form-control md-input" asp-for="Code" inputmode="numeric" maxlength="6"
+               pattern="[0-9]{6}" placeholder="123456" autocomplete="one-time-code" required autofocus />
+    </div>
+
+    <button type="submit" class="btn btn-md-dark w-100">Verify and create account</button>
+
+    @* formnovalidate: the Resend button works even when the code box is empty *@
+    <p class="md-auth-switch">
+        Didn't get it? Check your Spam folder, or
+        <button type="submit" asp-page-handler="Resend" formnovalidate class="btn btn-link p-0 align-baseline"
+                style="color: var(--md-ink); font-size: inherit;">send a new code</button>
+    </p>
+</form>
+
+<p class="md-auth-switch">Wrong email? <a asp-page="/Customer/Register">Register again</a></p>

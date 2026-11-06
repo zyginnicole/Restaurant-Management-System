@@ -14,18 +14,21 @@ namespace RestaurantManagementSystem.Pages.Customer
     {
         private readonly AuthService _authService;
         private readonly SettingsService _settingsService;
+        private readonly SignUpVerificationService _verificationService;
 
-        public RegisterModel(AuthService authService, SettingsService settingsService)
+        public RegisterModel(AuthService authService, SettingsService settingsService,
+                             SignUpVerificationService verificationService)
         {
             _authService = authService;
             _settingsService = settingsService;
+            _verificationService = verificationService;
         }
 
-        // The form fields (Customer.custName, custEmail, custPhone, DietaryPref, custPassword) bind to this object
+        // The form fields (Customer.custName, custEmail, custPhone, custBirthday, custPassword) bind to this object
         [BindProperty]
         public CustomerModel Customer { get; set; } = new CustomerModel();
 
-        // These three are NOT columns in the Customer table, they only help the form
+        // These are NOT columns in the Customer table, they only help the form
         [BindProperty]
         [Required(ErrorMessage = "Please confirm your password.")]
         [DataType(DataType.Password)]
@@ -114,23 +117,16 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return Page();
             }
 
-            //ticked boxes → saved fields (both the guest-profile and new-account paths below use them)
+            //ticked boxes → saved fields
             Customer.promoOptIn = PromoOptIn;
             Customer.DietaryPref = MenuVocabulary.Join(SelectedPrefs.Where(x => MenuVocabulary.Tags.Contains(x)));
             Customer.Allergies = MenuVocabulary.Join(SelectedAllergies.Where(x => MenuVocabulary.Allergens.Contains(x)));
 
-            //email of a guest profile (staff booked a walk-in with it): activate that profile instead of a new account,
-            //so the guest's reservations are already in it
-            var guestProfile = await _authService.FindGuestProfileAsync(Customer.custEmail);
-            if (guestProfile != null)
-            {
-                await _authService.ActivateGuestProfileAsync(guestProfile, Customer);
-                TempData["SuccessMessage"] = "Your account has been created. Your bookings at the restaurant are already in it. You can now sign in.";
-                return RedirectToPage();
-            }
-
-            //email must not belong to ANY account (customer, staff or admin)
-            if (await _authService.IsEmailTakenAsync(Customer.custEmail))
+            //email must not belong to ANY account (customer, staff or admin).
+            //Exception: a guest profile (staff booked a walk-in with this email) is allowed,
+            //it becomes this customer's account once the email is verified (bookings already in it).
+            bool isGuestProfile = await _authService.FindGuestProfileAsync(Customer.custEmail) != null;
+            if (!isGuestProfile && await _authService.IsEmailTakenAsync(Customer.custEmail))
             {
                 ModelState.AddModelError(
                     "Customer.custEmail",
@@ -138,12 +134,23 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return Page();
             }
 
-            //save: the service trims the fields and hashes the password
-            await _authService.RegisterCustomerAsync(Customer);
+            //NOT saved yet: the details wait in server memory (password hashed) and a 6-digit code is emailed.
+            //The account is only created on the Verify email page, so fake emails never become accounts.
+            var (error, devCode) = await _verificationService.StartAsync(Customer);
+            if (error != null)
+            {
+                ModelState.AddModelError(string.Empty, error);
+                return Page();
+            }
 
-            //show the success pop-up (redirect to itself so refresh won't re-submit the form)
-            TempData["SuccessMessage"] = "Your account has been created. You can now sign in.";
-            return RedirectToPage();
+            //the email is passed in TempData (not the URL)
+            string email = AuthService.NormaliseEmail(Customer.custEmail);
+            TempData["VerifyEmail"] = email;
+            TempData["VerifyInfo"] = devCode == null
+                ? $"We've sent a 6-digit code to {email}. It expires in {SignUpVerificationService.CodeMinutes} minutes."
+                : $"Email isn't set up on this computer, so here is your code for testing: {devCode}";
+
+            return RedirectToPage("/Customer/VerifyEmail");
         }
     }
 }
