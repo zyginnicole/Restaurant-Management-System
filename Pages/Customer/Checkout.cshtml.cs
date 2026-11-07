@@ -123,23 +123,32 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return await FailAsync(custId.Value, "Dine-in is available once our staff have seated you at your table. Please choose takeaway for now.");
             }
 
-            // 1. Sync session cart with posted items
+            // 1. The page must show the same cart as the saved one. If they differ (a dish added, removed or
+            //    changed in another tab or window), NOTHING is ordered: the page is shown again with the saved cart.
             var cart = HttpContext.Session.GetCart();
+            var saved = cart.Where(c => c.Quantity > 0)
+                .GroupBy(c => c.MenuId)
+                .ToDictionary(g => g.Key, g => Math.Min(g.Sum(c => c.Quantity), MaxQuantity));
+            var shown = Items.Where(i => i.Quantity > 0)
+                .GroupBy(i => i.MenuId)
+                .ToDictionary(g => g.Key, g => Math.Min(g.Sum(i => i.Quantity), MaxQuantity));
+            bool sameCart = saved.Count == shown.Count
+                            && saved.All(kv => shown.TryGetValue(kv.Key, out var qty) && qty == kv.Value);
+
             foreach (var line in cart)
             {
                 var posted = Items.FirstOrDefault(i => i.MenuId == line.MenuId);
                 if (posted == null) continue;
-                line.Quantity = Math.Clamp(posted.Quantity, 0, MaxQuantity + 1);
+
+                // kitchen notes typed on this page are kept either way
                 string? note = posted.ItemRemark?.Trim();
                 line.Note = string.IsNullOrEmpty(note) ? null : (note.Length > 200 ? note.Substring(0, 200) : note);
+
+                // quantities are only taken from the page when it matches the saved cart
+                if (sameCart) line.Quantity = Math.Clamp(posted.Quantity, 0, MaxQuantity + 1);   // +1 so "too many" is still noticed below
             }
 
-            // The form must show the same dishes as the saved cart. If the cart was changed in another tab
-            // (a dish added or removed there), show the page again with the current cart instead of ordering
-            // something the customer never saw on this page.
-            bool addedElsewhere = cart.Any(c => c.Quantity > 0 && !Items.Any(i => i.MenuId == c.MenuId));
-            bool removedElsewhere = Items.Any(i => i.Quantity > 0 && !cart.Any(c => c.MenuId == i.MenuId));
-            if (addedElsewhere || removedElsewhere)
+            if (!sameCart)
             {
                 HttpContext.Session.SaveCart(cart.Select(l => new CartItem
                 {
@@ -147,7 +156,7 @@ namespace RestaurantManagementSystem.Pages.Customer
                     Quantity = Math.Min(l.Quantity, MaxQuantity),
                     Note = l.Note
                 }).ToList());
-                return await FailAsync(custId.Value, "Your cart was changed in another tab, so it has been refreshed below. Please check it and place your order again.");
+                return await FailAsync(custId.Value, "Your cart was changed in another tab or window, so it has been refreshed below. Please check it and place your order again.");
             }
 
             var lines = cart.Where(i => i.Quantity > 0).ToList();
