@@ -182,6 +182,10 @@
                     <li class="md-guest md-row-link @key" data-id="@r.reservationID" data-code="@code" data-name="@name" data-guests="@r.partySize"
                         data-date="@r.reservationDateTime.ToString("yyyy-MM-dd", inv)" data-time="@time" data-table="@tableNo" data-table-id="@r.tableID" data-today="true"
                         data-status="@r.reservationStatus" data-walkin="false" data-booked="@StaffReservationText.Booked(r)"
+                        data-can-seat="@(ReservationService.CanSeatNow(r) ? "true" : "false")"
+                        data-can-noshow="@(ReservationService.CanMarkNoShowNow(r, Model.Settings.lateHoldMinutes) ? "true" : "false")"
+                        data-seat-from="@ReservationService.SeatFrom(r).ToString("HH:mm", inv)"
+                        data-noshow-from="@ReservationService.NoShowFrom(r, Model.Settings.lateHoldMinutes).ToString("HH:mm", inv)"
                         data-request="@(ended ? "" : r.specialRequest)" data-details="@name · @time · @r.partySize guests · @tableNo @area"
                         data-free="@(ended ? "" : StaffReservationText.NextOnTable(r, Model.Today, Model.Settings.diningMinutes))">
                         <div class="md-guest-time">@time<span>@(r.reservationDateTime.Hour < 16 ? "Lunch" : "Tonight")</span></div>

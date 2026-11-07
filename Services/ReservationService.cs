@@ -25,6 +25,26 @@ namespace RestaurantManagementSystem.Services
 
         //Last moment staff can confirm a Pending request
         public static DateTime PendingDeadline(Reservation booking) => booking.reservationDateTime.AddMinutes(-PendingDeadlineMinutes);
+
+        //Guests who arrive early can be seated this many minutes before the booking time (not earlier)
+        public const int EarlySeatMinutes = 15;
+
+        //First moment staff can seat a Confirmed booking (15 minutes before the booking time)
+        public static DateTime SeatFrom(Reservation booking) => booking.reservationDateTime.AddMinutes(-EarlySeatMinutes);
+
+        //First moment staff can mark a Confirmed booking as no-show (booking time + Admin > Settings lateHoldMinutes)
+        public static DateTime NoShowFrom(Reservation booking, int lateHoldMinutes) => booking.reservationDateTime.AddMinutes(lateHoldMinutes);
+
+        //Used by the staff pages to show the Seat / No-show buttons only when the server will accept them
+        public static bool CanSeatNow(Reservation booking) =>
+            booking.reservationStatus == ReservationStatus.Confirmed
+            && booking.reservationDateTime.Date == DateTime.Today
+            && DateTime.Now >= SeatFrom(booking);
+
+        public static bool CanMarkNoShowNow(Reservation booking, int lateHoldMinutes) =>
+            booking.reservationStatus == ReservationStatus.Confirmed
+            && booking.reservationDateTime.Date == DateTime.Today
+            && DateTime.Now >= NoShowFrom(booking, lateHoldMinutes);
         private readonly ApplicationDbContext _db;
         private readonly SettingsService _settings;
 
@@ -546,7 +566,8 @@ namespace RestaurantManagementSystem.Services
             return null;
         }
 
-        //12. Confirmed → Seated, table Occupied. Only on the booking's day, and only when the table is empty.
+        //12. Confirmed → Seated, table Occupied. Only on the booking's day, from 15 minutes before the booking time
+        //(EarlySeatMinutes), and only when the table is empty.
         //(Seated → Completed happens in Billing when the order is paid; the table goes back to Available there.)
         public async Task<string?> SeatAsync(int reservationId, int? staffId)
         {
@@ -555,6 +576,9 @@ namespace RestaurantManagementSystem.Services
 
             if (booking.reservationDateTime.Date != DateTime.Today)
                 return $"{Code(booking)} is for {booking.reservationDateTime:d MMM}. Guests can only be seated on the day.";
+
+            if (DateTime.Now < SeatFrom(booking))
+                return $"{Code(booking)} can be seated from {SeatFrom(booking):HH:mm} ({EarlySeatMinutes} minutes before the booking time).";
 
             var table = booking.DiningTable!;
             if (await IsTableOccupiedAsync(table, booking.reservationID))
@@ -583,7 +607,7 @@ namespace RestaurantManagementSystem.Services
             if (booking == null) return error;
 
             var settings = await _settings.GetAsync();
-            var from = booking.reservationDateTime.AddMinutes(settings.lateHoldMinutes);
+            var from = NoShowFrom(booking, settings.lateHoldMinutes);
             if (DateTime.Now < from)
                 return $"{Code(booking)} can be marked as no-show from {from:HH:mm} ({settings.lateHoldMinutes} minutes after the booking time).";
 
