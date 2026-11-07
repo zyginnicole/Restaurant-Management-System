@@ -237,34 +237,56 @@
                     : '';
                 saveError.classList.toggle('d-none', messages.length === 0);
             }
-            function saveQuantity(item) {
+            // Sends one dish's quantity and note to the saved cart. Never rejects: a failure is shown in the red notice.
+            function sendSave(item) {
                 var menuId = item.querySelector('input[name$=".menuId"]').value;
                 var qty = parseInt(item.querySelector('.md-qty input').value, 10) || 0;
                 var noteInput = item.querySelector('.md-cart-note');
                 var note = noteInput ? noteInput.value : '';
-                clearTimeout(timers[menuId]);
                 var dishName = item.querySelector('.md-cart-name').textContent.trim();
-                timers[menuId] = setTimeout(function () {
-                    fetch('/Customer/Menu?handler=SetQuantity', {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'RequestVerificationToken': token ? token.value : ''
-                        },
-                        body: 'menuId=' + encodeURIComponent(menuId) + '&quantity=' + qty + '&note=' + encodeURIComponent(note)
-                    })
-                        .then(function (response) {
-                            return response.json().catch(function () { return {}; }).then(function (data) {
-                                if (response.ok && data.ok !== false) { saveFailed(menuId, null); return; }
-                                saveFailed(menuId, 'We could not save your change to ' + dishName + ' (' + (data.message || 'error ' + response.status) + ').');
-                            });
-                        })
-                        .catch(function () {
-                            saveFailed(menuId, 'We could not save your change to ' + dishName + '. Please check your connection.');
+                return fetch('/Customer/Menu?handler=SetQuantity', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'RequestVerificationToken': token ? token.value : ''
+                    },
+                    body: 'menuId=' + encodeURIComponent(menuId) + '&quantity=' + qty + '&note=' + encodeURIComponent(note)
+                })
+                    .then(function (response) {
+                        return response.json().catch(function () { return {}; }).then(function (data) {
+                            if (response.ok && data.ok !== false) { saveFailed(menuId, null); return; }
+                            saveFailed(menuId, 'We could not save your change to ' + dishName + ' (' + (data.message || 'error ' + response.status) + ').');
                         });
-                }, 300);
+                    })
+                    .catch(function () {
+                        saveFailed(menuId, 'We could not save your change to ' + dishName + '. Please check your connection.');
+                    });
             }
+
+            // A change is sent 300 ms after the last keystroke / click
+            var pendingItems = {};                // dish id -> cart row whose change has not been sent yet
+            function saveQuantity(item) {
+                var menuId = item.querySelector('input[name$=".menuId"]').value;
+                clearTimeout(timers[menuId]);
+                pendingItems[menuId] = item;
+                timers[menuId] = setTimeout(function () { delete pendingItems[menuId]; sendSave(item); }, 300);
+            }
+
+            // Place order: first send any change that is still waiting, then submit, so the server sees the same cart as the page
+            var submitting = false;
+            form.addEventListener('submit', function (event) {
+                var ids = Object.keys(pendingItems);
+                if (ids.length === 0 || submitting) return;
+                event.preventDefault();
+                submitting = true;
+                Promise.all(ids.map(function (id) {
+                    clearTimeout(timers[id]);
+                    var item = pendingItems[id];
+                    delete pendingItems[id];
+                    return sendSave(item);
+                })).then(function () { form.submit(); });
+            });
 
             // Promotions for the current quantities and order type, worked out on the server with the
             // Promotion module's rules (?handler=Price). The latest answer wins if several are in flight.
