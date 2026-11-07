@@ -437,7 +437,10 @@ namespace RestaurantManagementSystem.Pages.Customer
                     .FirstOrDefaultAsync(h => h.restaurantID == restaurant.restaurantID && h.dayOfWeek == day.DayOfWeek);
                 if (hour == null || hour.isClosed) continue;
 
-                for (var t = hour.openTime; t <= hour.closeTime; t += step)
+                // Calculate the last order time based on the restaurant's last call setting
+                var lastOrder = RestaurantHours.LastCall(hour, restaurant.lastCallMinutes);
+
+                for (var t = hour.openTime; t <= lastOrder; t += step)
                 {
                     var slot = day + t;
                     if (slot < earliest) continue;
@@ -449,13 +452,6 @@ namespace RestaurantManagementSystem.Pages.Customer
                     });
                 }
             }
-        }
-
-        private async Task<IActionResult> FailAsync(int custId, string message)
-        {
-            ModelState.AddModelError(string.Empty, message);
-            await LoadPageAsync(custId);
-            return Page();
         }
 
         private async Task<string?> CheckPickupTimeAsync(DateTime pickup)
@@ -474,12 +470,21 @@ namespace RestaurantManagementSystem.Pages.Customer
                 .FirstOrDefaultAsync(h => h.restaurantID == restaurant.restaurantID && h.dayOfWeek == pickup.DayOfWeek);
             if (hour == null) return null;
 
-            if (hour.isClosed || pickup.TimeOfDay < hour.openTime || pickup.TimeOfDay > hour.closeTime)
+            var lastOrder = RestaurantHours.LastCall(hour, restaurant.lastCallMinutes);
+
+            if (hour.isClosed || pickup.TimeOfDay < hour.openTime || pickup.TimeOfDay > lastOrder)
             {
-                return "We are closed at that time. Please choose a pick-up time within opening hours.";
+                return $"We are closed or past the last order time ({lastOrder:hh\\:mm}) for that day. Please choose a pick-up time within operating hours.";
             }
 
             return null;
+        }
+
+        private async Task<IActionResult> FailAsync(int custId, string message)
+        {
+            ModelState.AddModelError(string.Empty, message);
+            await LoadPageAsync(custId);
+            return Page();
         }
     }
 }
