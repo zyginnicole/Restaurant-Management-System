@@ -13,11 +13,14 @@ namespace RestaurantManagementSystem.Pages.Customer
     {
         private readonly ProfileService _profileService;
         private readonly SettingsService _settingsService;
+        private readonly EmailChangeService _emailChangeService;
 
-        public ProfileModel(ProfileService profileService, SettingsService settingsService)
+        public ProfileModel(ProfileService profileService, SettingsService settingsService,
+                            EmailChangeService emailChangeService)
         {
             _profileService = profileService;
             _settingsService = settingsService;
+            _emailChangeService = emailChangeService;
         }
 
         // What the form shows: the saved values, or what the user typed after a failed save
@@ -49,14 +52,42 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             if (ModelState.IsValid)
             {
-                string? error = await _profileService.UpdateCustomerProfileAsync(custId.Value, input);
+                CustomerModel? current = await _profileService.GetCustomerAsync(custId.Value);
+                if (current == null)
+                {
+                    return SignOutAndGoToLogin();
+                }
+
+                // A NEW email is not saved here. It is checked first, then a code is sent to it
+                // and it is only saved on the Verify new email page.
+                string newEmail = AuthService.NormaliseEmail(input.custEmail);
+                bool emailChanged = newEmail != AuthService.NormaliseEmail(current.custEmail);
+
+                string? error = emailChanged ? await _emailChangeService.CheckNewEmailAsync(newEmail) : null;
+                error ??= await _profileService.UpdateCustomerProfileAsync(custId.Value, input);
+
                 if (error == null)
                 {
                     // keep the sidebar and dashboard name in step with the new name
                     HttpContext.Session.UpdateUserName(input.custName.Trim());
 
-                    TempData["ProfileMessage"] = "Your profile has been saved.";
-                    return RedirectToPage();
+                    if (!emailChanged)
+                    {
+                        TempData["ProfileMessage"] = "Your profile has been saved.";
+                        return RedirectToPage();
+                    }
+
+                    var (sendError, devCode) = await _emailChangeService.StartAsync(custId.Value, newEmail);
+                    if (sendError == null)
+                    {
+                        TempData["VerifyNewEmailInfo"] = devCode == null
+                            ? $"Your other changes have been saved. We've sent a 6-digit code to {newEmail}. It expires in {EmailChangeService.CodeMinutes} minutes."
+                            : $"Your other changes have been saved. Email isn't set up on this computer, so here is your code for testing: {devCode}";
+                        return RedirectToPage("/Customer/VerifyNewEmail");
+                    }
+
+                    // the other details are saved; only the email change couldn't start
+                    error = "Your other changes were saved, but your email was not changed. " + sendError;
                 }
 
                 ModelState.AddModelError(string.Empty, error);
