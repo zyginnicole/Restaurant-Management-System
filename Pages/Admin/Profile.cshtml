@@ -12,7 +12,6 @@
 
     // Values come from the signed-in administrator (see ProfileModel)
     var systemRole = "Administrator";      // always Administrator here (Admin table)
-    var lastSignIn = "Not recorded yet";   // no field in the Admin table yet
     string initials = NameFormatter.GetInitials(Model.DisplayName);
 
     // Open the Change password pop-up again when OnPostPassword returns Page() with errors
@@ -91,8 +90,9 @@
                         <input class="form-control md-input md-input-locked" id="systemRole" type="text" readonly tabindex="-1" value="@systemRole" />
                     </div>
                     <div class="col-sm-6">
-                        <label class="md-label" for="lastSignIn">Last sign-in</label>
-                        <input class="form-control md-input md-input-locked" id="lastSignIn" type="text" readonly tabindex="-1" value="@lastSignIn" />
+                        @* Admin accounts can't be deactivated or deleted, so a signed-in admin is always active *@
+                        <label class="md-label" for="accountStatus">Account status</label>
+                        <input class="form-control md-input md-input-locked" id="accountStatus" type="text" readonly tabindex="-1" value="Active" />
                     </div>
                 </div>
                 <p class="md-hint mb-0">Administrator accounts are created on the Accounts page. If you change your email, use the new one next time you sign in.</p>
