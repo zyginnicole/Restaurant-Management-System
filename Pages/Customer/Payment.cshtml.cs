@@ -47,6 +47,8 @@ namespace RestaurantManagementSystem.Pages.Customer
         public decimal ServiceChargePct { get; set; } = 10m;
         public decimal SstPct { get; set; } = 6m;
 
+        public string RestaurantName { get; set; } = string.Empty;
+
         // Payment methods the admin has switched on (Admin > Settings > Billing & payments)
         public bool AcceptCard { get; set; } = true;
         public bool AcceptFpx { get; set; } = true;
@@ -287,6 +289,16 @@ namespace RestaurantManagementSystem.Pages.Customer
             AcceptCard = settings.acceptCard;
             AcceptFpx = settings.acceptFpx;
             AcceptEwallet = settings.acceptEwallet;
+
+            // Restaurant name as set by the admin (Admin > Settings > General, the same name as the page header);
+            // if that is empty, the name on the Restaurants table; last resort: a neutral wording
+            string? name = settings.restaurantName?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                var restaurant = await _context.Restaurants.AsNoTracking().OrderBy(r => r.restaurantID).FirstOrDefaultAsync();
+                name = restaurant?.restaurantName?.Trim();
+            }
+            RestaurantName = string.IsNullOrWhiteSpace(name) ? "Our restaurant" : name;
 
             CustomerName = order.Customer?.custName ?? string.Empty;
             TableNumber = order.DiningTable?.tableNumber;
