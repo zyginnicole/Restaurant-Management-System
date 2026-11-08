@@ -6,7 +6,7 @@ using CustomerModel = RestaurantManagementSystem.Model.Customer;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
-    // My profile for customers: personal details, dining preferences and password.
+    // My profile for customers: personal details, dining preferences, password and deleting the account.
     // Only signed-in customers reach this page (RequireRoleFilter on /Customer),
     // and the customer ID always comes from the session, never from the URL or the form.
     public class ProfileModel : PageModel
@@ -14,13 +14,20 @@ namespace RestaurantManagementSystem.Pages.Customer
         private readonly ProfileService _profileService;
         private readonly SettingsService _settingsService;
         private readonly EmailChangeService _emailChangeService;
+        private readonly AccountService _accountService;
+        private readonly PasswordService _passwordService;
+        private readonly RememberMeService _rememberMeService;
 
         public ProfileModel(ProfileService profileService, SettingsService settingsService,
-                            EmailChangeService emailChangeService)
+                            EmailChangeService emailChangeService, AccountService accountService,
+                            PasswordService passwordService, RememberMeService rememberMeService)
         {
             _profileService = profileService;
             _settingsService = settingsService;
             _emailChangeService = emailChangeService;
+            _accountService = accountService;
+            _passwordService = passwordService;
+            _rememberMeService = rememberMeService;
         }
 
         // What the form shows: the saved values, or what the user typed after a failed save
@@ -131,6 +138,47 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             TempData["ProfileMessage"] = "Your password has been updated.";
             return RedirectToPage();
+        }
+
+        // Delete account pop-up: the current password confirms it is really them (someone using an unlocked,
+        // signed-in device can't delete the account). Then AccountService erases the personal details,
+        // keeps past bookings and orders as "Deleted customer", and emails a confirmation to the old address.
+        public async Task<IActionResult> OnPostDeleteAccountAsync(string? deletePassword)
+        {
+            int? custId = HttpContext.Session.GetUserId();
+            if (custId == null)
+            {
+                return SignOutAndGoToLogin();
+            }
+
+            CustomerModel? customer = await _profileService.GetCustomerAsync(custId.Value);
+            if (customer == null)
+            {
+                return SignOutAndGoToLogin();
+            }
+
+            if (string.IsNullOrEmpty(deletePassword) || !_passwordService.VerifyPassword(customer.custPassword, deletePassword))
+            {
+                ModelState.AddModelError(string.Empty, "Incorrect password. Your account was not deleted.");
+            }
+            else
+            {
+                var (error, _) = await _accountService.CloseCustomerAccountAsync(custId.Value, closedByAdmin: false);
+                if (error == null)
+                {
+                    // signed out everywhere on this device, including "Remember me"
+                    HttpContext.Session.SignOutUser();
+                    _rememberMeService.Clear(HttpContext);
+
+                    TempData["LoginMessage"] = "Your account has been deleted and your personal details removed. Thank you for dining with us.";
+                    return RedirectToPage("/Customer/Login");
+                }
+
+                ModelState.AddModelError(string.Empty, error);
+            }
+
+            // the pop-up opens again by itself and shows the error
+            return await LoadPageAsync(fillForm: true) ? Page() : SignOutAndGoToLogin();
         }
 
         // Loads what every version of the page needs. Returns false if the account no longer exists.
