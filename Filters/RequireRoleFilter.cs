@@ -1,15 +1,22 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using RestaurantManagementSystem.Helpers;
 
 namespace RestaurantManagementSystem.Filters
 {
     // Runs before every page in a protected folder (set up in Program.cs).
-    // If the signed-in user's role is not the one this folder needs, they are sent to the login page.
-    // Pages marked [AllowAnonymous] (login, register) are skipped.
+    // Pages marked [AllowAnonymous] (login, register, ...) are skipped.
+    // - Right role             → the page runs (and the browser is told not to keep a copy).
+    // - Not signed in          → the login page, with a message ("Please sign in" or "signed out after X minutes")
+    //                            and returnUrl, so after signing in they come back to the page they wanted.
+    // - Signed in, wrong role  → the Access denied page (e.g. a customer opening /Admin/Accounts).
     public class RequireRoleFilter : IPageFilter
     {
+        // Set by the idle-timeout code in Program.cs when it signs someone out
+        public const string SessionExpiredKey = "SessionExpiredMinutes";
+
         private readonly string _requiredRole;
         private readonly string _loginPage;
 
@@ -34,19 +41,41 @@ namespace RestaurantManagementSystem.Filters
                 return;
             }
 
-            string? role = context.HttpContext.Session.GetUserRole();
+            HttpContext http = context.HttpContext;
+            string? role = http.Session.GetUserRole();
 
-            if (role != _requiredRole)
+            if (role == _requiredRole)
             {
-                // Not signed in, or signed in with the wrong role -> back to the login page.
-                // Setting context.Result stops the page from running at all.
-                context.Result = new RedirectToPageResult(_loginPage);
+                // Allowed. Tell the browser not to keep a copy of this private page,
+                // so pressing Back after signing out cannot show it again.
+                http.Response.Headers.CacheControl = "no-store, no-cache";
                 return;
             }
 
-            // Allowed. Tell the browser not to keep a copy of this private page,
-            // so pressing Back after signing out cannot show it again.
-            context.HttpContext.Response.Headers.CacheControl = "no-store, no-cache";
+            if (role == null)
+            {
+                // Not signed in → login page with a message (TempData survives the redirect)
+                string notice = http.Items.TryGetValue(SessionExpiredKey, out object? minutes)
+                    ? $"You were signed out after {minutes} minutes without activity. Please sign in again."
+                    : "Please sign in to continue.";
+
+                ITempDataDictionary tempData = http.RequestServices
+                    .GetRequiredService<ITempDataDictionaryFactory>()
+                    .GetTempData(http);
+                tempData["LoginNotice"] = notice;
+
+                // Come back here after signing in (only for normal page visits, not form posts)
+                string? returnUrl = HttpMethods.IsGet(http.Request.Method)
+                    ? http.Request.Path + http.Request.QueryString
+                    : null;
+
+                // Setting context.Result stops the page from running at all
+                context.Result = new RedirectToPageResult(_loginPage, new { returnUrl });
+                return;
+            }
+
+            // Signed in, but this area belongs to another role
+            context.Result = new RedirectToPageResult("/AccessDenied");
         }
 
         public void OnPageHandlerExecuted(PageHandlerExecutedContext context)

@@ -1,0 +1,53 @@
+﻿@page
+@model RestaurantManagementSystem.Pages.Customer.VerifyNewEmailModel
+@{
+    ViewData["Title"] = "Confirm new email";
+    ViewData["ActiveNav"] = "Profile";
+    ViewData["Eyebrow"] = "Account";
+    ViewData["Heading"] = "Confirm your new email";
+    Layout = "_CustomerLayout";
+}
+
+@if (!string.IsNullOrEmpty(Model.InfoMessage))
+{
+    <div class="md-alert-success md-section" role="status"><i class="bi bi-check-circle me-2"></i>@Model.InfoMessage</div>
+}
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="md-alert-danger md-section" role="alert"><i class="bi bi-exclamation-circle me-2"></i>@Model.ErrorMessage</div>
+}
+
+<section class="md-card md-section" style="max-width: 560px;">
+    <div class="md-card-header">
+        <span class="md-card-label">Email change</span>
+    </div>
+    <div class="md-card-body">
+        @if (Model.NewEmail != null)
+        {
+            <p class="mb-3">
+                Enter the 6-digit code we sent to <strong>@Model.NewEmail</strong>.
+                Until you confirm, your account keeps <strong>@Model.CurrentEmail</strong>.
+            </p>
+
+            <form method="post">
+                <label class="md-label" for="Code">6-digit code</label>
+                <input class="form-control md-input mb-3" id="Code" name="Code" value="@Model.Code" inputmode="numeric" maxlength="6"
+                       pattern="[0-9]{6}" placeholder="123456" autocomplete="one-time-code" required autofocus />
+
+                @* formnovalidate: Resend and Keep work even when the code box is empty *@
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-md-dark">Confirm new email</button>
+                    <button type="submit" asp-page-handler="Resend" formnovalidate class="btn md-btn-outline">Send a new code</button>
+                    <button type="submit" asp-page-handler="Cancel" formnovalidate class="btn md-btn-outline">Keep my current email</button>
+                </div>
+            </form>
+
+            <p class="md-hint mt-3 mb-0">Didn't get it? Check your Spam folder. The code expires in @RestaurantManagementSystem.Services.EmailChangeService.CodeMinutes minutes.</p>
+        }
+        else
+        {
+            <p class="mb-3">There is no email change waiting. Your email is <strong>@Model.CurrentEmail</strong>.</p>
+            <a class="btn btn-md-dark" asp-page="/Customer/Profile">Back to Profile</a>
+        }
+    </div>
+</section>

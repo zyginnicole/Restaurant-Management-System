@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using RestaurantManagementSystem.Helpers;
+using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages
 {
@@ -9,6 +10,13 @@ namespace RestaurantManagementSystem.Pages
     // token is checked, so another website cannot sign the user out with a link.
     public class LogoutModel : PageModel
     {
+        private readonly RememberMeService _rememberMeService;
+
+        public LogoutModel(RememberMeService rememberMeService)
+        {
+            _rememberMeService = rememberMeService;
+        }
+
         // Typing /Logout in the address bar does NOT sign anyone out
         // (only the pop-up's POST does) – send the person back to their own area
         public IActionResult OnGet()
@@ -28,6 +36,7 @@ namespace RestaurantManagementSystem.Pages
             string? role = HttpContext.Session.GetUserRole();
 
             HttpContext.Session.SignOutUser();
+            _rememberMeService.Clear(HttpContext);   // otherwise "Remember me" would sign them straight back in
 
             if (role == UserRoles.Staff || role == UserRoles.Admin)
             {

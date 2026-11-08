@@ -6,18 +6,28 @@ using CustomerModel = RestaurantManagementSystem.Model.Customer;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
-    // My profile for customers: personal details, dining preferences and password.
+    // My profile for customers: personal details, dining preferences, password and deleting the account.
     // Only signed-in customers reach this page (RequireRoleFilter on /Customer),
     // and the customer ID always comes from the session, never from the URL or the form.
     public class ProfileModel : PageModel
     {
         private readonly ProfileService _profileService;
         private readonly SettingsService _settingsService;
+        private readonly EmailChangeService _emailChangeService;
+        private readonly AccountService _accountService;
+        private readonly PasswordService _passwordService;
+        private readonly RememberMeService _rememberMeService;
 
-        public ProfileModel(ProfileService profileService, SettingsService settingsService)
+        public ProfileModel(ProfileService profileService, SettingsService settingsService,
+                            EmailChangeService emailChangeService, AccountService accountService,
+                            PasswordService passwordService, RememberMeService rememberMeService)
         {
             _profileService = profileService;
             _settingsService = settingsService;
+            _emailChangeService = emailChangeService;
+            _accountService = accountService;
+            _passwordService = passwordService;
+            _rememberMeService = rememberMeService;
         }
 
         // What the form shows: the saved values, or what the user typed after a failed save
@@ -49,14 +59,42 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             if (ModelState.IsValid)
             {
-                string? error = await _profileService.UpdateCustomerProfileAsync(custId.Value, input);
+                CustomerModel? current = await _profileService.GetCustomerAsync(custId.Value);
+                if (current == null)
+                {
+                    return SignOutAndGoToLogin();
+                }
+
+                // A NEW email is not saved here. It is checked first, then a code is sent to it
+                // and it is only saved on the Verify new email page.
+                string newEmail = AuthService.NormaliseEmail(input.custEmail);
+                bool emailChanged = newEmail != AuthService.NormaliseEmail(current.custEmail);
+
+                string? error = emailChanged ? await _emailChangeService.CheckNewEmailAsync(newEmail) : null;
+                error ??= await _profileService.UpdateCustomerProfileAsync(custId.Value, input);
+
                 if (error == null)
                 {
                     // keep the sidebar and dashboard name in step with the new name
                     HttpContext.Session.UpdateUserName(input.custName.Trim());
 
-                    TempData["ProfileMessage"] = "Your profile has been saved.";
-                    return RedirectToPage();
+                    if (!emailChanged)
+                    {
+                        TempData["ProfileMessage"] = "Your profile has been saved.";
+                        return RedirectToPage();
+                    }
+
+                    var (sendError, devCode) = await _emailChangeService.StartAsync(custId.Value, newEmail);
+                    if (sendError == null)
+                    {
+                        TempData["VerifyNewEmailInfo"] = devCode == null
+                            ? $"Your other changes have been saved. We've sent a 6-digit code to {newEmail}. It expires in {EmailChangeService.CodeMinutes} minutes."
+                            : $"Your other changes have been saved. Email isn't set up on this computer, so here is your code for testing: {devCode}";
+                        return RedirectToPage("/Customer/VerifyNewEmail");
+                    }
+
+                    // the other details are saved; only the email change couldn't start
+                    error = "Your other changes were saved, but your email was not changed. " + sendError;
                 }
 
                 ModelState.AddModelError(string.Empty, error);
@@ -100,6 +138,47 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             TempData["ProfileMessage"] = "Your password has been updated.";
             return RedirectToPage();
+        }
+
+        // Delete account pop-up: the current password confirms it is really them (someone using an unlocked,
+        // signed-in device can't delete the account). Then AccountService erases the personal details,
+        // keeps past bookings and orders as "Deleted customer", and emails a confirmation to the old address.
+        public async Task<IActionResult> OnPostDeleteAccountAsync(string? deletePassword)
+        {
+            int? custId = HttpContext.Session.GetUserId();
+            if (custId == null)
+            {
+                return SignOutAndGoToLogin();
+            }
+
+            CustomerModel? customer = await _profileService.GetCustomerAsync(custId.Value);
+            if (customer == null)
+            {
+                return SignOutAndGoToLogin();
+            }
+
+            if (string.IsNullOrEmpty(deletePassword) || !_passwordService.VerifyPassword(customer.custPassword, deletePassword))
+            {
+                ModelState.AddModelError(string.Empty, "Incorrect password. Your account was not deleted.");
+            }
+            else
+            {
+                var (error, _) = await _accountService.CloseCustomerAccountAsync(custId.Value, closedByAdmin: false);
+                if (error == null)
+                {
+                    // signed out everywhere on this device, including "Remember me"
+                    HttpContext.Session.SignOutUser();
+                    _rememberMeService.Clear(HttpContext);
+
+                    TempData["LoginMessage"] = "Your account has been deleted and your personal details removed. Thank you for dining with us.";
+                    return RedirectToPage("/Customer/Login");
+                }
+
+                ModelState.AddModelError(string.Empty, error);
+            }
+
+            // the pop-up opens again by itself and shows the error
+            return await LoadPageAsync(fillForm: true) ? Page() : SignOutAndGoToLogin();
         }
 
         // Loads what every version of the page needs. Returns false if the account no longer exists.
