@@ -21,11 +21,11 @@
 
 <div class="md-portal-tabs" role="tablist" aria-label="Sign in as">
     <button type="button" class="md-portal-tab @(adminTab ? "" : "active")" role="tab" aria-selected="@(adminTab ? "false" : "true")"
-            data-role="Staff" data-title="Staff Portal" data-placeholder="name@maisondoree.my">
+            data-role="Staff" data-title="Staff Portal" data-placeholder="name@lumiere.my">
         Staff
     </button>
     <button type="button" class="md-portal-tab @(adminTab ? "active" : "")" role="tab" aria-selected="@(adminTab ? "true" : "false")"
-            data-role="Admin" data-title="Administration" data-placeholder="admin@maisondoree.my">
+            data-role="Admin" data-title="Administration" data-placeholder="admin@lumiere.my">
         Administrator
     </button>
 </div>
@@ -56,7 +56,7 @@
         <div class="mb-3">
             <label class="md-label" for="email">Email address</label>
             <input class="form-control md-input md-input-dark" id="email" name="email" type="email" value="@Model.Email"
-                   placeholder="@(adminTab ? "admin@maisondoree.my" : "name@maisondoree.my")" autocomplete="username" required />
+                   placeholder="@(adminTab ? "admin@lumiere.my" : "name@lumiere.my")" autocomplete="username" required />
         </div>
 
         <div class="mb-4">
