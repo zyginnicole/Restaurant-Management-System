@@ -11,10 +11,16 @@
 <h1>Welcome back</h1>
 <p class="md-auth-subtitle">Sign in to your member account</p>
 
-@* Green message after a password reset (set by ResetPassword) *@
+@* Green message after a password reset, sign-up verification or deleted account (TempData["LoginMessage"]) *@
 @if (TempData["LoginMessage"] is string loginMessage)
 {
     <div class="md-alert-success mb-4" role="status">@loginMessage</div>
+}
+
+@* Blue notice from RequireRoleFilter: "Please sign in to continue" or "signed out after X minutes without activity" *@
+@if (TempData["LoginNotice"] is string loginNotice)
+{
+    <div class="md-note-box md-note-box-info mb-4" role="status">@loginNotice</div>
 }
 
 @* Error message from the PageModel: wrong details, attempts left, or account locked *@
@@ -26,6 +32,9 @@
 }
 
 <form method="post">
+    @* The page to go back to after signing in (only pages inside /Customer/ are accepted) *@
+    <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+
     <div class="mb-3">
         <label class="md-label" asp-for="Customer.custEmail">Email address</label>
         <input class="form-control md-input" asp-for="Customer.custEmail" type="email"
@@ -49,8 +58,9 @@
     </div>
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <div class="form-check">
-            <input class="form-check-input" id="rememberMe" name="rememberMe" type="checkbox" value="true" />
+        @* Remember me: stay signed in on this device for 30 days (RememberMeService). Don't tick on a shared computer. *@
+        <div class="form-check" title="Stay signed in on this device for 30 days. Don't use on a shared computer.">
+            <input class="form-check-input" id="rememberMe" name="RememberMe" type="checkbox" value="true" checked="@Model.RememberMe" />
             <label class="form-check-label" for="rememberMe">Remember me</label>
         </div>
         <a asp-page="/Customer/ForgotPassword" class="small">Forgot password?</a>

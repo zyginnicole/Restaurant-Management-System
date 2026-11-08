@@ -31,6 +31,10 @@ namespace RestaurantManagementSystem.Pages.Staff
         [BindProperty]
         public string Password { get; set; } = string.Empty;
 
+        // The page they tried to open before signing in (set by RequireRoleFilter), e.g. /Admin/Accounts
+        [BindProperty(SupportsGet = true)]
+        public string? ReturnUrl { get; set; }
+
         // Shown in the red alert box when sign-in fails
         public string? ErrorMessage { get; set; }
 
@@ -45,6 +49,12 @@ namespace RestaurantManagementSystem.Pages.Staff
             if (HttpContext.Session.IsSignedInAs(UserRoles.Staff))
             {
                 return RedirectToPage("/Staff/Dashboard");
+            }
+
+            // coming from an /Admin page → open the Administrator tab
+            if (ReturnUrl != null && ReturnUrl.StartsWith("/Admin/", StringComparison.OrdinalIgnoreCase))
+            {
+                Role = UserRoles.Admin;
             }
 
             return Page();
@@ -72,7 +82,15 @@ namespace RestaurantManagementSystem.Pages.Staff
             // clear any old session, then store user ID + role + name
             HttpContext.Session.SignInUser(result.UserId, result.Role, result.UserName);
 
-            // where to go depends on the role from the RESULT, not the form
+            // where to go depends on the role from the RESULT, not the form.
+            // Back to the page they wanted only if it is inside their own area of THIS site.
+            string area = result.Role == UserRoles.Admin ? "/Admin/" : "/Staff/";
+            if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) &&
+                ReturnUrl.StartsWith(area, StringComparison.OrdinalIgnoreCase))
+            {
+                return LocalRedirect(ReturnUrl);
+            }
+
             if (result.Role == UserRoles.Admin)
             {
                 return RedirectToPage("/Admin/Dashboard");
