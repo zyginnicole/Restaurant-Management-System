@@ -27,6 +27,9 @@
     <div class="md-note-box md-note-box-info md-section" role="status">@orderMessage</div>
 }
 
+@* What this page was built from; customer-orders-refresh.js compares it with the live status and reloads when it changes *@
+<div id="ordersWatch" class="d-none" data-snapshot="@(string.Join(",", Model.OpenOrders.Select(o => o.OrderCode + ":" + o.Status + ":" + (o.PaymentStatus == "Paid" ? "1" : "0")).OrderBy(x => x, StringComparer.Ordinal)))"></div>
+
 @if (Model.OpenOrders.Count == 0)
 {
     <div class="md-card md-section text-center py-5">
@@ -242,23 +245,36 @@ else
         (function () {
             // Open orders list: show the chosen order on the left
             var rows = document.querySelectorAll('#orderPick [data-show]');
-            rows.forEach(function (row) {
-                row.addEventListener('click', function () {
-                    rows.forEach(function (r) {
-                        var on = r === row;
-                        r.classList.toggle('active', on);
-                        r.setAttribute('aria-pressed', on);
-                        var panel = document.getElementById(r.dataset.show);
-                        if (panel) panel.classList.toggle('d-none', !on);
-                    });
-                    // On phones the detail is below the list – scroll down to it
-                    if (window.innerWidth < 992) {
-                        var activePanel = document.getElementById(row.dataset.show);
-                        if (activePanel) activePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
+            var storeKey = 'custOrderSelected';
+
+            function select(row, scroll) {
+                rows.forEach(function (r) {
+                    var on = r === row;
+                    r.classList.toggle('active', on);
+                    r.setAttribute('aria-pressed', on);
+                    var panel = document.getElementById(r.dataset.show);
+                    if (panel) panel.classList.toggle('d-none', !on);
                 });
+                try { sessionStorage.setItem(storeKey, row.dataset.show); } catch (e) { }
+                // On phones the detail is below the list – scroll down to it
+                if (scroll && window.innerWidth < 992) {
+                    var activePanel = document.getElementById(row.dataset.show);
+                    if (activePanel) activePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+            rows.forEach(function (row) {
+                row.addEventListener('click', function () { select(row, true); });
             });
+
+            // After the automatic refresh, show the order that was selected before (if it is still open)
+            try {
+                var saved = sessionStorage.getItem(storeKey);
+                var savedRow = saved && document.querySelector('#orderPick [data-show="' + saved + '"]');
+                if (savedRow) select(savedRow, false);
+            } catch (e) { }
             // The Cancel order pop-up is filled by confirm-popup.js (loaded by the layout)
         })();
     </script>
+    @* Reloads the page when one of the customer's orders changes (status, payment, new or finished order) *@
+    <script src="~/js/customer-orders-refresh.js" asp-append-version="true"></script>
 }
