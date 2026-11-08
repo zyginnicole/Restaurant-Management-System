@@ -69,8 +69,8 @@
     <div class="col-sm-6 col-xl-3">
         <div class="md-stat md-staff-stat">
             <span class="md-label">Locked accounts</span>
-            <div class="md-stat-value">@Model.Stats.LockedCustomers</div>
-            <span class="md-hint">After too many failed sign-ins</span>
+            <div class="md-stat-value">@(Model.Stats.LockedCustomers + Model.Stats.LockedStaff)</div>
+            <span class="md-hint">@Model.Stats.LockedCustomers customers · @Model.Stats.LockedStaff staff / admin</span>
         </div>
     </div>
 </div>
@@ -99,6 +99,7 @@
                         @foreach (var s in staff)
                         {
                             bool admin = s.Role == "Administrator";
+                            bool staffLocked = s.LockedUntil.HasValue && s.LockedUntil.Value > now;
                             <tr data-search="@($"{s.Name} {s.Email}".ToLower())" class="@(s.Active ? "" : "is-muted")">
                                 <td>
                                     <div class="md-account-name">
@@ -111,8 +112,25 @@
                                 </td>
                                 <td>@(string.IsNullOrEmpty(s.JobTitle) ? "—" : s.JobTitle)</td>
                                 <td><span class="md-role @(admin ? "is-admin" : "is-staff")">@s.Role</span></td>
-                                <td><span class="md-pill @(s.Active ? "is-active" : "is-deactivated")">@(s.Active ? "Active" : "Deactivated")</span></td>
+                                <td>
+                                    @if (staffLocked)
+                                    {
+                                        <span class="md-pill is-locked">Locked</span>
+                                        <small class="md-locked-until">until @(s.LockedUntil!.Value.ToString("HH:mm"))</small>
+                                    }
+                                    else
+                                    {
+                                        <span class="md-pill @(s.Active ? "is-active" : "is-deactivated")">@(s.Active ? "Active" : "Deactivated")</span>
+                                    }
+                                </td>
                                 <td class="text-end">
+                                    @if (staffLocked)
+                                    {
+                                        <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline me-1" data-bs-toggle="modal" data-bs-target="#unlockStaffPopup"
+                                                data-id="@s.AccountId" data-name="@s.Name" data-details="@s.Name · @s.Role · @s.Email">
+                                            Unlock
+                                        </button>
+                                    }
                                     @if (s.Active)
                                     {
                                         <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-bs-toggle="modal" data-bs-target="#editAccountPopup"
@@ -157,7 +175,7 @@
                     </div>
                     <div class="col-sm-6">
                         <label class="md-label" for="newEmail">Work email</label>
-                        <input class="form-control md-input" id="newEmail" name="staffEmail" type="email" maxlength="100" placeholder="name@maisondoree.my" required />
+                        <input class="form-control md-input" id="newEmail" name="staffEmail" type="email" maxlength="100" placeholder="name@lumiere.my" required />
                     </div>
                     <div class="col-sm-6">
                         <label class="md-label" for="newPhone">Phone</label>
@@ -236,14 +254,18 @@
                                     <span class="md-pill is-active">Active</span>
                                 }
                             </td>
-                            <td class="text-end">
+                            <td class="text-end text-nowrap">
                                 @if (locked)
                                 {
-                                    <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-bs-toggle="modal" data-bs-target="#unlockPopup"
+                                    <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline me-1" data-bs-toggle="modal" data-bs-target="#unlockPopup"
                                             data-id="@c.CustId" data-name="@c.Name" data-details="@c.Name · @c.Email">
                                         Unlock
                                     </button>
                                 }
+                                <button type="button" class="btn md-btn-round md-btn-sm md-btn-cancel" data-bs-toggle="modal" data-bs-target="#deleteCustomerPopup"
+                                        data-id="@c.CustId" data-name="@c.Name" data-details="@c.Name · @c.Email · member since @(c.MemberSince.ToString("d MMM yyyy"))">
+                                    Delete
+                                </button>
                             </td>
                         </tr>
                     }
@@ -367,11 +389,37 @@
         IdField = "custId",
         ConfirmText = "Unlock account"
     };
+    var unlockStaffPopup = new ConfirmPopupView
+    {
+        Id = "unlockStaffPopup",
+        Eyebrow = "Staff account",
+        Title = "Unlock {name}?",
+        Message = "{details}",
+        Note = "The account was locked after too many failed sign-ins. Unlocking lets them sign in again straight away with their current password. If they forgot it, use Reset password instead (that also unlocks the account).",
+        Handler = "UnlockStaff",
+        IdField = "accountId",
+        ConfirmText = "Unlock account"
+    };
+    var deleteCustomerPopup = new ConfirmPopupView
+    {
+        Id = "deleteCustomerPopup",
+        Eyebrow = "Customer account",
+        Title = "Delete {name}'s account?",
+        Message = "{details}",
+        Note = "Their name, email, phone, birthday and preferences are removed and they can no longer sign in. Past reservations, orders, payments and feedback stay in the records (shown as \"Deleted customer\"). This cannot be undone. Not possible while they have an upcoming booking or an order in progress.",
+        Handler = "DeleteCustomer",
+        IdField = "custId",
+        BackText = "Keep account",
+        ConfirmText = "Delete account",
+        Danger = true
+    };
 }
 <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="deactivatePopup" />
 <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="reactivatePopup" />
 <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="resetPasswordPopup" />
 <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="unlockPopup" />
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="unlockStaffPopup" />
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="deleteCustomerPopup" />
 
 @section Scripts {
     <script src="~/js/md-select.js" asp-append-version="true"></script>

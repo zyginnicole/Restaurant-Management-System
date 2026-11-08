@@ -4,7 +4,8 @@ using RestaurantManagementSystem.Services;
 
 namespace RestaurantManagementSystem.Pages.Admin
 {
-    // Admin Accounts: customer and staff accounts, roles and access.
+    // Admin Accounts: customer and staff accounts, roles and access (create, edit, deactivate, reset password,
+    // unlock locked accounts, delete customer accounts).
     // Only administrators reach this page (RequireRoleFilter on /Admin).
     // Every action redirects back with TempData["AdminMessage"] (green box) or TempData["AdminError"] (red box)
     // and ?tab=staff / ?tab=customers, so refreshing the page never repeats an action.
@@ -96,6 +97,24 @@ namespace RestaurantManagementSystem.Pages.Admin
         {
             string? error = await _accountService.UnlockCustomerAsync(custId);
             return error == null ? Done("Customer account unlocked.", "customers") : Failed(error, "customers");
+        }
+
+        // Staff tab "Unlock" (accountId is "S-12" for a Staff row or "A-1" for an Admin row)
+        public async Task<IActionResult> OnPostUnlockStaffAsync(string? accountId)
+        {
+            var (error, name) = await _accountService.UnlockStaffAsync(accountId);
+            return error == null
+                ? Done($"{name}'s account unlocked. They can sign in again straight away.", "staff")
+                : Failed(error, "staff");
+        }
+
+        // Customers tab "Delete": removes the customer's personal details (records stay for reports)
+        public async Task<IActionResult> OnPostDeleteCustomerAsync(int custId)
+        {
+            var (error, name) = await _accountService.CloseCustomerAccountAsync(custId, closedByAdmin: true);
+            return error == null
+                ? Done($"{name}'s account has been deleted. Their personal details were removed; past bookings and orders stay in the records.", "customers")
+                : Failed(error, "customers");
         }
 
         private IActionResult Done(string message, string tab)

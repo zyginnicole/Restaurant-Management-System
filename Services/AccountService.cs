@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -9,13 +10,19 @@ namespace RestaurantManagementSystem.Services
 {
     // Business logic for Admin → Accounts: list staff, administrators and customers,
     // create staff / administrator accounts, edit them, deactivate / reactivate staff,
-    // reset passwords and unlock customers.
+    // reset passwords, unlock any locked account and delete (close) customer accounts.
     // Methods that change something return null (or a null Error) when it worked, otherwise a message.
     public class AccountService
     {
         public const string RoleStaff = "Staff";
         public const string RoleAdministrator = "Administrator";
         public const int CustomersPerPage = 20;
+
+        // A deleted (closed) customer keeps its row, so past reservations, orders, payments and feedback
+        // stay in the records and reports, but every personal detail is removed and the email becomes
+        // "deleted-<id>@closed.invalid" (.invalid is a reserved domain that can never receive email).
+        public const string ClosedEmailSuffix = "@closed.invalid";
+        public const string ClosedCustomerName = "Deleted customer";
 
         private const string NotFoundMessage = "That account could not be found. Please refresh the page.";
         private const string PhoneMessage = "Phone number must be 10 to 11 digits (numbers only).";
@@ -24,14 +31,19 @@ namespace RestaurantManagementSystem.Services
         private readonly PasswordService _passwordService;
         private readonly SettingsService _settingsService;
         private readonly AuthService _authService;
+        private readonly EmailService _emailService;
+        private readonly ILogger<AccountService> _logger;
 
         public AccountService(ApplicationDbContext context, PasswordService passwordService,
-                              SettingsService settingsService, AuthService authService)
+                              SettingsService settingsService, AuthService authService,
+                              EmailService emailService, ILogger<AccountService> logger)
         {
             _context = context;
             _passwordService = passwordService;
             _settingsService = settingsService;
             _authService = authService;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         // ---------- Reading ----------
@@ -40,15 +52,18 @@ namespace RestaurantManagementSystem.Services
         {
             DateTimeOffset now = DateTimeOffset.Now;
             DateTimeOffset weekAgo = now.AddDays(-7);
+            IQueryable<Customer> customers = OpenCustomers();
 
             return new AccountStats
             {
-                CustomerTotal = await _context.Customers.CountAsync(),
-                CustomersNewThisWeek = await _context.Customers.CountAsync(c => c.custCreateAt >= weekAgo),
+                CustomerTotal = await customers.CountAsync(),
+                CustomersNewThisWeek = await customers.CountAsync(c => c.custCreateAt >= weekAgo),
                 StaffActive = await _context.StaffMembers.CountAsync(s => s.staffActive),
                 StaffDeactivated = await _context.StaffMembers.CountAsync(s => !s.staffActive),
                 AdminTotal = await _context.Admins.CountAsync(),
-                LockedCustomers = await _context.Customers.CountAsync(c => c.LockoutEnd != null && c.LockoutEnd > now)
+                LockedCustomers = await customers.CountAsync(c => c.LockoutEnd != null && c.LockoutEnd > now),
+                LockedStaff = await _context.StaffMembers.CountAsync(s => s.LockoutEnd != null && s.LockoutEnd > now)
+                            + await _context.Admins.CountAsync(a => a.LockoutEnd != null && a.LockoutEnd > now)
             };
         }
 
@@ -76,7 +91,8 @@ namespace RestaurantManagementSystem.Services
                     Name = a.adminName,
                     Email = a.adminEmail,
                     Role = RoleAdministrator,
-                    Active = true
+                    Active = true,
+                    LockedUntil = a.LockoutEnd
                 });
             }
 
@@ -90,17 +106,18 @@ namespace RestaurantManagementSystem.Services
                     Phone = s.staffPhone,
                     JobTitle = s.staffRole,
                     Role = RoleStaff,
-                    Active = s.staffActive
+                    Active = s.staffActive,
+                    LockedUntil = s.LockoutEnd
                 });
             }
 
             return rows;
         }
 
-        // Customers tab: one page (newest first), optionally filtered by name or email
+        // Customers tab: one page (newest first), optionally filtered by name or email. Deleted accounts are hidden.
         public async Task<(List<CustomerAccountRow> Rows, int Total)> GetCustomersAsync(string? search, int page)
         {
-            IQueryable<Customer> query = _context.Customers.AsNoTracking();
+            IQueryable<Customer> query = OpenCustomers().AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -271,7 +288,8 @@ namespace RestaurantManagementSystem.Services
             return null;
         }
 
-        // Gives a staff or administrator account a new random temporary password (old one stops working at once)
+        // Gives a staff or administrator account a new random temporary password (old one stops working at once).
+        // It also clears any lockout, so the person can sign in with the new password straight away.
         public async Task<(string? Error, string? Name, string? TemporaryPassword)> ResetPasswordAsync(string? accountId)
         {
             if (!TryParseAccountId(accountId, out bool isAdmin, out int id))
@@ -292,6 +310,8 @@ namespace RestaurantManagementSystem.Services
                 }
 
                 admin.adminPassword = hash;
+                admin.FailedLoginAttempts = 0;
+                admin.LockoutEnd = null;
                 name = admin.adminName;
             }
             else
@@ -303,6 +323,8 @@ namespace RestaurantManagementSystem.Services
                 }
 
                 staff.staffPassword = hash;
+                staff.FailedLoginAttempts = 0;
+                staff.LockoutEnd = null;
                 name = staff.staffName;
             }
 
@@ -325,7 +347,140 @@ namespace RestaurantManagementSystem.Services
             return null;
         }
 
+        // Clears the lockout of a staff ("S-12") or administrator ("A-1") account. Returns their name for the message.
+        public async Task<(string? Error, string? Name)> UnlockStaffAsync(string? accountId)
+        {
+            if (!TryParseAccountId(accountId, out bool isAdmin, out int id))
+            {
+                return (NotFoundMessage, null);
+            }
+
+            ILockable? account;
+            string name;
+
+            if (isAdmin)
+            {
+                Admin? admin = await _context.Admins.FirstOrDefaultAsync(a => a.adminID == id);
+                account = admin;
+                name = admin?.adminName ?? string.Empty;
+            }
+            else
+            {
+                Staff? staff = await _context.StaffMembers.FirstOrDefaultAsync(s => s.staffID == id);
+                account = staff;
+                name = staff?.staffName ?? string.Empty;
+            }
+
+            if (account == null)
+            {
+                return (NotFoundMessage, null);
+            }
+
+            account.FailedLoginAttempts = 0;
+            account.LockoutEnd = null;
+            await _context.SaveChangesAsync();
+            return (null, name);
+        }
+
+        // Deletes (closes) a customer account: used by the admin (Accounts) and by the customer (Profile).
+        // The row is NOT removed, because reservations, orders, payments and feedback point to it and must stay
+        // for the restaurant's records and reports. Instead every personal detail is erased, the email is replaced
+        // (so it can be used to register again), the password can never match, and their notifications are removed.
+        // Not allowed while they still have an upcoming / current booking or an unfinished order.
+        // A confirmation email goes to the old address. closedByAdmin only changes the wording of that email.
+        // Returns their name (for the message on screen), or an Error.
+        public async Task<(string? Error, string? Name)> CloseCustomerAccountAsync(int custId, bool closedByAdmin)
+        {
+            Customer? customer = await _context.Customers.FirstOrDefaultAsync(c => c.custID == custId);
+            if (customer == null || IsClosedEmail(customer.custEmail))
+            {
+                return (NotFoundMessage, null);
+            }
+
+            bool hasActiveBooking = await _context.Reservations.AnyAsync(r =>
+                r.custID == custId && ReservationStatus.Active.Contains(r.reservationStatus));
+            if (hasActiveBooking)
+            {
+                return ("This account still has an upcoming or current reservation. Please cancel or finish it first.", null);
+            }
+
+            bool hasOpenOrder = await _context.Orders.AnyAsync(o =>
+                o.custID == custId && o.orderStatus != "Completed" && o.orderStatus != "Cancelled");
+            if (hasOpenOrder)
+            {
+                return ("This account still has an order in progress. Please wait until it is completed or cancelled.", null);
+            }
+
+            string name = customer.custName;
+            string oldEmail = customer.custEmail;
+
+            customer.custName = ClosedCustomerName;
+            customer.custEmail = $"deleted-{customer.custID}{ClosedEmailSuffix}";
+            customer.custPhone = "0000000000";
+            customer.custBirthday = null;
+            customer.DietaryPref = "None";
+            customer.Allergies = "None";
+            customer.kitchenNotes = null;
+            customer.promoOptIn = false;
+            customer.FailedLoginAttempts = 0;
+            customer.LockoutEnd = null;
+            // a random password nobody knows, so the account can never be signed in to again
+            customer.custPassword = _passwordService.HashPassword(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+
+            List<Notification> notifications = await _context.NotificationLogs.Where(n => n.custID == custId).ToListAsync();
+            _context.NotificationLogs.RemoveRange(notifications);
+
+            await _context.SaveChangesAsync();
+
+            await SendAccountClosedEmailAsync(oldEmail, name, closedByAdmin);
+            return (null, name);
+        }
+
+        // Confirmation to the old address. Best effort: the account is already closed, so a failure is only logged.
+        private async Task SendAccountClosedEmailAsync(string email, string name, bool closedByAdmin)
+        {
+            if (!_emailService.IsConfigured)
+            {
+                return;
+            }
+
+            try
+            {
+                SystemSetting settings = await _settingsService.GetAsync();
+                string brand = WebUtility.HtmlEncode(settings.restaurantName);
+                string reason = closedByAdmin
+                    ? "Your account has been deleted by the restaurant."
+                    : "As you requested, your account has been deleted.";
+
+                string body = $@"
+<div style=""font-family:Arial,sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a"">
+  <h2 style=""font-weight:normal;letter-spacing:1px"">{brand}</h2>
+  <p>Hi {WebUtility.HtmlEncode(name)},</p>
+  <p>{reason} Your personal details have been removed and you will no longer receive emails from us.</p>
+  <p>You are welcome to register again with this email at any time.</p>
+  <p style=""color:#777;font-size:13px"">If you didn't expect this, please contact the restaurant.</p>
+</div>";
+
+                await _emailService.SendAsync(email, $"Your {settings.restaurantName} account has been deleted", body);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Account deleted email could not be sent to {Email}", email);
+            }
+        }
+
         // ---------- Helpers ----------
+
+        public static bool IsClosedEmail(string? email)
+        {
+            return email != null && email.EndsWith(ClosedEmailSuffix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Customers that have not been deleted
+        private IQueryable<Customer> OpenCustomers()
+        {
+            return _context.Customers.Where(c => !c.custEmail.EndsWith(ClosedEmailSuffix));
+        }
 
         // "S-12" → staff 12 · "A-1" → admin 1. The prefix says which table, because both start their IDs at 1.
         private static bool TryParseAccountId(string? accountId, out bool isAdmin, out int id)

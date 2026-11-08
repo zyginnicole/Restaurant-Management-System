@@ -12,6 +12,7 @@
         public string JobTitle { get; set; } = string.Empty;    // admins have no job title
         public string Role { get; set; } = string.Empty;        // "Staff" or "Administrator"
         public bool Active { get; set; }
+        public DateTimeOffset? LockedUntil { get; set; }        // set after too many failed sign-ins
     }
 
     // One row of the Customers tab
@@ -36,5 +37,6 @@
         public int StaffDeactivated { get; set; }
         public int AdminTotal { get; set; }
         public int LockedCustomers { get; set; }
+        public int LockedStaff { get; set; }                    // staff + administrators
     }
 }
