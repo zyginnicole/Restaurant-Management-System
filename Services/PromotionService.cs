@@ -79,14 +79,46 @@ namespace RestaurantManagementSystem.Services
             return usable;
         }
 
-        // Auto-apply promotions for a new order (customer Checkout, staff new order), one entry per line
-        public async Task<AppliedPromo?[]> PriceNewOrderAsync(PromoBuyer buyer, string orderType, IReadOnlyList<PricedLine> lines)
+        // Auto-apply promotions for a new order (customer Checkout, staff new order), one entry per line.
+        // enteredCode: a promotion the customer unlocked by typing its code at Checkout. It must already have
+        // passed CheckCodeAsync; it then competes with the auto-apply promotions (best discount per line wins).
+        public async Task<AppliedPromo?[]> PriceNewOrderAsync(PromoBuyer buyer, string orderType, IReadOnlyList<PricedLine> lines,
+            Promotion? enteredCode = null)
         {
             var now = MalaysiaClock.Now;
             decimal subtotal = lines.Sum(l => l.UnitPrice * l.Quantity);
             var auto = (await ActiveAsync()).Where(p => p.autoApply);
             var usable = await UsableAsync(auto, buyer, now, orderType, subtotal);
+            if (enteredCode != null && usable.All(p => p.promoID != enteredCode.promoID)) usable.Add(enteredCode);
             return PromotionPricing.Apply(usable, lines);
+        }
+
+        // A promo code typed by the customer at Checkout. Rules for the code:
+        //   1. it must belong to a promotion (codes are stored in upper case, so typing is not case-sensitive)
+        //   2. at least one dish in the cart must be one of the promotion's own dishes
+        //   3. every normal promotion rule must pass for this customer and order (WhyNotAsync): switched on, campaign
+        //      dates, days, time of day, birthday month, members only, order type, minimum spend, and the usage limits.
+        //      Used-code rule: a code this customer has already used up to "uses per customer" (paid, not cancelled
+        //      orders), or that is fully redeemed, is rejected. It is checked again at payment (RecheckLimitsAsync).
+        // Returns the promotion when it may be used, otherwise the message to show. An empty code = (null, null).
+        public async Task<(Promotion? Promo, string? Error)> CheckCodeAsync(string? code, PromoBuyer buyer, string orderType,
+            IReadOnlyList<PricedLine> lines)
+        {
+            code = code?.Trim().ToUpperInvariant();
+            if (string.IsNullOrEmpty(code)) return (null, null);
+
+            var promo = await _context.Promotions.AsNoTracking()
+                .Include(p => p.Menus)
+                .FirstOrDefaultAsync(p => p.promoCode == code);
+            if (promo == null) return (null, $"{code} is not a valid promo code.");
+
+            var covered = promo.Menus.Select(m => m.menuID).ToHashSet();
+            if (!lines.Any(l => l.Quantity > 0 && covered.Contains(l.MenuId)))
+                return (null, $"{code} does not apply to any dish in your cart.");
+
+            decimal subtotal = lines.Sum(l => l.UnitPrice * l.Quantity);
+            string? why = await WhyNotAsync(promo, buyer, MalaysiaClock.Now, orderType, subtotal);
+            return why == null ? (promo, null) : (null, $"{code} cannot be used: {why}");
         }
 
         // Right before a bill is paid: a promotion whose limit is now used up (by other paid orders, or by an
