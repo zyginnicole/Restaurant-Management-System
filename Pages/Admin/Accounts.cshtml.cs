@@ -5,7 +5,7 @@ using RestaurantManagementSystem.Services;
 namespace RestaurantManagementSystem.Pages.Admin
 {
     // Admin Accounts: customer and staff accounts, roles and access (create, edit, deactivate, reset password,
-    // unlock locked accounts, delete customer accounts).
+    // unlock locked accounts, delete unused staff accounts, delete customer accounts).
     // Only administrators reach this page (RequireRoleFilter on /Admin).
     // Every action redirects back with TempData["AdminMessage"] (green box) or TempData["AdminError"] (red box)
     // and ?tab=staff / ?tab=customers, so refreshing the page never repeats an action.
@@ -105,6 +105,15 @@ namespace RestaurantManagementSystem.Pages.Admin
             var (error, name) = await _accountService.UnlockStaffAsync(accountId);
             return error == null
                 ? Done($"{name}'s account unlocked. They can sign in again straight away.", "staff")
+                : Failed(error, "staff");
+        }
+
+        // Staff "Delete" (Edit pop-up or deactivated row): only for staff with no reservations or orders
+        public async Task<IActionResult> OnPostDeleteStaffAsync(string? accountId)
+        {
+            var (error, name) = await _accountService.DeleteStaffAsync(accountId);
+            return error == null
+                ? Done($"{name}'s staff account has been deleted.", "staff")
                 : Failed(error, "staff");
         }
 

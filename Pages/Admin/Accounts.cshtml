@@ -144,6 +144,10 @@
                                                 data-id="@s.AccountId" data-name="@s.Name" data-details="@s.Name · @s.JobTitle · @s.Email">
                                             Reactivate
                                         </button>
+                                        <button type="button" class="btn md-btn-round md-btn-sm md-btn-cancel ms-1" data-bs-toggle="modal" data-bs-target="#deleteStaffPopup"
+                                                data-id="@s.AccountId" data-name="@s.Name" data-details="@s.Name · @s.JobTitle · @s.Email">
+                                            Delete
+                                        </button>
                                     }
                                 </td>
                             </tr>
@@ -291,7 +295,7 @@
 </div>
 
 @* ---------- Edit account pop-up (filled from the row's Edit button) ----------
-   Posts accountId + fields to OnPostEdit. Deactivate / Reset password close it and open their confirm pop-up. *@
+   Posts accountId + fields to OnPostEdit. Deactivate / Delete / Reset password close it and open their confirm pop-up. *@
 <div class="modal fade md-popup" id="editAccountPopup" tabindex="-1" aria-labelledby="editAccountTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content" method="post" asp-page-handler="Edit">
@@ -333,6 +337,7 @@
             <div class="modal-footer md-detail-footer">
                 <div class="md-edit-actions">
                     <button type="button" class="btn md-btn-round md-btn-cancel" data-open-popup="deactivatePopup" data-staff-only>Deactivate</button>
+                    <button type="button" class="btn md-btn-round md-btn-cancel" data-open-popup="deleteStaffPopup" data-staff-only>Delete</button>
                     <button type="button" class="btn md-btn-round md-btn-outline" data-open-popup="resetPasswordPopup">Reset password</button>
                 </div>
                 <button type="submit" class="btn md-btn-round btn-md-green">Save changes</button>
@@ -400,6 +405,19 @@
         IdField = "accountId",
         ConfirmText = "Unlock account"
     };
+    var deleteStaffPopup = new ConfirmPopupView
+    {
+        Id = "deleteStaffPopup",
+        Eyebrow = "Staff account",
+        Title = "Delete {name}'s account?",
+        Message = "{details}",
+        Note = "The account is removed permanently. This is only possible for staff who have never handled a reservation or order (e.g. an account created by mistake); otherwise deactivate it, so the records still show who handled them.",
+        Handler = "DeleteStaff",
+        IdField = "accountId",
+        BackText = "Keep account",
+        ConfirmText = "Delete account",
+        Danger = true
+    };
     var deleteCustomerPopup = new ConfirmPopupView
     {
         Id = "deleteCustomerPopup",
@@ -419,6 +437,7 @@
 <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="resetPasswordPopup" />
 <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="unlockPopup" />
 <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="unlockStaffPopup" />
+<partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="deleteStaffPopup" />
 <partial name="~/Pages/Shared/Popups/_ConfirmPopup.cshtml" model="deleteCustomerPopup" />
 
 @section Scripts {
@@ -487,7 +506,7 @@
                 });
             });
 
-            // Deactivate / Reset password: close the Edit pop-up, then open the confirm pop-up
+            // Deactivate / Delete / Reset password: close the Edit pop-up, then open the confirm pop-up
             popupEl.querySelectorAll('[data-open-popup]').forEach(function (button) {
                 button.addEventListener('click', function () {
                     var target = bootstrap.Modal.getOrCreateInstance(document.getElementById(button.dataset.openPopup));

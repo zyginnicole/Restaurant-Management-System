@@ -10,7 +10,7 @@ namespace RestaurantManagementSystem.Services
 {
     // Business logic for Admin → Accounts: list staff, administrators and customers,
     // create staff / administrator accounts, edit them, deactivate / reactivate staff,
-    // reset passwords, unlock any locked account and delete (close) customer accounts.
+    // reset passwords, unlock any locked account, delete unused staff accounts and delete (close) customer accounts.
     // Methods that change something return null (or a null Error) when it worked, otherwise a message.
     public class AccountService
     {
@@ -345,6 +345,36 @@ namespace RestaurantManagementSystem.Services
             customer.LockoutEnd = null;
             await _context.SaveChangesAsync();
             return null;
+        }
+
+        // Permanently deletes a STAFF account, but only one that was never used for work: no reservation or order
+        // points to it (e.g. created by mistake or for testing). A staff member who has handled bookings or orders
+        // is deactivated instead, so the records still show who handled them.
+        // Administrators can't be deleted, so the system always keeps an administrator. Returns their name.
+        public async Task<(string? Error, string? Name)> DeleteStaffAsync(string? accountId)
+        {
+            if (!TryParseAccountId(accountId, out bool isAdmin, out int id) || isAdmin)
+            {
+                return ("Only staff accounts can be deleted. Administrator accounts are kept.", null);
+            }
+
+            Staff? staff = await _context.StaffMembers.FirstOrDefaultAsync(s => s.staffID == id);
+            if (staff == null)
+            {
+                return (NotFoundMessage, null);
+            }
+
+            bool hasRecords = await _context.Reservations.AnyAsync(r => r.staffID == id)
+                           || await _context.Orders.AnyAsync(o => o.staffID == id);
+            if (hasRecords)
+            {
+                return ($"{staff.staffName} has handled reservations or orders, so the account can't be deleted (the records must show who handled them). Deactivate it instead.", null);
+            }
+
+            string name = staff.staffName;
+            _context.StaffMembers.Remove(staff);
+            await _context.SaveChangesAsync();
+            return (null, name);
         }
 
         // Clears the lockout of a staff ("S-12") or administrator ("A-1") account. Returns their name for the message.
