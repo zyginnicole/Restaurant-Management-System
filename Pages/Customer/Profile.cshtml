@@ -14,6 +14,9 @@
 
     // Stay in Edit mode when OnPostProfile returns Page() with errors
     var reopenEdit = Request.Query["handler"] == "Profile" && !ViewData.ModelState.IsValid;
+
+    // Open the Delete account pop-up again when OnPostDeleteAccount returns Page() with an error (e.g. wrong password)
+    var reopenDelete = Request.Query["handler"] == "DeleteAccount" && !ViewData.ModelState.IsValid;
 }
 
 @* Saved message after saving the profile or the password (TempData["ProfileMessage"] set by the PageModel) *@
@@ -57,6 +60,8 @@
                             <div class="col-md-6">
                                 <label class="md-label" for="Customer_custEmail">Email address</label>
                                 <input class="form-control md-input" id="Customer_custEmail" name="Customer.custEmail" type="email" autocomplete="email" value="@Model.Input.custEmail" />
+                                @* A new email is only saved after the code sent to it is entered (EmailChangeService) *@
+                                <div class="form-text">Changing it? We'll send a code to the new address to confirm it first.</div>
                             </div>
                             <div class="col-md-6">
                                 <label class="md-label" for="Customer_custPhone">Phone number</label>
@@ -150,6 +155,59 @@
     </div>
 </form>
 
+@* ---------- Delete account (opens the pop-up below, which asks for the password) ---------- *@
+<section class="md-card md-section">
+    <div class="md-card-header">
+        <span class="md-card-label">Delete account</span>
+    </div>
+    <div class="md-card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <p class="md-hint mb-0">Permanently removes your name, email, phone, birthday and preferences, and signs you out. Past bookings and orders stay in the restaurant's records without your details. This can't be undone.</p>
+        <button type="button" class="btn md-btn-round md-btn-danger" id="deleteAccountButton" data-bs-toggle="modal" data-bs-target="#deleteAccountPopup"><i class="bi bi-trash me-2"></i>Delete my account</button>
+    </div>
+</section>
+
+@* ---------- Delete account pop-up ----------
+   Posts the current password to OnPostDeleteAccount. A wrong password (or an open booking / order) comes back
+   as a ModelState error and the pop-up opens again by itself (see reopenDelete at the top). *@
+<div class="modal fade md-popup" id="deleteAccountPopup" tabindex="-1" aria-labelledby="deleteAccountTitle" aria-hidden="true"
+     data-auto-open="@(reopenDelete ? "true" : "false")">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" asp-page-handler="DeleteAccount">
+            <div class="modal-header">
+                <div>
+                    <span class="md-eyebrow">Account</span>
+                    <h2 class="modal-title md-popup-title" id="deleteAccountTitle">Delete your account?</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @if (reopenDelete)
+                {
+                    <div class="md-note-box md-note-box-danger mb-3" role="alert">
+                        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                        {
+                            <div>@error.ErrorMessage</div>
+                        }
+                    </div>
+                }
+                <p class="md-note-box md-note-box-info mb-3">
+                    Your personal details are removed straight away and you can no longer sign in. You'll get a confirmation email,
+                    and you can register again with the same email later. It's not possible while you have an upcoming booking or an order in progress.
+                </p>
+                <label class="md-label" for="deletePassword">Enter your password to confirm</label>
+                <div class="position-relative">
+                    <input class="form-control md-input pe-5" id="deletePassword" name="deletePassword" type="password" autocomplete="current-password" required />
+                    <button type="button" class="md-eye-btn" data-toggle-password="deletePassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye-slash"></i></button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn md-btn-round md-btn-outline" data-bs-dismiss="modal">Keep my account</button>
+                <button type="submit" class="btn md-btn-round md-btn-danger">Delete my account</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @* ---------- Change password pop-up ----------
    Posts to OnPostPassword. If the backend finds an error (e.g. wrong current password) it can add it to
    ModelState and return Page() – the pop-up then opens again by itself (see reopenPassword at the top). *@
@@ -201,10 +259,12 @@
     @* function.js (shared, from the Register page): show / hide password eye buttons *@
     <script src="~/js/function.js" asp-append-version="true"></script>
     <script>
-        // Change password pop-up: reopen it after a failed save (data-auto-open set by the page)
+        // Change password / Delete account pop-ups: reopen after a failed post (data-auto-open set by the page)
         (function () {
-            var popup = document.getElementById('changePasswordPopup');
-            if (popup.dataset.autoOpen === 'true') bootstrap.Modal.getOrCreateInstance(popup).show();
+            ['changePasswordPopup', 'deleteAccountPopup'].forEach(function (id) {
+                var popup = document.getElementById(id);
+                if (popup.dataset.autoOpen === 'true') bootstrap.Modal.getOrCreateInstance(popup).show();
+            });
         })();
 
         // Edit → Save changes: first click unlocks the two cards, turns the button green and disables Change password;

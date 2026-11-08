@@ -37,7 +37,9 @@ namespace RestaurantManagementSystem.Services
                 .FirstOrDefaultAsync(c => c.custID == custId);
         }
 
-        // Saves the fields the customer may edit
+        // Saves the fields the customer may edit.
+        // The EMAIL is not changed here: a new email is only saved after the customer enters the code
+        // sent to it (EmailChangeService, Verify new email page), so it can never become a fake address.
         public async Task<string?> UpdateCustomerProfileAsync(int custId, CustomerProfileInput input)
         {
             Customer? customer = await _context.Customers.FirstOrDefaultAsync(c => c.custID == custId);
@@ -46,15 +48,7 @@ namespace RestaurantManagementSystem.Services
                 return AccountMissingMessage;
             }
 
-            // A NEW email must not belong to any other account (customer, staff or admin)
-            string newEmail = AuthService.NormaliseEmail(input.custEmail);
-            if (await IsNewEmailTakenAsync(customer.custEmail, newEmail))
-            {
-                return EmailTakenMessage;
-            }
-
             customer.custName = input.custName.Trim();
-            customer.custEmail = newEmail;
             customer.custPhone = input.custPhone.Trim();
             customer.DietaryPref = MenuVocabulary.Join(input.Prefs.Where(x => MenuVocabulary.Tags.Contains(x)));
             customer.Allergies = MenuVocabulary.Join(input.Allergies.Where(x => MenuVocabulary.Allergens.Contains(x)));

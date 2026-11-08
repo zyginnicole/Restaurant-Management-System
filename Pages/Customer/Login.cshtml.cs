@@ -7,19 +7,29 @@ using CustomerModel = RestaurantManagementSystem.Model.Customer;
 
 namespace RestaurantManagementSystem.Pages.Customer
 {
- [AllowAnonymous] // must stay open: this is where customers sign in
- public class LoginModel : PageModel
+    [AllowAnonymous] // must stay open: this is where customers sign in
+    public class LoginModel : PageModel
     {
         private readonly AuthService _authService;
+        private readonly RememberMeService _rememberMeService;
 
-        public LoginModel(AuthService authService)
+        public LoginModel(AuthService authService, RememberMeService rememberMeService)
         {
             _authService = authService;
+            _rememberMeService = rememberMeService;
         }
 
         // The form fields (Customer.custEmail, Customer.custPassword) bind to this object
         [BindProperty]
         public CustomerModel Customer { get; set; } = new CustomerModel();
+
+        // "Remember me" tick box (name="rememberMe"): stay signed in on this device for 30 days
+        [BindProperty]
+        public bool RememberMe { get; set; }
+
+        // The page the customer tried to open before signing in (set by RequireRoleFilter), e.g. /Customer/Orders
+        [BindProperty(SupportsGet = true)]
+        public string? ReturnUrl { get; set; }
 
         // Shown in the red alert box on the page when sign-in fails
         public string? ErrorMessage { get; set; }
@@ -67,6 +77,23 @@ namespace RestaurantManagementSystem.Pages.Customer
 
             //clear any old session, then store user ID + role + name
             HttpContext.Session.SignInUser(result.UserId, result.Role, result.UserName);
+
+            //Remember me: a 30-day cookie on this device; otherwise remove any old one
+            if (RememberMe)
+            {
+                await _rememberMeService.IssueAsync(HttpContext, result.UserId);
+            }
+            else
+            {
+                _rememberMeService.Clear(HttpContext);
+            }
+
+            //back to the page they wanted, but only a page inside the customer area of THIS site
+            if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl) &&
+                ReturnUrl.StartsWith("/Customer/", StringComparison.OrdinalIgnoreCase))
+            {
+                return LocalRedirect(ReturnUrl);
+            }
 
             return RedirectToPage("/Customer/Dashboard");
         }
