@@ -181,7 +181,8 @@ namespace RestaurantManagementSystem.Pages.Staff
         }
 
         // ---------- New order ----------
-        // Fields: orderType "DineIn"/"Takeaway", tableId (dine-in) + walkInName / walkInPhone (walk-in), guestName, guestPhone, pickupDateTime (takeaway),
+        // Fields: orderType "DineIn"/"Takeaway", tableId (dine-in) + walkInName / walkInPhone (walk-in),
+        // guestName, guestPhone, pickupDateTime (takeaway),
         // items[i].menuId, items[i].quantity, items[i].itemRemark.
         // Creates the Order (orderStatus "Preparing", staffID = signed-in staff) + OrderItems (unitPrice = current Menu price).
         public async Task<IActionResult> OnPostCreateAsync(
