@@ -27,6 +27,11 @@ namespace RestaurantManagementSystem.Pages.Customer
         [BindProperty] public int? TableId { get; set; }                     // Selected table ID
         [BindProperty] public DateTime? PickupDateTime { get; set; }         // Takeaway pick-up time
         [BindProperty] public string? ContactPhone { get; set; }             // Takeaway contact phone
+        [BindProperty] public string? PromoCode { get; set; }                // Promo code typed by the customer (optional)
+
+        // Result of the typed promo code, shown under the code box (null = no code typed)
+        public string? PromoMessage { get; set; }
+        public bool PromoAccepted { get; set; }
 
         [BindProperty] public List<CartLine> Items { get; set; } = new();
 
@@ -123,23 +128,32 @@ namespace RestaurantManagementSystem.Pages.Customer
                 return await FailAsync(custId.Value, "Dine-in is available once our staff have seated you at your table. Please choose takeaway for now.");
             }
 
-            // 1. Sync session cart with posted items
+            // 1. The page must show the same cart as the saved one. If they differ (a dish added, removed or
+            //    changed in another tab or window), NOTHING is ordered: the page is shown again with the saved cart.
             var cart = HttpContext.Session.GetCart();
+            var saved = cart.Where(c => c.Quantity > 0)
+                .GroupBy(c => c.MenuId)
+                .ToDictionary(g => g.Key, g => Math.Min(g.Sum(c => c.Quantity), MaxQuantity));
+            var shown = Items.Where(i => i.Quantity > 0)
+                .GroupBy(i => i.MenuId)
+                .ToDictionary(g => g.Key, g => Math.Min(g.Sum(i => i.Quantity), MaxQuantity));
+            bool sameCart = saved.Count == shown.Count
+                            && saved.All(kv => shown.TryGetValue(kv.Key, out var qty) && qty == kv.Value);
+
             foreach (var line in cart)
             {
                 var posted = Items.FirstOrDefault(i => i.MenuId == line.MenuId);
                 if (posted == null) continue;
-                line.Quantity = Math.Clamp(posted.Quantity, 0, MaxQuantity + 1);
+
+                // kitchen notes typed on this page are kept either way
                 string? note = posted.ItemRemark?.Trim();
                 line.Note = string.IsNullOrEmpty(note) ? null : (note.Length > 200 ? note.Substring(0, 200) : note);
+
+                // quantities are only taken from the page when it matches the saved cart
+                if (sameCart) line.Quantity = Math.Clamp(posted.Quantity, 0, MaxQuantity + 1);   // +1 so "too many" is still noticed below
             }
 
-            // The form must show the same dishes as the saved cart. If the cart was changed in another tab
-            // (a dish added or removed there), show the page again with the current cart instead of ordering
-            // something the customer never saw on this page.
-            bool addedElsewhere = cart.Any(c => c.Quantity > 0 && !Items.Any(i => i.MenuId == c.MenuId));
-            bool removedElsewhere = Items.Any(i => i.Quantity > 0 && !cart.Any(c => c.MenuId == i.MenuId));
-            if (addedElsewhere || removedElsewhere)
+            if (!sameCart)
             {
                 HttpContext.Session.SaveCart(cart.Select(l => new CartItem
                 {
@@ -147,7 +161,7 @@ namespace RestaurantManagementSystem.Pages.Customer
                     Quantity = Math.Min(l.Quantity, MaxQuantity),
                     Note = l.Note
                 }).ToList());
-                return await FailAsync(custId.Value, "Your cart was changed in another tab, so it has been refreshed below. Please check it and place your order again.");
+                return await FailAsync(custId.Value, "Your cart was changed in another tab or window, so it has been refreshed below. Please check it and place your order again.");
             }
 
             var lines = cart.Where(i => i.Quantity > 0).ToList();
@@ -230,10 +244,16 @@ namespace RestaurantManagementSystem.Pages.Customer
                 contactPhone = phone;
             }
 
-            // 4. Promotions: every rule is checked here on the server (PromotionService), for this customer and order type
+            // 4. Promotions: every rule is checked here on the server (PromotionService), for this customer and order type.
+            //    A typed promo code that can't be used stops the order, so the customer never pays without the discount they expected.
             var buyer = await _promotions.GetBuyerAsync(custId.Value);
-            var applied = await _promotions.PriceNewOrderAsync(buyer, OrderType,
-                lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList());
+            var pricedLines = lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList();
+            var (enteredPromo, codeError) = await _promotions.CheckCodeAsync(PromoCode, buyer, OrderType, pricedLines);
+            if (codeError != null)
+            {
+                return await FailAsync(custId.Value, codeError + " Remove the code or change your order, then try again.");
+            }
+            var applied = await _promotions.PriceNewOrderAsync(buyer, OrderType, pricedLines, enteredPromo);
             var priced = lines.Select((l, i) => new
             {
                 Line = l,
@@ -310,7 +330,12 @@ namespace RestaurantManagementSystem.Pages.Customer
                 .Select(i => new CartItem { MenuId = i.MenuId, Quantity = Math.Clamp(i.Quantity, 0, MaxQuantity) })
                 .ToList();
 
-            return new JsonResult(await PriceLinesAsync(custId.Value, orderType, lines, menus));
+            var priced = await PriceLinesAsync(custId.Value, orderType, lines, menus);
+            return new JsonResult(new
+            {
+                lines = priced,
+                promo = new { code = PromoCode?.Trim().ToUpperInvariant(), accepted = PromoAccepted, message = PromoMessage }
+            });
         }
 
         private int? CurrentCustomerId()
@@ -383,11 +408,31 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         // Cart lines with the promotions they get: the same server-side rules as placing the order
         // (PromotionService: day, time, birthday, members only, order type, minimum spend, usage limits, best per line)
+        // Also checks the typed promo code and sets PromoAccepted / PromoMessage for the code box.
         private async Task<List<CartDisplayLine>> PriceLinesAsync(int custId, string orderType, List<CartItem> lines, Dictionary<int, Menu> menus)
         {
             var buyer = await _promotions.GetBuyerAsync(custId);
-            var appliedLines = await _promotions.PriceNewOrderAsync(buyer, orderType,
-                lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList());
+            var pricedLines = lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList();
+
+            var (enteredPromo, codeError) = await _promotions.CheckCodeAsync(PromoCode, buyer, orderType, pricedLines);
+            var appliedLines = await _promotions.PriceNewOrderAsync(buyer, orderType, pricedLines, enteredPromo);
+
+            PromoAccepted = false;
+            PromoMessage = codeError;
+            if (enteredPromo != null)
+            {
+                decimal saved = appliedLines.Where(a => a?.PromoId == enteredPromo.promoID).Sum(a => a!.LineDiscount);
+                if (saved > 0m)
+                {
+                    PromoAccepted = true;
+                    PromoMessage = $"{enteredPromo.promoCode} applied: {enteredPromo.promoLabel} (you save RM {saved:0.00}).";
+                }
+                else
+                {
+                    // valid code, but another promotion already takes more off those dishes (one promotion per dish)
+                    PromoMessage = $"{enteredPromo.promoCode} is valid, but a better offer is already applied to those dishes.";
+                }
+            }
             var appliedIds = appliedLines.Where(a => a != null).Select(a => a!.PromoId).ToList();
             var promoRules = await _context.Promotions.AsNoTracking()
                 .Where(p => appliedIds.Contains(p.promoID))
