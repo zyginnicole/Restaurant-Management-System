@@ -41,13 +41,24 @@ namespace RestaurantManagementSystem.Pages.Admin
 
         public async Task OnGetAsync(string? period, DateTime? from, DateTime? to)
         {
-            SelectedFrom = from?.Date;
-            SelectedTo = to?.Date;
+            if (from.HasValue && to.HasValue)
+            {
+                // Keep the custom date selectors and the query range consistent
+                // when an administrator enters the dates in reverse order.
+                var start = from.Value.Date;
+                var end = to.Value.Date;
+                if (start > end) (start, end) = (end, start);
 
-            if (SelectedFrom.HasValue && SelectedTo.HasValue && SelectedTo >= SelectedFrom)
+                SelectedFrom = start;
+                SelectedTo = end;
                 Period = "custom";
+            }
             else
+            {
+                SelectedFrom = from?.Date;
+                SelectedTo = to?.Date;
                 Period = period is "week" or "month" or "all" ? period : "month";
+            }
 
             var query = _context.Feedbacks
                 .AsNoTracking()
