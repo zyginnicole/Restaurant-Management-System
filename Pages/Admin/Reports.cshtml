@@ -34,8 +34,14 @@
 
     string sFrom, sTo;
     string[] chartLabels; decimal[] chartValues; int[] newCustBars; int bookings, newCust; decimal revenue; string range, compareText; int deltaRev, deltaRes;
-    sFrom = Q("from");
-    sTo = Q("to");
+    // Display the corrected server-side range so reversed custom selections
+    // are visibly normalised after the report is generated.
+    sFrom = sPeriod == "yearly"
+        ? Model.SelectedRange.Start.Year.ToString(inv)
+        : Model.SelectedRange.Start.ToString("yyyy-MM", inv);
+    sTo = sPeriod == "yearly"
+        ? Model.SelectedRange.End.AddYears(-1).Year.ToString(inv)
+        : Model.SelectedRange.End.AddMonths(-1).ToString("yyyy-MM", inv);
     chartLabels = Model.StatisticRevenue.Select(x => x.Name).ToArray();
     chartValues = Model.StatisticRevenue.Select(x => (decimal)x.Value).ToArray();
     newCustBars = Model.StatisticNewCustomers.Select(x => (int)x.Value).ToArray();

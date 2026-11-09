@@ -71,10 +71,17 @@ public class ChatbotService
 
     private const int MaxMessageLength = 300;   // longer messages are cut: limits cost and abuse
 
+    private static readonly HashSet<string> GenericDishWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dish", "dishes", "menu", "item", "items", "food", "meal", "meals",
+        "price", "cost", "costs", "available", "availability", "have", "serve",
+        "want", "like", "tell", "about", "what", "which", "the", "is", "are",
+        "this", "that", "please", "show", "me"
+    };
+
     public async Task<string> GetReplyAsync(string message)
     {
-        var original = (message ?? "").Trim();
-        if (original.Length > MaxMessageLength) original = original[..MaxMessageLength];
+        var original = LimitMessage(message);
         var text = original.ToLower();
         if (text.Length == 0) return "Please type a question.";
 
@@ -88,7 +95,12 @@ public class ChatbotService
         if (Has(text, "hour", "open", "close", "operation", "time"))
             return faqs[0].Answer;
 
-        // 2. Customer mentions a dish by name -> exact price and description from the database
+        if (IsHistoryRequest(text))
+            return "You can view your previous orders and payment records on the History page.";
+
+        // 2. Customer mentions a dish by name or a distinctive part of its name.
+        // Only available dishes in active categories are loaded, so unavailable or
+        // inactive dishes are never presented as available to the customer.
         var dishes = await _db.Menus
             // Disable change tracking for read-only optimization (faster execution)
             .AsNoTracking()
@@ -99,9 +111,20 @@ public class ChatbotService
                         (m.MenuCategory == null || m.MenuCategory.categoryActive))
             .ToListAsync();
 
-        var dish = dishes.FirstOrDefault(m => text.Contains(m.menuName.ToLower()));
-        if (dish != null)
-            return $"{dish.menuName} costs RM {dish.menuPrice:N2}. {dish.menuDescription}";
+        var matchingDishes = dishes
+            .Where(d => DishMatchesMessage(d.menuName, text))
+            .OrderByDescending(d => text.Contains(NormaliseDishText(d.menuName), StringComparison.OrdinalIgnoreCase))
+            .ThenBy(d => d.menuName)
+            .ToList();
+
+        if (matchingDishes.Count > 0)
+            return string.Join(" ", matchingDishes.Select(BuildDishInformation));
+
+        // Ordering is completed through the Menu page. Keep this response
+        // deterministic so the customer is directed to the correct workflow
+        // even when no specific dish name was included.
+        if (IsOrderRequest(text))
+            return "To place an order, please open the Menu page and select your dishes.";
 
         // 3. Recommendation / popular dishes -> top 3 sellers of the last 30 days
         if (Has(text, "popular", "recommend", "best", "suggest"))
@@ -157,6 +180,11 @@ public class ChatbotService
             return $"Our {requestedCategory.ToLowerInvariant()} include: {dishList}.";
         }
 
+        // A short, dish-oriented query with no available match should not be
+        // passed to Ollama, where it could produce an invented dish or price.
+        if (LooksLikeDishEnquiry(text))
+            return "Sorry, we don't have that dish available at the moment. Please check the menu for the dishes currently offered.";
+
         // 4. Anything else: ask the local language model, if it is switched on
         if (_ollama.Enabled)
         {
@@ -190,7 +218,7 @@ public class ChatbotService
     // Returns the page or menu filter that best matches the customer's request.
     public (string Url, string Text)? GetNavigation(string message)
     {
-        var text = (message ?? string.Empty).Trim().ToLowerInvariant();
+        var text = LimitMessage(message).ToLowerInvariant();
         if (text.Length == 0) return null;
 
         if (Has(text, "recommend", "recommended", "popular", "best", "suggest"))
@@ -212,8 +240,10 @@ public class ChatbotService
             return ("/Customer/Reservations", "Open reservations");
         if (Has(text, "notification", "notifications", "announcement", "announcements"))
             return ("/Customer/Notifications", "Open notifications");
-        if (Has(text, "history", "order history", "payment", "receipt", "order"))
+        if (IsHistoryRequest(text))
             return ("/Customer/History", "Open order history");
+        if (IsOrderRequest(text))
+            return ("/Customer/Menu", "Open the menu to place an order");
         if (Has(text, "promotion", "promotions", "offer", "offers", "discount"))
             return ("/Customer/Menu?view=promotions", "View promotions");
         if (Has(text, "menu", "food", "dish", "dishes", "price"))
@@ -323,6 +353,73 @@ public class ChatbotService
         }
 
         return null;
+    }
+
+    private static bool DishMatchesMessage(string dishName, string text)
+    {
+        var normalisedName = NormaliseDishText(dishName);
+
+        // Supports the existing full-name behaviour, for example:
+        // "What is the price of Wagyu Beef Tenderloin?"
+        if (text.Contains(normalisedName, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Also supports distinctive partial-name enquiries, for example:
+        // "wagyu" -> "Wagyu Beef Tenderloin".
+        var distinctiveWords = normalisedName
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(word => word.Length >= 3 && !GenericDishWords.Contains(word));
+
+        return distinctiveWords.Any(word => ContainsWord(text, word));
+    }
+
+    private static string BuildDishInformation(Menu dish)
+    {
+        var category = dish.MenuCategory?.categoryName ?? "Menu";
+        var tags = string.IsNullOrWhiteSpace(dish.menuTags) ? "Not specified" : dish.menuTags;
+        var allergens = string.IsNullOrWhiteSpace(dish.menuAllergens) ? "Not specified" : dish.menuAllergens;
+        var signature = dish.isSignature ? " It is a signature dish." : string.Empty;
+
+        return $"{dish.menuName} is currently available in the {category} category. " +
+               $"Price: RM {dish.menuPrice:N2}. " +
+               $"Description: {FallbackText(dish.menuDescription, "No description is available")}. " +
+               $"Tags: {tags}. Allergens: {allergens}.{signature}";
+    }
+
+    private static bool LooksLikeDishEnquiry(string text)
+    {
+        if (Has(text, "price", "cost", "ingredient", "ingredients", "allergen", "allergens", "dish"))
+            return true;
+
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length <= 3 &&
+               !Has(text, "book", "booking", "reserve", "reservation", "payment", "pay", "promotion", "offer");
+    }
+
+    private static bool IsHistoryRequest(string text)
+        => Has(text, "history", "past orders", "previous orders", "order history", "payment history", "receipt");
+
+    private static bool IsOrderRequest(string text)
+        => !IsHistoryRequest(text) &&
+           Has(text, "order", "place an order", "make an order", "want to order",
+               "would like to order", "buy", "purchase");
+
+    private static string NormaliseDishText(string value)
+        => string.Join(' ', value.Trim().ToLowerInvariant()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    private static bool ContainsWord(string text, string word)
+        => text.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Any(candidate => candidate.Trim(',', '.', '?', '!', ':', ';', '(', ')', '[', ']', '"', '\'')
+                .Equals(word, StringComparison.OrdinalIgnoreCase));
+
+    private static string FallbackText(string? value, string fallback)
+        => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    private static string LimitMessage(string? message)
+    {
+        var text = (message ?? string.Empty).Trim();
+        return text.Length > MaxMessageLength ? text[..MaxMessageLength] : text;
     }
 
     // True if the text contains at least one of the keywords.

@@ -10,6 +10,9 @@
     // The script is also safe on pages that do not include the chatbot markup.
     if (!toggle || !panel || !close || !form || !input || !body) return;
 
+    // Reinforce the server-side limit at the input layer as well.
+    input.maxLength = 300;
+
     function setChat(open) {
         panel.classList.toggle('d-none', !open);
         toggle.classList.toggle('d-none', open);
@@ -23,7 +26,7 @@
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
 
-        var text = input.value.trim();
+        var text = input.value.trim().slice(0, 300);
         if (!text) return;
 
         var message = document.createElement('div');
