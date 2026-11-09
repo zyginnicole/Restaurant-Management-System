@@ -39,6 +39,8 @@ namespace RestaurantManagementSystem.Pages.Customer
             public bool IsDineIn { get; set; }
             public string Status { get; set; } = string.Empty;
             public DateTimeOffset OrderDateTime { get; set; }
+            public DateTimeOffset? PreparingAt { get; set; }          // when staff accepted the order
+            public DateTimeOffset? ServedAt { get; set; }             // when staff marked it served
             public DateTime? PickupDateTime { get; set; }
             public string? TableNumber { get; set; }
             public string? AreaName { get; set; }
@@ -192,6 +194,8 @@ namespace RestaurantManagementSystem.Pages.Customer
                     IsDineIn = dineIn,
                     Status = o.orderStatus,
                     OrderDateTime = o.orderDateTime,
+                    PreparingAt = o.preparingAt,
+                    ServedAt = o.servedAt,
                     PickupDateTime = o.pickupDateTime,
                     TableNumber = o.DiningTable?.tableNumber,
                     AreaName = o.DiningTable?.DiningArea?.areaName,
