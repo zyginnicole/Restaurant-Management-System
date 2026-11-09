@@ -151,6 +151,17 @@
                     <span class="md-card-label">Summary</span>
                 </div>
                 <div class="md-card-body">
+                    @* ---------- Promo code (checked on the server: PromotionService.CheckCodeAsync) ---------- *@
+                    <div class="mb-3">
+                        <label class="md-label" for="promoCode">Promo code</label>
+                        <div class="d-flex gap-2">
+                            <input class="form-control md-input" id="promoCode" name="promoCode" maxlength="20" autocomplete="off"
+                                   style="text-transform: uppercase;" placeholder="e.g. WEEKEND15" value="@Model.PromoCode" />
+                            <button type="button" class="btn btn-md-outline md-btn-sm" id="applyPromo">Apply</button>
+                        </div>
+                        <small class="d-block mt-1 @(Model.PromoAccepted ? "text-success" : "text-danger") @(Model.PromoMessage == null ? "d-none" : "")"
+                               id="promoStatus" role="status">@Model.PromoMessage</small>
+                    </div>
                     <dl class="md-sum">
                         <div><dt>Subtotal</dt><dd data-sum="subtotal">RM 0.00</dd></div>
                         <div><dt>Service charge @Model.ServiceChargePct.ToString("0.##", inv)%</dt><dd data-sum="service">Dine-in only</dd></div>
@@ -291,15 +302,16 @@
             // Promotions for the current quantities and order type, worked out on the server with the
             // Promotion module's rules (?handler=Price). The latest answer wins if several are in flight.
             var priceTimer, priceRequest = 0;
-            function reprice() {
+            function reprice(now) {
                 clearTimeout(priceTimer);
                 priceTimer = setTimeout(function () {
                     var mine = ++priceRequest;
                     fetch('?handler=Price', { method: 'POST', credentials: 'same-origin', body: new FormData(form) })
                         .then(function (response) { return response.ok ? response.json() : null; })
-                        .then(function (lines) {
-                            if (!lines || mine !== priceRequest) return;
-                            lines.forEach(function (line) {
+                        .then(function (data) {
+                            if (!data || mine !== priceRequest) return;
+                            showPromo(data.promo);
+                            data.lines.forEach(function (line) {
                                 var idInput = form.querySelector('input[name$=".menuId"][value="' + line.menuId + '"]');
                                 var item = idInput && idInput.closest('.md-cart-item');
                                 if (!item) return;
@@ -314,8 +326,31 @@
                             recalc();
                         })
                         .catch(function () { /* keep the preview; the order is priced again when it is placed */ });
-                }, 250);
+                }, now === true ? 0 : 250);
             }
+
+            // ---------- Promo code ----------
+            // The server decides (code exists, covers a dish in the cart, all promotion rules, not already used up);
+            // this only shows its answer under the box.
+            var promoInput = document.getElementById('promoCode');
+            var promoStatus = document.getElementById('promoStatus');
+            function showPromo(promo) {
+                var message = promo && promo.message;
+                promoStatus.textContent = message || '';
+                promoStatus.classList.toggle('d-none', !message);
+                promoStatus.classList.toggle('text-success', !!(promo && promo.accepted));
+                promoStatus.classList.toggle('text-danger', !(promo && promo.accepted));
+            }
+            function applyPromo() {
+                promoInput.value = promoInput.value.trim().toUpperCase();
+                if (!promoInput.value) showPromo(null);
+                reprice(true);
+            }
+            document.getElementById('applyPromo').addEventListener('click', applyPromo);
+            // Enter in the code box applies the code instead of placing the order
+            promoInput.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') { event.preventDefault(); applyPromo(); }
+            });
 
             // Quantity lock: at most maxQty of one dish (same limit as the server), with a note when it is reached
             function limitQuantity(item) {

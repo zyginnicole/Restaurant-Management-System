@@ -27,6 +27,11 @@ namespace RestaurantManagementSystem.Pages.Customer
         [BindProperty] public int? TableId { get; set; }                     // Selected table ID
         [BindProperty] public DateTime? PickupDateTime { get; set; }         // Takeaway pick-up time
         [BindProperty] public string? ContactPhone { get; set; }             // Takeaway contact phone
+        [BindProperty] public string? PromoCode { get; set; }                // Promo code typed by the customer (optional)
+
+        // Result of the typed promo code, shown under the code box (null = no code typed)
+        public string? PromoMessage { get; set; }
+        public bool PromoAccepted { get; set; }
 
         [BindProperty] public List<CartLine> Items { get; set; } = new();
 
@@ -239,10 +244,16 @@ namespace RestaurantManagementSystem.Pages.Customer
                 contactPhone = phone;
             }
 
-            // 4. Promotions: every rule is checked here on the server (PromotionService), for this customer and order type
+            // 4. Promotions: every rule is checked here on the server (PromotionService), for this customer and order type.
+            //    A typed promo code that can't be used stops the order, so the customer never pays without the discount they expected.
             var buyer = await _promotions.GetBuyerAsync(custId.Value);
-            var applied = await _promotions.PriceNewOrderAsync(buyer, OrderType,
-                lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList());
+            var pricedLines = lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList();
+            var (enteredPromo, codeError) = await _promotions.CheckCodeAsync(PromoCode, buyer, OrderType, pricedLines);
+            if (codeError != null)
+            {
+                return await FailAsync(custId.Value, codeError + " Remove the code or change your order, then try again.");
+            }
+            var applied = await _promotions.PriceNewOrderAsync(buyer, OrderType, pricedLines, enteredPromo);
             var priced = lines.Select((l, i) => new
             {
                 Line = l,
@@ -319,7 +330,12 @@ namespace RestaurantManagementSystem.Pages.Customer
                 .Select(i => new CartItem { MenuId = i.MenuId, Quantity = Math.Clamp(i.Quantity, 0, MaxQuantity) })
                 .ToList();
 
-            return new JsonResult(await PriceLinesAsync(custId.Value, orderType, lines, menus));
+            var priced = await PriceLinesAsync(custId.Value, orderType, lines, menus);
+            return new JsonResult(new
+            {
+                lines = priced,
+                promo = new { code = PromoCode?.Trim().ToUpperInvariant(), accepted = PromoAccepted, message = PromoMessage }
+            });
         }
 
         private int? CurrentCustomerId()
@@ -392,11 +408,31 @@ namespace RestaurantManagementSystem.Pages.Customer
 
         // Cart lines with the promotions they get: the same server-side rules as placing the order
         // (PromotionService: day, time, birthday, members only, order type, minimum spend, usage limits, best per line)
+        // Also checks the typed promo code and sets PromoAccepted / PromoMessage for the code box.
         private async Task<List<CartDisplayLine>> PriceLinesAsync(int custId, string orderType, List<CartItem> lines, Dictionary<int, Menu> menus)
         {
             var buyer = await _promotions.GetBuyerAsync(custId);
-            var appliedLines = await _promotions.PriceNewOrderAsync(buyer, orderType,
-                lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList());
+            var pricedLines = lines.Select(l => new PricedLine(l.MenuId, menus[l.MenuId].menuPrice, l.Quantity)).ToList();
+
+            var (enteredPromo, codeError) = await _promotions.CheckCodeAsync(PromoCode, buyer, orderType, pricedLines);
+            var appliedLines = await _promotions.PriceNewOrderAsync(buyer, orderType, pricedLines, enteredPromo);
+
+            PromoAccepted = false;
+            PromoMessage = codeError;
+            if (enteredPromo != null)
+            {
+                decimal saved = appliedLines.Where(a => a?.PromoId == enteredPromo.promoID).Sum(a => a!.LineDiscount);
+                if (saved > 0m)
+                {
+                    PromoAccepted = true;
+                    PromoMessage = $"{enteredPromo.promoCode} applied: {enteredPromo.promoLabel} (you save RM {saved:0.00}).";
+                }
+                else
+                {
+                    // valid code, but another promotion already takes more off those dishes (one promotion per dish)
+                    PromoMessage = $"{enteredPromo.promoCode} is valid, but a better offer is already applied to those dishes.";
+                }
+            }
             var appliedIds = appliedLines.Where(a => a != null).Select(a => a!.PromoId).ToList();
             var promoRules = await _context.Promotions.AsNoTracking()
                 .Where(p => appliedIds.Contains(p.promoID))
