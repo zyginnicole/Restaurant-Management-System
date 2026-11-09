@@ -462,8 +462,14 @@ namespace RestaurantManagementSystem.Migrations
                     b.Property<DateTime?>("pickupDateTime")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTimeOffset?>("preparingAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<int?>("reservationID")
                         .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("servedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<int?>("staffID")
                         .HasColumnType("int");

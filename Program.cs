@@ -37,6 +37,9 @@ builder.Services.AddSession(options =>
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
 builder.Services.AddMemoryCache();
 
+// Data Protection: encrypts and signs the "Remember me" cookie so it can't be read or forged
+builder.Services.AddDataProtection();
+
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<SettingsService>();
@@ -49,6 +52,8 @@ builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<SignUpVerificationService>();
+builder.Services.AddScoped<EmailChangeService>();
+builder.Services.AddScoped<RememberMeService>();
 builder.Services.AddScoped<DemoAccountSeeder>();
 builder.Services.AddScoped<ReportService>();
 builder.Services.AddScoped<ExportService>();
@@ -102,7 +107,14 @@ app.Use(async (context, next) =>
         if (last != null && DateTimeOffset.TryParse(last, out var time) &&
             DateTimeOffset.Now - time > TimeSpan.FromMinutes(settings.idleTimeoutMinutes))
         {
+            bool wasSignedIn = session.GetUserRole() != null;
             session.Clear();
+
+            // tells RequireRoleFilter to show "You were signed out after X minutes without activity"
+            if (wasSignedIn)
+            {
+                context.Items[RequireRoleFilter.SessionExpiredKey] = settings.idleTimeoutMinutes;
+            }
         }
         else
         {
@@ -110,6 +122,13 @@ app.Use(async (context, next) =>
         }
     }
 
+    await next();
+});
+
+// "Remember me": a customer with a valid remember-me cookie but no session is signed in again automatically
+app.Use(async (context, next) =>
+{
+    await context.RequestServices.GetRequiredService<RememberMeService>().TryRestoreAsync(context);
     await next();
 });
 

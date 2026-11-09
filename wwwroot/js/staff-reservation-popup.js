@@ -3,6 +3,7 @@
 //   data-id="43" (reservationID, posted) data-code="R-0043" data-name="Sophia Haines" data-guests="6"
 //   data-date="2026-10-25" data-time="20:00" data-table="T-20" data-table-id="20" (tableID, posted)
 //   data-status="Pending" data-seated="19:04" data-walkin="false" data-booked="Requested online on …"
+//   data-can-seat="true" data-can-noshow="false" data-seat-from="19:45" data-noshow-from="20:15" (Seat / No-show buttons)
 //   data-request="…" data-details="Sophia Haines · 20:00 · 6 guests · T-20 VIP" data-free="T-20 is held 20:00–22:00 …"
 //   and a class is-pending / is-confirmed / is-seated / … (the pill colour)
 // and contains a link with data-open-detail (href="?view=R-0043", so it also works without the script).
@@ -184,10 +185,17 @@
         popupEl.querySelectorAll('[data-for]').forEach(function (group) {
             group.classList.toggle('d-none', group.dataset.for !== status);
         });
-        // Seat guests / No-show only for today's bookings (data-today="false" on other days)
-        popupEl.querySelectorAll('[data-today-only]').forEach(function (b) {
-            b.classList.toggle('d-none', d.today === 'false');
-        });
+        // Seat guests / No-show only when the server allows them: today, Seat from 15 min before the booking time,
+        // No-show from the late hold after it (data-can-seat / data-can-noshow, set by the page)
+        var canSeat = d.canSeat === 'true', canNoShow = d.canNoshow === 'true';
+        popupEl.querySelectorAll('[data-seat-only]').forEach(function (b) { b.classList.toggle('d-none', !canSeat); });
+        popupEl.querySelectorAll('[data-noshow-only]').forEach(function (b) { b.classList.toggle('d-none', !canNoShow); });
+        // Today, before the buttons open: say when they do
+        var when = [];
+        if (d.today !== 'false' && !canSeat && d.seatFrom) when.push('Seat from ' + d.seatFrom);
+        if (d.today !== 'false' && !canNoShow && d.noshowFrom) when.push('No-show from ' + d.noshowFrom);
+        part('when').textContent = when.join(' · ');
+        part('when').classList.toggle('d-none', when.length === 0);
         // Buttons that open a confirm pop-up carry this booking's values (read by confirm-popup.js)
         popupEl.querySelectorAll('[data-open-popup]').forEach(function (b) {
             b.dataset.id = d.id || d.code; b.dataset.code = d.code; b.dataset.details = d.details; b.dataset.table = d.table;

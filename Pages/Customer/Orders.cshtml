@@ -71,10 +71,10 @@ else
                                 <span>Order placed</span><small class="md-tracker-time">@o.OrderDateTime.ToString("HH:mm")</small>
                             </li>
                             <li class="@(o.Status == "Preparing" ? "current" : (stepPreparing ? "done" : ""))">
-                                <span>Preparing</span><small class="md-tracker-time">—</small>
+                                <span>Preparing</span><small class="md-tracker-time">@(o.PreparingAt?.ToString("HH:mm") ?? "—")</small>
                             </li>
                             <li class="@(o.Status == "Served" ? "current" : (stepServed ? "done" : ""))">
-                                <span>Served</span><small class="md-tracker-time">—</small>
+                                <span>Served</span><small class="md-tracker-time">@(o.ServedAt?.ToString("HH:mm") ?? "—")</small>
                             </li>
                             <li class="@(o.Status == "Completed" ? "current" : (stepCompleted ? "done" : ""))">
                                 <span>Completed</span><small class="md-tracker-time">—</small>

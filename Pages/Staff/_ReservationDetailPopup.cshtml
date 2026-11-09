@@ -94,9 +94,12 @@
                 </div>
                 <div class="md-edit-actions" data-for="Confirmed">
                     <button type="button" class="btn md-btn-round md-btn-cancel" data-open-popup="cancelBookingPopup">Cancel booking</button>
-                    @* data-today-only: shown only for today's bookings (arrival tracking) *@
-                    <button type="button" class="btn md-btn-round md-btn-outline" data-open-popup="noShowPopup" data-today-only>No-show</button>
-                    <button type="submit" class="btn md-btn-round md-btn-green" asp-page="/Staff/Reservations" asp-page-handler="Seat" data-today-only>Seat guests</button>
+                    @* Shown only when the server allows them (row data-can-seat / data-can-noshow):
+                       Seat guests from 15 minutes before the booking time, No-show from the late hold after it, today only.
+                       Before that, data-detail="when" says when they open. *@
+                    <span class="md-hint m-0 d-none" data-detail="when"></span>
+                    <button type="button" class="btn md-btn-round md-btn-outline" data-open-popup="noShowPopup" data-noshow-only>No-show</button>
+                    <button type="submit" class="btn md-btn-round md-btn-green" asp-page="/Staff/Reservations" asp-page-handler="Seat" data-seat-only>Seat guests</button>
                 </div>
                 @* Dark until something is changed, then solid green (staff-reservation-popup.js) *@
                 <button type="submit" class="btn md-btn-round btn-md-dark" data-detail="save">Save changes</button>

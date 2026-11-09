@@ -106,6 +106,7 @@ namespace RestaurantManagementSystem.Pages.Staff
 
         public async Task OnGetAsync()
         {
+            // orders left open from a day that has passed are cancelled (refunded when paid)
             await StaleOrders.CancelStaleAsync(_context, _notifications);
 
             TodayLabel = DateTime.Now.ToString("dddd, d MMMM yyyy");
@@ -127,12 +128,12 @@ namespace RestaurantManagementSystem.Pages.Staff
                 Name = o.Customer?.custName ?? "Guest",
                 Res = o.reservationID.HasValue ? "R-" + o.reservationID.Value.ToString("0000") : null,
                 Status = o.orderStatus,
-                // only the placed time (and the payment time once completed) are stored; other steps show "—"
+                // time each step was reached: placed, preparing (Accept), served (Mark served), completed (payment); "" = not reached / not recorded
                 Steps = new[]
                 {
                     o.orderDateTime.ToString("HH:mm"),
-                    "",
-                    "",
+                    o.preparingAt?.ToString("HH:mm") ?? "",
+                    o.servedAt?.ToString("HH:mm") ?? "",
                     o.orderStatus == "Completed" && o.Payment != null ? o.Payment.paymentDate.ToString("HH:mm") : ""
                 },
                 Pickup = o.pickupDateTime?.ToString("HH:mm"),
@@ -322,6 +323,7 @@ namespace RestaurantManagementSystem.Pages.Staff
                 contactPhone = contactPhone,
                 orderDateTime = DateTimeOffset.Now,
                 orderStatus = "Preparing",                          // staff orders go straight to the kitchen
+                preparingAt = DateTimeOffset.Now,
                 totalAmount = subtotal + service + sst
             };
             if (guest != null) order.Customer = guest;
@@ -365,6 +367,7 @@ namespace RestaurantManagementSystem.Pages.Staff
                 return Done($"{code} cannot be accepted: it is already {order.orderStatus}.", code);
 
             order.orderStatus = "Preparing";
+            order.preparingAt = DateTimeOffset.Now;
             order.staffID = staffId;
             await _context.SaveChangesAsync();
             await NotifyOrderStatusAsync(order);
@@ -385,6 +388,7 @@ namespace RestaurantManagementSystem.Pages.Staff
                 return Done($"{code} cannot be marked as served: it is {order.orderStatus}.", code);
 
             order.orderStatus = "Served";
+            order.servedAt = DateTimeOffset.Now;
             await _context.SaveChangesAsync();
             await NotifyOrderStatusAsync(order);
 

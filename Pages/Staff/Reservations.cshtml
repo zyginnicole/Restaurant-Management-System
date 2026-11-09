@@ -170,6 +170,11 @@
             var diet = r.Customer?.DietaryPref is { } d && d != "None" ? d : null;
             var ended = endedStatuses.Contains(r.reservationStatus);
             string details = $"{name} · {time} · {r.partySize} guests · {tableNo} {area}";
+            // Seat from 15 min before the booking time; No-show from the late hold after it (ReservationService)
+            var canSeat = ReservationService.CanSeatNow(r);
+            var canNoShow = ReservationService.CanMarkNoShowNow(r, settings.lateHoldMinutes);
+            var seatFrom = ReservationService.SeatFrom(r).ToString("HH:mm", inv);
+            var noShowFrom = ReservationService.NoShowFrom(r, settings.lateHoldMinutes).ToString("HH:mm", inv);
             @* Whole row opens the Reservation details pop-up (the name is a stretched-link to ?view=R-xxxx);
                the action buttons stay clickable on top. data-* values fill the pop-up (staff-reservation-popup.js). *@
             <li class="md-guest md-staff-res md-row-link @key" data-status="@r.reservationStatus" data-area="@area" data-hour="@r.reservationDateTime.Hour"
@@ -177,6 +182,8 @@
                 data-id="@r.reservationID" data-code="@code" data-name="@name" data-guests="@r.partySize"
                 data-date="@r.reservationDateTime.ToString("yyyy-MM-dd", inv)" data-time="@time"
                 data-table="@tableNo" data-table-id="@r.tableID" data-today="@(isToday ? "true" : "false")" data-walkin="false" data-booked="@Booked(r)"
+                data-can-seat="@(canSeat ? "true" : "false")" data-can-noshow="@(canNoShow ? "true" : "false")"
+                data-seat-from="@seatFrom" data-noshow-from="@noShowFrom"
                 data-request="@(ended ? "" : r.specialRequest)" data-details="@details" data-free="@(ended ? "" : FreeText(r))">
                 <div class="md-guest-time">@time</div>
 
@@ -212,16 +219,28 @@
                                         data-id="@r.reservationID" data-code="@code" data-details="@details">Decline</button>
                                 break;
                             case ReservationStatus.Confirmed:
-                                @* Seat / No-show track the guests' arrival, so only on the booking's day; other days can only be cancelled *@
+                                @* Seat / No-show track the guests' arrival: only on the booking's day, Seat from 15 minutes before
+                                   the booking time, No-show from the late hold after it. Before that, the time they open is shown.
+                                   The page refreshes every minute (staff-auto-refresh.js), so the buttons appear on time. *@
                                 if (isToday)
                                 {
-                                    <form method="post" asp-page-handler="Seat">
-                                        <input type="hidden" name="reservationId" value="@r.reservationID" />
-                                        <input type="hidden" name="returnUrl" value="@currentUrl" />
-                                        <button type="submit" class="btn md-btn-round md-btn-sm md-btn-green">Seat</button>
-                                    </form>
-                                    <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-bs-toggle="modal" data-bs-target="#noShowPopup"
-                                            data-id="@r.reservationID" data-code="@code" data-details="@details">No-show</button>
+                                    if (canSeat)
+                                    {
+                                        <form method="post" asp-page-handler="Seat">
+                                            <input type="hidden" name="reservationId" value="@r.reservationID" />
+                                            <input type="hidden" name="returnUrl" value="@currentUrl" />
+                                            <button type="submit" class="btn md-btn-round md-btn-sm md-btn-green">Seat</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="md-hint m-0">Seat from @seatFrom</span>
+                                    }
+                                    if (canNoShow)
+                                    {
+                                        <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-bs-toggle="modal" data-bs-target="#noShowPopup"
+                                                data-id="@r.reservationID" data-code="@code" data-details="@details">No-show</button>
+                                    }
                                 }
                                 <button type="button" class="btn md-btn-round md-btn-sm md-btn-cancel" data-bs-toggle="modal" data-bs-target="#cancelBookingPopup"
                                         data-id="@r.reservationID" data-code="@code" data-details="@details">Cancel</button>
