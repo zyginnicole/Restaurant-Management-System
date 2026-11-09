@@ -42,6 +42,11 @@ namespace RestaurantManagementSystem.Model
         [MaxLength(11, ErrorMessage = "Maximum 11 digits including the leading 0.")]
         public string? contactPhone { get; set; }
 
+        // When the order reached each kitchen stage (set when staff click Accept order / Mark served; a staff-created
+        // order starts as Preparing). Null = not reached yet, or placed before these columns existed.
+        public DateTimeOffset? preparingAt { get; set; }
+        public DateTimeOffset? servedAt { get; set; }
+
         [Required]
         public string orderStatus { get; set; } = "Order placed"; // Order placed, Preparing, Served, Completed, Cancelled
 
