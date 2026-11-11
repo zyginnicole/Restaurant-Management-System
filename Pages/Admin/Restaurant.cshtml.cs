@@ -152,8 +152,9 @@ namespace RestaurantManagementSystem.Pages.Admin
             await _db.SaveChangesAsync();
 
             // Existing reservations are never changed, but tell the admin if some now fall outside the hours
+            var now = DateTime.Now;   // app (Malaysia) time, not the database server's clock
             var upcoming = await _db.Reservations
-                .Where(r => r.reservationDateTime >= DateTime.Now
+                .Where(r => r.reservationDateTime >= now
                          && r.reservationStatus != "Cancelled" && r.reservationStatus != "Completed")
                 .Select(r => r.reservationDateTime)
                 .ToListAsync();
@@ -188,8 +189,9 @@ namespace RestaurantManagementSystem.Pages.Admin
             // Slot times change with a new interval, so old blocks would no longer line up: clear the upcoming ones
             if (intervalChanged)
             {
+                var today = DateTime.Today;   // app (Malaysia) date, not the database server's clock
                 var old = await _db.BlockedSlots
-                    .Where(b => b.restaurantID == restaurant.restaurantID && b.slotStart >= DateTime.Today)
+                    .Where(b => b.restaurantID == restaurant.restaurantID && b.slotStart >= today)
                     .ToListAsync();
                 _db.BlockedSlots.RemoveRange(old);
             }

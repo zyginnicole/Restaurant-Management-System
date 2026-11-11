@@ -484,3 +484,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Production secrets (MonsterASP connection string, Gmail app password)
+appsettings.Production.json

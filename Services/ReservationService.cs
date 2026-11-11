@@ -137,9 +137,10 @@ namespace RestaurantManagementSystem.Services
             var releaseAt = DateTime.Now.AddMinutes(SeatedReleaseMinutes);
             if (start < releaseAt)
             {
+                var today = DateTime.Today;   // app (Malaysia) date, not the database server's clock
                 busyTableIds.AddRange(await _db.Reservations.AsNoTracking()
                     .Where(r => r.reservationStatus == ReservationStatus.Seated && r.reservationDateTime <= start
-                             && r.reservationDateTime >= DateTime.Today   // a Seated booking from an earlier day isn't at the table any more
+                             && r.reservationDateTime >= today  // a Seated booking from an earlier day isn't at the table any more
                              && (ignoreReservationId == null || r.reservationID != ignoreReservationId))
                     .Select(r => r.tableID)
                     .ToListAsync());
@@ -238,8 +239,9 @@ namespace RestaurantManagementSystem.Services
         //Tables with guests at them right now: today's Seated booking, or tableStatus Occupied (e.g. set by an order)
         private async Task<HashSet<int>> OccupiedNowAsync(int? ignoreReservationId = null)
         {
+            var today = DateTime.Today;   // app (Malaysia) date, not the database server's clock
             var seated = await _db.Reservations.AsNoTracking()
-                .Where(r => r.reservationStatus == ReservationStatus.Seated && r.reservationDateTime >= DateTime.Today
+                .Where(r => r.reservationStatus == ReservationStatus.Seated && r.reservationDateTime >= today
                          && (ignoreReservationId == null || r.reservationID != ignoreReservationId))
                 .Select(r => r.tableID)
                 .ToListAsync();
@@ -359,11 +361,12 @@ namespace RestaurantManagementSystem.Services
         //6. The customer's active bookings from today on, soonest first (with table + area for display)
         public async Task<List<Reservation>> GetUpcomingForCustomerAsync(int custId)
         {
+            var today = DateTime.Today;   // app (Malaysia) date, not the database server's clock
             return await _db.Reservations.AsNoTracking()
                 .Include(r => r.DiningTable!).ThenInclude(t => t.DiningArea)
                 .Where(r => r.custID == custId
                          && ReservationStatus.Active.Contains(r.reservationStatus)
-                         && r.reservationDateTime >= DateTime.Today)
+                         && r.reservationDateTime >= today)
                 .OrderBy(r => r.reservationDateTime)
                 .ToListAsync();
         }
@@ -504,8 +507,9 @@ namespace RestaurantManagementSystem.Services
         //(requests past their 15-minute deadline are already declined by CloseOverdueAsync)
         public async Task<List<Reservation>> GetPendingUpcomingAsync()
         {
+            var today = DateTime.Today;   // app (Malaysia) date, not the database server's clock
             return await _db.Reservations.AsNoTracking()
-                .Where(r => r.reservationStatus == ReservationStatus.Pending && r.reservationDateTime >= DateTime.Today)
+                .Where(r => r.reservationStatus == ReservationStatus.Pending && r.reservationDateTime >= today)
                 .OrderBy(r => r.reservationDateTime)
                 .ToListAsync();
         }
@@ -595,8 +599,9 @@ namespace RestaurantManagementSystem.Services
         private async Task<bool> IsTableOccupiedAsync(DiningTable table, int? ignoreReservationId = null)
         {
             if (table.tableStatus == "Occupied") return true;
+            var today = DateTime.Today;   // app (Malaysia) date, not the database server's clock
             return await _db.Reservations.AnyAsync(r => r.tableID == table.tableID
-                && r.reservationStatus == ReservationStatus.Seated && r.reservationDateTime >= DateTime.Today
+                && r.reservationStatus == ReservationStatus.Seated && r.reservationDateTime >= today
                 && (ignoreReservationId == null || r.reservationID != ignoreReservationId));
         }
 

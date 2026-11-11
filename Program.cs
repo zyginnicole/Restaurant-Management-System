@@ -4,6 +4,11 @@ using RestaurantManagementSystem.Filters;
 using RestaurantManagementSystem.Helpers;
 using RestaurantManagementSystem.Services;
 
+// The restaurant runs on Malaysia time, but the hosting server may be in another time zone
+// (MonsterASP's server is in Europe). Make DateTime.Now / DateTime.Today / DateTimeOffset.Now
+// return Malaysia time everywhere in the app. On a PC already set to Malaysia time this changes nothing.
+MalaysiaClock.UseAsServerLocalTime();
+
 // QuestPDF requires the application to declare the license used by this project.
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
