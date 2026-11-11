@@ -1,0 +1,22 @@
+# Render Blueprint: Dashboard -> New -> Blueprint -> pick this repo.
+# Secrets marked `sync: false` are asked for when the Blueprint is created (never commit them).
+services:
+  - type: web
+    name: restaurant-management-system
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    branch: main
+    autoDeploy: true
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Email__UserName
+        sync: false
+      - key: Email__Password
+        sync: false
+      - key: Ollama__Enabled
+        value: "false"
