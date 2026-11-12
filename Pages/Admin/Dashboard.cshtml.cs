@@ -53,6 +53,8 @@ public class DashboardModel : PageModel
     public record ActivityItem(DateTimeOffset When, string Title, string Code, string Link, string Meta, string Css);
     public List<ActivityItem> RecentActivity { get; set; } = new();
     private const int RecentActivityCount = 4;
+    public decimal TonightExpected { get; private set; }
+    public decimal TonightCollected { get; private set; }
 
     // Loads the selected period and today's live reservation information.
     public async Task OnGetAsync(int? year, int? month, int? day)
@@ -120,6 +122,19 @@ public class DashboardModel : PageModel
             WindowStart = TimeSpan.FromHours(Math.Min(18, Arrivals.First().reservationDateTime.Hour));
             WindowEnd = TimeSpan.FromHours(Math.Max(22, Arrivals.Last().reservationDateTime.Hour + 1));
         }
+
+        var todayStart = new DateTimeOffset(today, DateTimeOffset.Now.Offset);
+        var tomorrowStart = todayStart.AddDays(1);
+        var tonightOrders = await _db.Orders.AsNoTracking()
+            .Include(o => o.Payment)
+            .Where(o => o.orderDateTime >= todayStart && o.orderDateTime < tomorrowStart
+                        && o.orderStatus != "Cancelled")
+            .ToListAsync();
+        TonightExpected = tonightOrders.Sum(o => o.totalAmount);
+        TonightCollected = tonightOrders
+            .Where(o => o.Payment?.paymentStatus == "Paid"
+                        && o.Payment.paymentDate >= todayStart && o.Payment.paymentDate < tomorrowStart)
+            .Sum(o => o.Payment!.paymentAmount);
 
         RecentActivity = await LoadRecentActivityAsync();
     }
