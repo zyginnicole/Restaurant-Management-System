@@ -16,43 +16,11 @@
     string Rm(decimal v) => "RM " + v.ToString("N2");
     var inv = System.Globalization.CultureInfo.InvariantCulture;   // "16 Sep", not "16 Sept"
 
-    // ---------- Reservations: from the database (MonitorModel, ReservationService.GetBetweenAsync) ----------
+    // ---------- Reservations, Orders and Payments all come from the database (MonitorModel) ----------
     var reservations = Model.Reservations;
+    var orders = Model.Orders;
+    var payments = Model.Payments;
     string[] resStatuses = { "Pending", "Confirmed", "Seated", "Completed", "Cancelled", "No-show", "Declined" };
-
-    // ---------- Orders and Payments: example data – later from the database (orders / payments feature) ----------
-    // Orders today. Total = Order.totalAmount (dine-in + 10% service charge, then 6% SST; takeaway SST only)
-    // Lines = OrderItems: quantity, Menu.menuName, unitPrice, itemRemark. Subtotal = sum of the lines.
-    var orders = new (string Code, string? Table, string Name, string Time, string Status, (int Qty, string Item, decimal Price, string? Remark)[] Lines)[]
-    {
-        ("ORD-0085", "T-03", "Daniel Tan", "20:31", "Order placed",
-            new (int, string, decimal, string?)[] { (1, "Pan-Seared Sea Bass", 98m, null), (1, "Valrhona Chocolate Fondant", 36m, null) }),
-        ("ORD-0084", null, "Natalia Voss", "18:52", "Cancelled",
-            new (int, string, decimal, string?)[] { (1, "Lobster Thermidor", 128m, null), (2, "Valrhona Chocolate Fondant", 38m, "Pickup 21:30") }),
-        ("ORD-0083", "T-09", "Thomas Ashford", "18:20", "Completed",
-            new (int, string, decimal, string?)[] { (2, "Wagyu Beef Tenderloin", 168m, "Medium rare"), (1, "Oyster Selection", 50m, "No shellfish garnish") }),
-        ("ORD-0082", "T-12", "Eleanor Whitmore", "19:52", "Served",
-            new (int, string, decimal, string?)[] { (2, "Wagyu Beef Tenderloin", 168m, "One medium, one well done"), (1, "Lobster Thermidor", 128m, null), (1, "Caviar & Soft Egg", 85m, null), (2, "Valrhona Chocolate Fondant", 38m, "Anniversary candle on one"), (1, "Château Margaux 2018 · glass", 51m, null) }),
-        ("ORD-0081", "T-06", "Marcus Delacroix", "19:41", "Preparing",
-            new (int, string, decimal, string?)[] { (2, "Duck à l'Orange", 92m, null), (1, "Caviar & Soft Egg", 85m, null), (1, "Pan-Seared Sea Bass", 98m, "Sauce on the side"), (1, "Sparkling Water", 20m, null) })
-    };
-    decimal Sub((int Qty, string Item, decimal Price, string? Remark)[] lines) => lines.Sum(l => l.Qty * l.Price);
-    decimal Total(decimal sub, bool dineIn) => Math.Round((dineIn ? Math.Round(sub * 1.10m, 2) : sub) * 1.06m, 2);
-    string OrderGroup(string s) => s is "Completed" ? "completed" : s is "Cancelled" ? "cancelled" : "active";
-
-    // Payments, newest first. Items fill the receipt (Paid / Refunded only).
-    var payments = new (string Code, string Order, string Name, string Method, string Status, string When, string? Table, string? Res, (int Qty, string Item, decimal Price)[] Items)[]
-    {
-        ("PAY-0061", "ORD-0083", "Thomas Ashford",  "Card",           "Paid",     "16 Sep 2026, 20:26", "T-09", "R-0039",
-            new[] { (2, "Wagyu Beef Tenderloin", 168.00m), (1, "Oyster Selection", 50.00m) }),
-        ("PAY-0060", "ORD-0084", "Natalia Voss",    "Online Banking", "Refunded", "16 Sep 2026, 19:10", null, null,
-            new[] { (1, "Lobster Thermidor", 128.00m), (2, "Valrhona Chocolate Fondant", 38.00m) }),
-        ("PAY-0059", "ORD-0080", "Victoria Blake",  "Cash",           "Paid",     "15 Sep 2026, 21:40", "T-02", "R-0036",
-            new[] { (2, "Duck à l'Orange", 92.00m), (1, "Caviar & Soft Egg", 85.00m), (1, "Château Margaux 2018 · glass", 51.00m) }),
-        ("PAY-0058", "ORD-0078", "James Carlton",   "Card",           "Failed",   "15 Sep 2026, 21:02", "T-05", "R-0033",
-            new[] { (1, "Wagyu Beef Tenderloin", 170.00m) })
-    };
-    decimal PayAmount(int i) { var p = payments[i]; return Total(p.Items.Sum(x => x.Qty * x.Price), p.Table != null); }
 }
 
 @section HeaderActions {
@@ -157,7 +125,7 @@
 </div>
 
 @* =====================================================
-   Orders
+   Orders (placed today)
    ===================================================== *@
 <div class="@(tab == "orders" ? "" : "d-none")" data-pane="orders">
     <section class="md-card md-section">
@@ -179,27 +147,26 @@
                     @foreach (var o in orders)
                     {
                         @* Click: opens the Order details pop-up with its ordered items *@
-                        <tr class="md-row-click" data-group="@OrderGroup(o.Status)" data-order="@o.Code" tabindex="0">
+                        <tr class="md-row-click" data-group="@o.Group" data-order="@o.Code" tabindex="0">
                             <td><b>@o.Code</b></td>
-                            <td>@(o.Table ?? "Takeaway") · @o.Name</td>
-                            <td>@(o.Table != null ? "Dine-in" : "Takeaway")</td>
-                            <td class="text-end">@o.Lines.Sum(l => l.Qty)</td>
-                            <td class="text-end">@Rm(Total(Sub(o.Lines), o.Table != null))</td>
+                            <td>@(o.Table ?? "Takeaway") · @o.CustomerName</td>
+                            <td>@o.Type</td>
+                            <td class="text-end">@o.ItemCount</td>
+                            <td class="text-end">@Rm(o.Total)</td>
                             <td><span class="md-pill @StatusClass(o.Status)">@o.Status</span></td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
+        <p class="md-notice-empty @(orders.Count == 0 ? "" : "d-none")">No orders have been placed today.</p>
     </section>
 
     @* One order details block per order – copied into the pop-up when its row is clicked *@
     @foreach (var o in orders)
     {
-        bool dineIn = o.Table != null;
-        decimal sub = Sub(o.Lines), sc = dineIn ? Math.Round(sub * 0.10m, 2) : 0m, sst = Math.Round((sub + sc) * 0.06m, 2);
         <template data-order-detail="@o.Code" data-status="@o.Status" data-pill="@StatusClass(o.Status)">
-            <p class="md-muted-text mb-3">@(dineIn ? $"Dine-in · {o.Table}" : "Takeaway") · @o.Name · ordered @o.Time</p>
+            <p class="md-muted-text mb-3">@(o.IsDineIn ? $"Dine-in · {o.Table}" : "Takeaway")@(o.ReservationCode != null ? " · " + o.ReservationCode : "") · @o.CustomerName · ordered @o.PlacedTime</p>
             <table class="md-order-lines">
                 <thead>
                     <tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Price</th></tr>
@@ -208,32 +175,42 @@
                     @foreach (var l in o.Lines)
                     {
                         <tr>
-                            <td>@l.Item@if (l.Remark != null) { <small>@l.Remark</small> }</td>
+                            <td>
+                                @l.Name
+                                @if (l.Remark != null)
+                                {
+                                    <small>@l.Remark</small>
+                                }
+                                @if (!string.IsNullOrEmpty(l.Promo) && l.Discount > 0)
+                                {
+                                    <small>Promo @l.Promo &minus;@Rm(l.Discount)</small>
+                                }
+                            </td>
                             <td class="text-end">× @l.Qty</td>
-                            <td class="text-end">@Rm(l.Qty * l.Price)</td>
+                            <td class="text-end">@Rm(l.LineTotal)</td>
                         </tr>
                     }
                 </tbody>
                 <tfoot>
-                    <tr><td colspan="2">Subtotal</td><td class="text-end">@Rm(sub)</td></tr>
-                    @if (dineIn)
+                    <tr><td colspan="2">Subtotal</td><td class="text-end">@Rm(o.Subtotal)</td></tr>
+                    @if (o.IsDineIn)
                     {
-                        <tr><td colspan="2">Service charge 10%</td><td class="text-end">@Rm(sc)</td></tr>
+                        <tr><td colspan="2">Service charge @Model.ServicePct.ToString("0.##")%</td><td class="text-end">@Rm(o.ServiceCharge)</td></tr>
                     }
-                    <tr><td colspan="2">SST 6%</td><td class="text-end">@Rm(sst)</td></tr>
-                    <tr class="is-total"><td colspan="2">Total</td><td class="text-end">@Rm(sub + sc + sst)</td></tr>
+                    <tr><td colspan="2">SST @Model.SstPct.ToString("0.##")%</td><td class="text-end">@Rm(o.Sst)</td></tr>
+                    <tr class="is-total"><td colspan="2">Total</td><td class="text-end">@Rm(o.Total)</td></tr>
                 </tfoot>
             </table>
             @if (o.Status == "Cancelled")
             {
-                <p class="md-hint mt-3 mb-0">This order was cancelled and its payment refunded.</p>
+                <p class="md-hint mt-3 mb-0">@(o.PaymentStatus == "Refunded" ? "This order was cancelled and its payment refunded." : "This order was cancelled.")</p>
             }
         </template>
     }
 </div>
 
 @* =====================================================
-   Payments
+   Payments (newest first)
    ===================================================== *@
 <div class="@(tab == "payments" ? "" : "d-none")" data-pane="payments">
     <section class="md-card md-section">
@@ -252,18 +229,17 @@
                     <tr><th>Payment / order</th><th>Customer</th><th>Method</th><th>Date</th><th class="text-end">Amount</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody>
-                    @for (int i = 0; i < payments.Length; i++)
+                    @foreach (var p in payments)
                     {
-                        var p = payments[i];
                         <tr data-group="@p.Status">
-                            <td><b>@p.Code</b><small class="d-block md-muted-text">@p.Order</small></td>
-                            <td>@p.Name</td>
+                            <td><b>@p.Code</b><small class="d-block md-muted-text">@p.OrderCodes</small></td>
+                            <td>@p.CustomerName</td>
                             <td>@p.Method</td>
-                            <td>@p.When.Replace(" 2026,", ",")</td>
-                            <td class="text-end">@Rm(PayAmount(i))</td>
+                            <td>@p.DateText</td>
+                            <td class="text-end">@Rm(p.Amount)</td>
                             <td><span class="md-pill @StatusClass(p.Status)">@p.Status</span></td>
                             <td class="text-end">
-                                @if (p.Status is "Paid" or "Refunded")
+                                @if (p.Receipt != null)
                                 {
                                     <button type="button" class="btn md-btn-round md-btn-sm md-btn-outline" data-receipt="@p.Code">Receipt</button>
                                 }
@@ -273,22 +249,15 @@
                 </tbody>
             </table>
         </div>
-        <p class="md-hint md-table-note">Card numbers are never stored. A failed payment has no receipt; the order stays unpaid until the guest pays again.</p>
+        <p class="md-notice-empty @(payments.Count == 0 ? "" : "d-none")">No payments recorded yet.</p>
+        <p class="md-hint md-table-note">Card numbers are never stored. A failed payment has no receipt; the order stays unpaid until the guest pays again. Dine-in orders paid together at one table are shown as one payment.</p>
     </section>
 
     @* One receipt per Paid / Refunded payment – copied into the Receipt pop-up *@
-    @foreach (var p in payments.Where(p => p.Status is "Paid" or "Refunded"))
+    @foreach (var p in payments.Where(p => p.Receipt != null))
     {
-        var receipt = new ReceiptView
-        {
-            ReceiptNo = "RCP-" + p.Code[4..], OrderCode = p.Order, IsDineIn = p.Table != null,
-            ReservationCode = p.Res, TableCode = p.Table, CustomerName = p.Name,
-            Items = p.Items.Select(x => new ReceiptLine { Quantity = x.Qty, Name = x.Item, UnitPrice = x.Price }).ToList(),
-            PaymentMethod = p.Method, PaymentStatus = p.Status,
-            PaidAt = DateTimeOffset.ParseExact(p.When + " +08:00", "d MMM yyyy, HH:mm zzz", System.Globalization.CultureInfo.InvariantCulture)
-        };
-        <template data-receipt-for="@p.Code" data-name="MaisonDoree-Receipt-@receipt.ReceiptNo">
-            <partial name="~/Pages/Shared/Partials/_Receipt.cshtml" model="receipt" />
+        <template data-receipt-for="@p.Code" data-name="MaisonDoree-Receipt-@p.Receipt!.ReceiptNo">
+            <partial name="~/Pages/Shared/Partials/_Receipt.cshtml" model="p.Receipt" />
         </template>
     }
 </div>
