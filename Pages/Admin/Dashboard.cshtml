@@ -242,9 +242,14 @@
             <section class="md-card h-100 md-live">
                 <div class="md-card-header"><span class="md-card-label">Collected tonight</span></div>
                 <div class="md-card-body">
-                    <div class="md-live-value">RM @Model.Analytics.Revenue.ToString("N2")</div>
-                    <div class="md-kpi-progress" aria-label="Collected revenue compared with @Model.PreviousLabel"><i class="@revenueProgressClass" style="width: @revenueProgress.ToString("0.##", inv)%"></i></div>
-                    <div class="md-stat-note">Paid revenue in selected period</div>
+                    @{ 
+                        var tonightProgress = Model.TonightExpected > 0
+                            ? Math.Min(100m, Model.TonightCollected / Model.TonightExpected * 100m)
+                            : 0m;
+                    }
+                    <div class="md-live-value">RM @Model.TonightCollected.ToString("N2") <small>/ RM @Model.TonightExpected.ToString("N2")</small></div>
+                    <div class="md-kpi-progress" aria-label="RM @Model.TonightCollected.ToString("N2") collected of RM @Model.TonightExpected.ToString("N2") expected"><i class="@(Model.TonightCollected >= Model.TonightExpected ? "is-good" : "is-low")" style="width: @tonightProgress.ToString("0.##", inv)%"></i></div>
+                    <div class="md-stat-note">Collected today · expected from today’s orders</div>
                 </div>
             </section>
         </div>
